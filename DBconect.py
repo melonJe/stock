@@ -3,7 +3,7 @@ import pandas as ps
 import pymysql
 from datetime import *
 from stock_API import *
-import secret as s
+import secret
 
 ps.set_option('display.max_rows', None)
 ps.set_option('display.max_columns', None)
@@ -14,10 +14,11 @@ ps.set_option('display.max_colwidth', None)
 class DBconect:
     def __init__(self):
         self.conn = pymysql.connect(
-            user=s.DBUSER,
-            passwd=s.DBpass,
-            host=s.HOST,
-            db=s.DBNAME,
+            user=secret.DBUSER,
+            passwd=secret.DBpass,
+            host=secret.HOST,
+            port=secret.PORT,
+            db=secret.DBNAME,
             charset='utf8'
         )
 
