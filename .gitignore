@@ -1,5 +1,6 @@
-secret.py
 __pycache__
-git_push.sh
 .idea
 venv
+secret.py
+git_push.sh
+daily.sh
