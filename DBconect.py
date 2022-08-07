@@ -33,9 +33,10 @@ class DBconect:
 
     def stock_criteria(self, data, srtnCd):
         with self.conn.cursor() as cursor:
-            select_sql = 'SELECT srtnCd,basDt,hipr,clpr,lopr,trqu from stock_price_data where srtnCd=%s and basDt<(select basDt from latest_time_data) ORDER BY basDt DESC LIMIT 245'
-            cursor.execute(select_sql, srtnCd)
-            data = ps.concat([ps.DataFrame(cursor.fetchall(), columns=('srtnCd', 'basDt', 'hipr', 'clpr', 'lopr', 'trqu')).sort_values(by='basDt'), data])
+            if srtnCd:
+                select_sql = 'SELECT srtnCd,basDt,hipr,clpr,lopr,trqu from stock_price_data where srtnCd=%s and basDt<(select basDt from latest_time_data) ORDER BY basDt DESC LIMIT 245'
+                cursor.execute(select_sql, srtnCd)
+                data = ps.concat([ps.DataFrame(cursor.fetchall(), columns=('srtnCd', 'basDt', 'hipr', 'clpr', 'lopr', 'trqu')).sort_values(by='basDt'), data])
             data['ema5'] = data['clpr'].ewm(span=5, min_periods=5).mean()
             data['ema20'] = data['clpr'].ewm(span=20, min_periods=20).mean()
             data['ema60'] = data['clpr'].ewm(span=60, min_periods=60).mean()
@@ -90,15 +91,14 @@ class DBconect:
             answer = ps.DataFrame()
             for srtnCd in stocks:
                 cursor.execute(select_sql, srtnCd)
-                data = ps.DataFrame(cursor.fetchall(), columns=('srtnCd', 'basDt', 'hipr', 'clpr', 'lopr', 'trqu')).sort_values(by='basDt')
-                le = list(get_stock_price(beginBasDt=last_date.strftime("%Y%m%d"), endBasDt=date.today().strftime("%Y%m%d"), likeSrtnCd=srtnCd))
-                if not le:
+                data = get_stock_price(beginBasDt=last_date.strftime("%Y%m%d"), endBasDt=date.today().strftime("%Y%m%d"), likeSrtnCd=srtnCd)
+                l = len(data)
+                if data.empty:
                     cursor.execute(delete_sql, srtnCd)
                     self.conn.commit()
                     continue
-                data = ps.concat([data, ps.DataFrame(le).astype({'clpr': 'int64', 'trqu': 'int64'}).sort_values(by='basDt')])[['srtnCd', 'basDt', 'hipr', 'clpr', 'lopr', 'trqu']]
                 data = self.stock_criteria(data, srtnCd)
-                answer = ps.concat([answer, data[-len(le):]])
+                answer = ps.concat([answer, data[-l:]])
             if not answer.empty:
                 answer = answer.fillna(0)
                 cursor.executemany(insert_sql, answer.values.tolist())
@@ -110,26 +110,7 @@ class DBconect:
             sql = "REPLACE INTO stock_price_data(srtnCd,basDt,hipr,clpr,lopr,trqu,ema5,ema20,ema60,ema120,ema240,PMF,NMF,perb,MFI,slow_d) VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)"
             for x in stocks:
                 data = ps.DataFrame(get_stock_price(beginBasDt=(date.today() - timedelta(days=1000)).strftime("%Y%m%d"), endBasDt=date.today().strftime("%Y%m%d"), numOfRows=1000, likeSrtnCd=x)).astype({'clpr': 'int64', 'trqu': 'int64'})
-                data = data[['srtnCd', 'basDt', 'hipr', 'clpr', 'lopr', 'trqu']]
-                data = data.sort_values(by='basDt')
-                data['ema5'] = data['clpr'].ewm(span=5, min_periods=5).mean()
-                data['ema20'] = data['clpr'].ewm(span=20, min_periods=20).mean()
-                data['ema60'] = data['clpr'].ewm(span=60, min_periods=60).mean()
-                data['ema120'] = data['clpr'].ewm(span=120, min_periods=120).mean()
-                data['ema240'] = data['clpr'].ewm(span=240, min_periods=240).mean()
-                data['PMF'] = 0
-                data['NMF'] = 0
-                data['perb'] = (data['clpr'] - data['clpr'].rolling(window=20).mean() + 2 * data['clpr'].rolling(window=20).std()) / (4 * data['clpr'].rolling(window=20).std())
-                for i in range(1, len(data)):
-                    if data['clpr'].values[i - 1] < data['clpr'].values[i]:
-                        data['PMF'].values[i] = data['clpr'].values[i] * data['trqu'].values[i]
-                    else:
-                        data['NMF'].values[i] = data['clpr'].values[i] * data['trqu'].values[i]
-                data['MFI'] = 100 - (00 / (1 + data['PMF'].rolling(window=10).std() / data['NMF'].rolling(window=10).std()))
-                data['max_hipr'] = data['hipr'].rolling(window=14).max()
-                data['min_lopr'] = data['lopr'].rolling(window=14).min()
-                data['fast_k'] = (data['clpr'] - data['min_lopr']) / (data['max_hipr'] - data['min_lopr']) * 100
-                data['slow_d'] = data['fast_k'].rolling(window=3).mean()
+                data = self.stock_criteria(data)
                 if not data.empty:
                     data = data[['srtnCd', 'basDt', 'hipr', 'clpr', 'lopr', 'trqu', 'ema5', 'ema20', 'ema60', 'ema120', 'ema240', 'PMF', 'NMF', 'perb', 'MFI', 'slow_d']]
                     print(data.srtnCd.values[0])
