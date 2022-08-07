@@ -3,4 +3,3 @@ __pycache__
 venv
 secret.py
 git_push.sh
-daily.sh
