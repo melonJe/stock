@@ -7,10 +7,15 @@ if (bConnect == 0):
     print("PLUS가 정상적으로 연결되지 않음. ")
     exit()
 
+<<<<<<< HEAD
 # 현재가 객체 구하기
 objStockMst = win32com.client.Dispatch("DsCbo1.StockMst")
 objStockMst.SetInputValue(0, 'A005930')  # 종목 코드 - 삼성전자
 objStockMst.BlockRequest()
+=======
+# db.stock_data_update_daily_naver()
+print(db.bollinger() + "\n" + db.triple_screen() + "\n" + db.granville())
+>>>>>>> 9a7e5e46a885b9f3a2e7ed4a119b877629627acc
 
 # 현재가 통신 및 통신 에러 처리
 rqStatus = objStockMst.GetDibStatus()

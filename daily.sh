@@ -3,4 +3,5 @@
 
 date
 sudo python3 /workspace/stock_mysql/daily.py
+date
 echo end
