@@ -89,16 +89,11 @@ class DBconect:
             select_sql = 'SELECT srtnCd,basDt,hipr,clpr,lopr,trqu from stock_price_data where srtnCd=%s and basDt<(select basDt from latest_time_data) ORDER BY basDt DESC LIMIT 245'
             insert_sql = "REPLACE INTO stock_price_data(srtnCd,basDt,hipr,clpr,lopr,trqu,ema5,ema20,ema60,ema120,ema240,PMF,NMF,perb,MFI,slow_d) VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)"
             delete_sql = 'delete from saved_srtnCd where srtnCd=%s'
-            date_sql = "UPDATE latest_time_data SET basDt=%s"
             answer = pd.DataFrame()
             for srtnCd in stocks:
                 cursor.execute(select_sql, srtnCd)
                 data = API.get_stock_price(beginBasDt=last_date.strftime("%Y%m%d"), endBasDt=dt.date.today().strftime("%Y%m%d"), likeSrtnCd=srtnCd)
                 dataLen = len(data)
-                if data.empty:
-                    cursor.execute(delete_sql, srtnCd)
-                    self.conn.commit()
-                    continue
                 data = self.stock_criteria(data, srtnCd)
                 answer = pd.concat([answer, data[-dataLen:]])
             if not answer.empty:
