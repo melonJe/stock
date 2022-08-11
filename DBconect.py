@@ -61,7 +61,7 @@ class DBconect:
 
     def stock_data_update_daily_naver(self):
         with self.conn.cursor() as cursor:
-            select_sql = 'SELECT srtnCd FROM saved_srtnCd where buy=1 or buy=0'
+            select_sql = 'SELECT srtnCd FROM saved_srtnCd'
             cursor.execute(select_sql)
             stocks = [x[0] for x in cursor.fetchall()]
             insert_sql = "REPLACE INTO stock_price_data(srtnCd,basDt,hipr,clpr,lopr,trqu,ema5,ema20,ema60,ema120,ema240,PMF,NMF,perb,MFI,slow_d) VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)"
@@ -78,41 +78,6 @@ class DBconect:
             if not answer.empty:
                 answer = answer.fillna(0)
                 cursor.executemany(insert_sql, answer.values.tolist())
-                self.conn.commit()
-
-    def stock_data_update_daily(self):
-        with self.conn.cursor() as cursor:
-            select_sql = 'SELECT srtnCd FROM saved_srtnCd'
-            cursor.execute(select_sql)
-            stocks = [x[0] for x in cursor.fetchall()]
-            last_date = self.last_update()
-            select_sql = 'SELECT srtnCd,basDt,hipr,clpr,lopr,trqu from stock_price_data where srtnCd=%s and basDt<(select basDt from latest_time_data) ORDER BY basDt DESC LIMIT 245'
-            insert_sql = "REPLACE INTO stock_price_data(srtnCd,basDt,hipr,clpr,lopr,trqu,ema5,ema20,ema60,ema120,ema240,PMF,NMF,perb,MFI,slow_d) VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)"
-            delete_sql = 'delete from saved_srtnCd where srtnCd=%s'
-            answer = pd.DataFrame()
-            for srtnCd in stocks:
-                cursor.execute(select_sql, srtnCd)
-                data = API.get_stock_price(beginBasDt=last_date.strftime("%Y%m%d"), endBasDt=dt.date.today().strftime("%Y%m%d"), likeSrtnCd=srtnCd)
-                dataLen = len(data)
-                data = self.stock_criteria(data, srtnCd)
-                answer = pd.concat([answer, data[-dataLen:]])
-            if not answer.empty:
-                answer = answer.fillna(0)
-                cursor.executemany(insert_sql, answer.values.tolist())
-                cursor.execute(date_sql, answer.basDt.values[-1])
-                self.conn.commit()
-
-    def stock_data_update_history(self, stocks):
-        with self.conn.cursor() as cursor:
-            sql = "REPLACE INTO stock_price_data(srtnCd,basDt,hipr,clpr,lopr,trqu,ema5,ema20,ema60,ema120,ema240,PMF,NMF,perb,MFI,slow_d) VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)"
-            for x in stocks:
-                data = pd.DataFrame(API.get_stock_price(beginBasDt=(dt.date.today() - dt.timedelta(days=1000)).strftime("%Y%m%d"), endBasDt=dt.date.today().strftime("%Y%m%d"), numOfRows=1000, likeSrtnCd=x)).astype({'clpr': 'int64', 'trqu': 'int64'})
-                data = self.stock_criteria(data)
-                if not data.empty:
-                    data = data[['srtnCd', 'basDt', 'hipr', 'clpr', 'lopr', 'trqu', 'ema5', 'ema20', 'ema60', 'ema120', 'ema240', 'PMF', 'NMF', 'perb', 'MFI', 'slow_d']]
-                    print(data.srtnCd.values[0])
-                    data = data.fillna(0)
-                    cursor.executemany(sql, data.values.tolist())
                 self.conn.commit()
 
     def get_buy_0_or_1(self):
