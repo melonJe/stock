@@ -1,18 +1,26 @@
 import FinanceDataReader as fdr
+import pandas as pd
+import numpy as np
 import schedule
 import time
 
-df_krx = fdr.StockListing('KRX')
-df_krx.head()
+from helper.db_helper import DBHelper
 
-def AddStock
 
-print(df_krx)
+def add_stock():
+    df_krx = fdr.StockListing('KRX')
+    MySQLHelper.execute_query('insert ignore into from stock ', )
+    db = DBHelper.getInstance()
+    # Execute a query and retrieve the results
+    result = db.execute_query("SELECT * FROM mytable")
+    # Print the results
+    print(result)
 
-# def job():
-#     print("I'm working...")
-#
-# schedule.every(1).minutes.do(job)
+
+def add_stock_price():
+    df_krx = fdr.StockListing('KRX')
+
+# schedule.every().minutes.do(job)
 # schedule.every().hour.do(job)
 # schedule.every().day.at("10:30").do(job)
 # schedule.every().monday.do(job)
@@ -22,3 +30,4 @@ print(df_krx)
 # while True:
 #     schedule.run_pending()
 #     time.sleep(1)
+AddStock()
