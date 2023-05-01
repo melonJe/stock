@@ -1,6 +1,4 @@
-import pony.orm as pony
-
-from ponySetting import *
+from app.ponySetting import *
 
 with pony.db_session:
     stock = Stock.select()

@@ -1,4 +1,4 @@
-from ponySetting import *
+from app.ponySetting import *
 import win32com.client
 
 

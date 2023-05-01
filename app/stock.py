@@ -4,7 +4,7 @@ import numpy as np
 import schedule
 import time
 
-from helper.db_helper import DBHelper
+from database.db_helper import DBHelper
 
 
 def add_stock():
