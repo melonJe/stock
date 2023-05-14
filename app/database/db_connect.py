@@ -1,0 +1,66 @@
+import os
+from dotenv import load_dotenv
+from peewee import *
+
+import config
+
+load_dotenv()
+
+
+class DBConnect(object):
+    _instance = None
+
+    def __new__(cls):
+        if cls._instance is None:
+            cls._instance = super().__new__(cls)
+            cls._instance.db = PostgresqlDatabase(host=config.DB_HOST, port=config.DB_PORT, database=config.DB_NAME,
+                                                  user=config.DB_USER, password=config.DB_PASS)
+        return cls._instance
+
+
+class BaseModel(Model):
+    class Meta:
+        database = DBConnect().db
+
+
+class User(BaseModel):
+    email = CharField(primary_key=True)
+    pass_hash = BlobField(null=False)
+    pass_salt = BlobField(null=False)
+
+
+class Stock(BaseModel):
+    symbol = CharField(primary_key=True)
+    name = CharField(null=False)
+
+
+class StockSubscription(BaseModel):
+    id = BigAutoField(primary_key=True)
+    email = CharField(null=False)
+    symbol = CharField(null=False)
+
+    class Meta:
+        constraints = [SQL('UNIQUE (email, symbol)')]
+
+
+class StockPrice(BaseModel):
+    id = BigAutoField(primary_key=True)
+    symbol = CharField(null=False)
+    date = DateField(null=False)
+    open = BigIntegerField(null=False)
+    high = BigIntegerField(null=False)
+    close = BigIntegerField(null=False)
+    low = BigIntegerField(null=False)
+
+    class Meta:
+        constraints = [SQL('UNIQUE (symbol, date)')]
+
+
+class StockBuy(BaseModel):
+    id = BigAutoField(primary_key=True)
+    email = CharField(null=False)
+    symbol = CharField(null=False)
+    volume = IntegerField(null=False)
+
+    class Meta:
+        constraints = [SQL('UNIQUE (email, symbol)')]
