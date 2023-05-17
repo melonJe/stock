@@ -1,4 +1,5 @@
 import datetime
+import time
 import schedule
 import FinanceDataReader
 from app.database.db_connect import *
@@ -44,14 +45,14 @@ def add_stock_price_1week():
 
 
 if __name__ == "__main__":
+    print("main.py 시작")
     DBConnect().db.create_tables([User, Stock, StockPrice, StockBuy, StockSubscription])
     schedule.every().monday.do(add_stock)
-    schedule.every().monday.do(add_stock_price_1day)
+    schedule.every().days.at("15:35").do(add_stock_price_1day)
     schedule.every().sunday.do(add_stock_price_1week)
     while True:
         schedule.run_pending()
         time.sleep(1)
-        break
 
 # schedule.every().hour.do(job)
 # schedule.every().day.at("10:30").do(job)

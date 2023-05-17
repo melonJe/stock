@@ -132,7 +132,7 @@ celerybeat.pid
 *.sage.py
 
 # Environments
-.env
+.env.stock
 .venv
 env/
 venv/
@@ -407,4 +407,6 @@ $RECYCLE.BIN/
 *.lnk
 
 # End of https://www.toptal.com/developers/gitignore/api/windows,linux,python,django,flask,visualstudiocode
+.env*
 .idea
+nohup.out

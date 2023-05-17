@@ -1,0 +1,1 @@
+sudo docker build --tag stock:latest -f Dockerfile.stock .

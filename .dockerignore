@@ -1,0 +1,7 @@
+venv
+.env.stock
+.env.postgres
+.gitignore
+docker-build.sh
+docker-compose.yml
+nohup.out
