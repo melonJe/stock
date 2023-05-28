@@ -4,7 +4,7 @@ from app.database.db_connect import *
 from app.service import stock
 
 if __name__ == "__main__":
-    print("main.py 시작")
+    print("main_stock.py 시작")
     DBConnect().db.create_tables([User, Stock, StockPrice, StockBuy, StockSubscription])
     schedule.every().monday.do(stock.add_stock)
     schedule.every().days.at("18:05").do(stock.add_stock_price_1day)
