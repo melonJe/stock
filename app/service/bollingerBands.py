@@ -1,7 +1,3 @@
-from dotenv import load_dotenv
-import os
-
-
 def get_bollinger_bands(data, window=20, num_std=2):
     rolling_mean = data['Close'].rolling(window=window).mean()
     rolling_std = data['Close'].rolling(window=window).std()

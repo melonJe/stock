@@ -11,7 +11,7 @@ def add_stock():
     insert_set = list()
     for item in df_krx.to_dict('records'):
         insert_set.append({'symbol': item['Code'], 'name': item['Name']})
-    Stock.insert_many(insert_set).on_conflict_ignore().execute()
+    Stock.insert_many(insert_set).on_conflict_replace().execute()
     print(len(insert_set))
 
 
@@ -25,9 +25,8 @@ def add_stock_price_1day():
     for stock in Stock.select(Stock.symbol):
         df_krx = FinanceDataReader.DataReader(stock.symbol, now, now)
         for idx, item in df_krx.iterrows():
-            insert_set.append({'symbol': stock.symbol, 'date': idx, 'open': item['Open'], 'high': item['High'],
-                               'close': item['Close'], 'low': item['Low']})
-    StockPrice.insert_many(insert_set).on_conflict_ignore().execute()
+            insert_set.append({'symbol': stock.symbol, 'date': idx, 'open': item['Open'], 'high': item['High'], 'close': item['Close'], 'low': item['Low']})
+    StockPrice.insert_many(insert_set).on_conflict_replace().execute()
     print(len(insert_set))
 
 
@@ -38,11 +37,21 @@ def add_stock_price_1week():
         return
     week_ago = (now - datetime.timedelta(days=7)).strftime('%Y-%m-%d')
     now = now.strftime('%Y-%m-%d')
+    insert_set = list()
     for stock in Stock.select(Stock.symbol):
         df_krx = FinanceDataReader.DataReader(stock.symbol, week_ago, now)
+        for idx, item in df_krx.iterrows():
+            insert_set.append({'symbol': stock.symbol, 'date': idx, 'open': item['Open'], 'high': item['High'], 'close': item['Close'], 'low': item['Low']})
+    StockPrice.insert_many(insert_set).on_conflict_replace().execute()
+    print(len(insert_set))
+
+
+def add_stock_price_all():
+    print("start add_stock_price_all")
+    for stock in Stock.select(Stock.symbol):
+        df_krx = FinanceDataReader.DataReader(stock.symbol)
         insert_set = list()
         for idx, item in df_krx.iterrows():
-            insert_set.append({'symbol': stock.symbol, 'date': idx, 'open': item['Open'], 'high': item['High'],
-                               'close': item['Close'], 'low': item['Low']})
-        StockPrice.insert_many(insert_set).on_conflict_ignore().execute()
+            insert_set.append({'symbol': stock.symbol, 'date': idx, 'open': item['Open'], 'high': item['High'], 'close': item['Close'], 'low': item['Low']})
+        StockPrice.insert_many(insert_set).on_conflict_replace().execute()
         print(len(insert_set))

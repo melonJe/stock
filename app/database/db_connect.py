@@ -1,10 +1,6 @@
-import os
-from dotenv import load_dotenv
 from peewee import *
 
 import config
-
-load_dotenv()
 
 
 class DBConnect(object):
@@ -13,8 +9,7 @@ class DBConnect(object):
     def __new__(cls):
         if cls._instance is None:
             cls._instance = super().__new__(cls)
-            cls._instance.db = PostgresqlDatabase(host=config.DB_HOST, port=config.DB_PORT, database=config.DB_NAME,
-                                                  user=config.DB_USER, password=config.DB_PASS)
+            cls._instance.db = MySQLDatabase(host=config.DB_HOST, port=config.DB_PORT, database=config.DB_NAME, user=config.DB_USER, password=config.DB_PASS)
         return cls._instance
 
 
@@ -25,8 +20,8 @@ class BaseModel(Model):
 
 class User(BaseModel):
     email = CharField(primary_key=True)
-    pass_hash = BlobField(null=False)
-    pass_salt = BlobField(null=False)
+    pass_hash = BigBitField(null=False)
+    pass_salt = BigBitField(null=False)
 
 
 class Stock(BaseModel):
