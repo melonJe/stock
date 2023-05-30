@@ -1,14 +1,15 @@
 import time
 import schedule
 from app.database.db_connect import *
-from app.service import stock
+from app.helper import schedule_helper
 
 if __name__ == "__main__":
     print("main_stock.py 시작")
     DBConnect().db.create_tables([User, Stock, StockPrice, StockBuy, StockSubscription])
-    schedule.every().monday.do(stock.add_stock)
-    schedule.every().days.at("18:05").do(stock.add_stock_price_1day)
-    schedule.every().sunday.do(stock.add_stock_price_1week)
+    schedule.every().sunday.do(schedule_helper.add_stock_price_1week)
+    schedule.every().monday.do(schedule_helper.add_stock)
+    schedule.every().days.at("22:00").do(schedule_helper.add_stock_price_1day)
+    schedule.every().days.at("22:00").do(schedule_helper.bollinger_band)
     while True:
         try:
             schedule.run_pending()
