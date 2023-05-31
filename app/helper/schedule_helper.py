@@ -62,13 +62,13 @@ def bollinger_band():
     # for stock_item in Stock.select(Stock.symbol):
     for stock_item in StockSubscription.select(StockSubscription.symbol).where(StockSubscription.email == 'cabs0814@naver.com'):
         try:
-            query = StockPrice.select().limit(25).where(StockPrice.symbol == stock_item.symbol).order_by(StockPrice.date.desc())
+            query = StockPrice.select().limit(85).where(StockPrice.symbol == stock_item.symbol).order_by(StockPrice.date.desc())
             name = Stock.get(Stock.symbol == stock_item.symbol).name
             data = list(query.dicts())
             if not data:
                 continue
             data = pd.DataFrame(data).sort_values(by='date', ascending=True)
-            bollingerBands.bollinger_band(data)
+            bollingerBands.bollinger_band(data, window=80)
             if data.iloc[-1]['decision'] == 'buy':
                 decision['buy'].append(name)
             if data.iloc[-1]['decision'] == 'sell':
@@ -76,5 +76,8 @@ def bollinger_band():
         except:
             traceback.print_exc()
     if decision['buy'] or decision['sell']:
-        discord.send_message(decision)
+        discord.send_message(f"buy : {decision['buy']}\nsell : {decision['sell']}")
     return decision
+
+
+bollinger_band()

@@ -10,10 +10,10 @@ pd.set_option('display.max_rows', None)
 
 
 def bollinger_band(data, window=20, num_std=2, adx_window=14):
-    data['ewm20'] = data['close'].ewm(span=window).mean()
+    data['ewm'] = data['close'].ewm(span=window).mean()
     data['rolling_std'] = data['close'].rolling(window=window).std()
-    data['upper_band'] = data['ewm20'] + (data['rolling_std'] * num_std)
-    data['lower_band'] = data['ewm20'] - (data['rolling_std'] * num_std)
+    data['upper_band'] = data['ewm'] + (data['rolling_std'] * num_std)
+    data['lower_band'] = data['ewm'] - (data['rolling_std'] * num_std)
     data['up_move'] = data['high'] - data['high'].shift(1)
     data['down_move'] = data['low'].shift(1) - data['low']
     data['pdm'] = 0
@@ -41,6 +41,6 @@ def bollinger_band(data, window=20, num_std=2, adx_window=14):
     data.loc[(data['decision'] == 'buy') & (data['adx'] > 25), 'decision'] = 'sell'
     data.loc[(data['decision'] == 'sell') & (data['adx'] > 25), 'decision'] = 'buy'
 
-    del data['ewm20'], data['rolling_std'], data['tr'], data['up_move'], data['down_move'], data['pdm'], data['mdm'], data['h-l'], data['h-c'], data['l-c'], data['smoothed_pdm'], \
+    del data['ewm'], data['rolling_std'], data['tr'], data['up_move'], data['down_move'], data['pdm'], data['mdm'], data['h-l'], data['h-c'], data['l-c'], data['smoothed_pdm'], \
         data['smoothed_mdm'], data['smoothed_tr'], data['pdi'], data['mdi'], data['dx']
     return data
