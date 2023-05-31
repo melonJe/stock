@@ -59,8 +59,8 @@ def bollinger_band():
     # if datetime.now().weekday() in (5, 6):
     #     return
     decision = {'buy': [], 'sell': []}
-    for stock_item in Stock.select(Stock.symbol):
-        # for stock_item in StockSubscription.select(StockSubscription.symbol).where(StockSubscription.email == 'cabs0814@naver.com'):
+    # for stock_item in Stock.select(Stock.symbol):
+    for stock_item in StockSubscription.select(StockSubscription.symbol).where(StockSubscription.email == 'cabs0814@naver.com'):
         try:
             query = StockPrice.select().limit(25).where(StockPrice.symbol == stock_item.symbol).order_by(StockPrice.date.desc())
             name = Stock.get(Stock.symbol == stock_item.symbol).name
