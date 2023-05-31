@@ -9,7 +9,7 @@ if __name__ == "__main__":
     schedule.every().sunday.do(schedule_helper.add_stock_price_1week)
     schedule.every().monday.do(schedule_helper.add_stock)
     schedule.every().days.at("22:00").do(schedule_helper.add_stock_price_1day)
-    schedule.every().days.at("22:00").do(schedule_helper.bollinger_band)
+    schedule.every().days.at("08:00").do(schedule_helper.bollinger_band)
     while True:
         try:
             schedule.run_pending()
