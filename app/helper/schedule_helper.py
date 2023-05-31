@@ -78,6 +78,3 @@ def bollinger_band():
     if decision['buy'] or decision['sell']:
         discord.send_message(decision)
     return decision
-
-
-print(bollinger_band())
