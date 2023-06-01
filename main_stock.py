@@ -1,4 +1,6 @@
 import time
+import traceback
+
 import schedule
 from app.database.db_connect import *
 from app.helper import schedule_helper
@@ -11,11 +13,8 @@ if __name__ == "__main__":
     schedule.every().days.at("22:00").do(schedule_helper.add_stock_price_1day)
     schedule.every().days.at("08:00").do(schedule_helper.bollinger_band)
     while True:
-        try:
-            schedule.run_pending()
-            time.sleep(1)
-        except Exception as e:
-            print(e)
+        schedule.run_pending()
+        time.sleep(1)
 
 # schedule.every().hour.do(job)
 # schedule.every().day.at("10:30").do(job)

@@ -17,6 +17,7 @@ def add_stock():
         insert_set.append({'symbol': item['Code'], 'name': item['Name']})
         print(item['Name'])
     Stock.insert_many(insert_set).on_conflict_replace().execute()
+    print('add_stock')
 
 
 def add_stock_price_1day():
@@ -30,6 +31,7 @@ def add_stock_price_1day():
         for idx, item in df_krx.iterrows():
             insert_set.append({'symbol': stock_item.symbol, 'date': idx, 'open': item['Open'], 'high': item['High'], 'close': item['Close'], 'low': item['Low']})
     StockPrice.insert_many(insert_set).on_conflict_replace().execute()
+    print(f'add_stock_price_1day   {now}')
 
 
 def add_stock_price_1week():
@@ -44,6 +46,7 @@ def add_stock_price_1week():
         for idx, item in df_krx.iterrows():
             insert_set.append({'symbol': stock_item.symbol, 'date': idx, 'open': item['Open'], 'high': item['High'], 'close': item['Close'], 'low': item['Low']})
         StockPrice.insert_many(insert_set).on_conflict_replace().execute()
+    print(f'add_stock_price_1week   {now}')
 
 
 def add_stock_price_all():
@@ -53,6 +56,7 @@ def add_stock_price_all():
         for idx, item in df_krx.iterrows():
             insert_set.append({'symbol': stock_item.symbol, 'date': idx, 'open': item['Open'], 'high': item['High'], 'close': item['Close'], 'low': item['Low']})
         StockPrice.insert_many(insert_set).on_conflict_replace().execute()
+    print(f'add_stock_price_all')
 
 
 def bollinger_band():
@@ -75,9 +79,8 @@ def bollinger_band():
                 decision['sell'].append(name)
         except:
             traceback.print_exc()
-    if decision['buy'] or decision['sell']:
-        discord.send_message(f"buy : {decision['buy']}\nsell : {decision['sell']}")
+    discord.send_message(f"{datetime.now().date()}\nbuy : {decision['buy']}\nsell : {decision['sell']}")
     return decision
 
-
-bollinger_band()
+# add_stock_price_1day()
+# bollinger_band()
