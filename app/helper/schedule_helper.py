@@ -60,26 +60,28 @@ def add_stock_price_all():
 
 
 def bollinger_band():
-    # if datetime.now().weekday() in (5, 6):
-    #     return
-    decision = {'buy': [], 'sell': []}
+    if datetime.now().weekday() in (5, 6):
+        return
+    decision = {'buy': set(), 'sell': set()}
     # for stock_item in Stock.select(Stock.symbol):
     for stock_item in StockSubscription.select(StockSubscription.symbol).where(StockSubscription.email == 'cabs0814@naver.com'):
         try:
-            query = StockPrice.select().limit(85).where(StockPrice.symbol == stock_item.symbol).order_by(StockPrice.date.desc())
             name = Stock.get(Stock.symbol == stock_item.symbol).name
-            data = list(query.dicts())
+            data = list(StockPrice.select().limit(85).where(StockPrice.symbol == stock_item.symbol).order_by(StockPrice.date.desc()).dicts())
             if not data:
                 continue
             data = pd.DataFrame(data).sort_values(by='date', ascending=True)
             bollingerBands.bollinger_band(data, window=80)
             if data.iloc[-1]['decision'] == 'buy':
-                decision['buy'].append(name)
+                decision['buy'].add(name)
             if data.iloc[-1]['decision'] == 'sell':
-                decision['sell'].append(name)
+                decision['sell'].add(name)
+            del data, name
+            # TODO: custum exception
         except:
-            traceback.print_exc()
-    discord.send_message(f"{datetime.now().date()}\nbuy : {decision['buy']}\nsell : {decision['sell']}")
+            discord.error_message("stock_db\n" + str(traceback.print_exc()))
+    sell_set = decision['sell'] & set(StockBuy.select(StockBuy.symbol).where(StockBuy.email == 'cabs0814@naver.com'))
+    discord.send_message(f"{datetime.now().date()}\nbuy : {decision['buy']}\nsell : {decision['sell']}\nsell from buy : {sell_set}")
     return decision
 
 # add_stock_price_1day()
