@@ -80,7 +80,8 @@ def bollinger_band():
             # TODO: custum exception
         except:
             discord.error_message("stock_db\n" + str(traceback.print_exc()))
-    sell_set = decision['sell'] & set(StockBuy.select(StockBuy.symbol).where(StockBuy.email == 'cabs0814@naver.com'))
+    sell_set = decision['sell'] & set(StockBuy.select().where(StockBuy.email == 'cabs0814@naver.com'))
+    # print(f"{datetime.now().date()}\nbuy : {decision['buy']}\nsell : {decision['sell']}\nsell from buy : {sell_set}")
     discord.send_message(f"{datetime.now().date()}\nbuy : {decision['buy']}\nsell : {decision['sell']}\nsell from buy : {sell_set}")
     return decision
 
