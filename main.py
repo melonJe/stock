@@ -6,7 +6,7 @@ from app.database.db_connect import *
 from app.helper import schedule_helper
 
 if __name__ == "__main__":
-    print("main_stock.py 시작")
+    print("main.py 시작")
     DBConnect().db.create_tables([User, Stock, StockPrice, StockBuy, StockSubscription])
     schedule.every().sunday.do(schedule_helper.add_stock_price_1week)
     schedule.every().monday.do(schedule_helper.add_stock)

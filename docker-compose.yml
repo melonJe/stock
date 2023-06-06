@@ -1,17 +1,6 @@
+#docker network create --driver=bridge -subnet 172.20.0.0/16 --gateway 172.20.0.1 melon-net
 version: '3.9'
 services:
-  postgres_db:
-    image: postgres:alpine
-    container_name: postgres_db
-    networks:
-      - melon
-    restart: always
-    env_file:
-      - .env.postgres
-    ports:
-      - "15432:5432"
-    volumes:
-      - ./../postgres:/var/lib/postgresql/data
   stock:
     image: stock:latest
     container_name: stock
@@ -19,9 +8,7 @@ services:
       - melon
     restart: always
     env_file:
-      - .env.stock
-    depends_on:
-      - postgres_db
+      - .env
 
 networks:
   melon:
