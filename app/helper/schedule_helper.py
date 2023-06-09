@@ -16,7 +16,7 @@ def add_stock():
     for item in df_krx.to_dict('records'):
         insert_set.append({'symbol': item['Code'], 'name': item['Name']})
         print(item['Name'])
-    Stock.insert_many(insert_set).on_conflict_replace().execute()
+    Stock.insert_many(insert_set).on_conflict_ignore().execute()
     print('add_stock')
 
 
@@ -30,7 +30,7 @@ def add_stock_price_1day():
         df_krx = FinanceDataReader.DataReader(stock_item.symbol, now, now)
         for idx, item in df_krx.iterrows():
             insert_set.append({'symbol': stock_item.symbol, 'date': idx, 'open': item['Open'], 'high': item['High'], 'close': item['Close'], 'low': item['Low']})
-    StockPrice.insert_many(insert_set).on_conflict_replace().execute()
+    StockPrice.insert_many(insert_set).on_conflict_ignore().execute()
     print(f'add_stock_price_1day   {now}')
 
 
@@ -45,7 +45,7 @@ def add_stock_price_1week():
         df_krx = FinanceDataReader.DataReader(stock_item.symbol, week_ago, now)
         for idx, item in df_krx.iterrows():
             insert_set.append({'symbol': stock_item.symbol, 'date': idx, 'open': item['Open'], 'high': item['High'], 'close': item['Close'], 'low': item['Low']})
-        StockPrice.insert_many(insert_set).on_conflict_replace().execute()
+        StockPrice.insert_many(insert_set).on_conflict_ignore().execute()
     print(f'add_stock_price_1week   {now}')
 
 
@@ -55,7 +55,7 @@ def add_stock_price_all():
         insert_set = list()
         for idx, item in df_krx.iterrows():
             insert_set.append({'symbol': stock_item.symbol, 'date': idx, 'open': item['Open'], 'high': item['High'], 'close': item['Close'], 'low': item['Low']})
-        StockPrice.insert_many(insert_set).on_conflict_replace().execute()
+        StockPrice.insert_many(insert_set).on_conflict_ignore().execute()
     print(f'add_stock_price_all')
 
 

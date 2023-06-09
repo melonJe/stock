@@ -10,5 +10,5 @@ def add_stock_price(day):
         df_krx = FinanceDataReader.DataReader(stock.symbol, day, day)
         for idx, item in df_krx.iterrows():
             insert_set.append({'symbol': stock.symbol, 'date': idx, 'open': item['Open'], 'high': item['High'], 'close': item['Close'], 'low': item['Low']})
-    StockPrice.insert_many(insert_set).on_conflict_replace().execute()
+    StockPrice.insert_many(insert_set).on_conflict_ignore().execute()
     print(len(insert_set))
