@@ -7,6 +7,8 @@ services:
     networks:
       - melon
     restart: always
+    environment:
+      - TZ=Asia/Seoul
     env_file:
       - .env
 
