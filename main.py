@@ -1,3 +1,4 @@
+from datetime import datetime
 import time
 import traceback
 
@@ -14,8 +15,9 @@ if __name__ == "__main__":
     schedule.every().days.at("08:45").do(schedule_helper.bollinger_band)
     # schedule.every().hours.do(schedule_helper.bollinger_band)
     while True:
+        # print(datetime.now())
         schedule.run_pending()
-        time.sleep(1)
+        time.sleep(0.9)
 
 # schedule.every().hour.do(job)
 # schedule.every().day.at("10:30").do(job)
