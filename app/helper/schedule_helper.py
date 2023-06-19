@@ -63,9 +63,9 @@ def bollinger_band():
     if datetime.now().weekday() in (5, 6):
         return
     decision = {'buy': set(), 'sell': set()}
-    # for stock_item in Stock.select(Stock.symbol):
-    for stock_item in StockSubscription.select(StockSubscription.symbol).where(StockSubscription.email == 'cabs0814@naver.com'):
-        try:
+    try:
+        # for stock_item in Stock.select(Stock.symbol):
+        for stock_item in StockSubscription.select(StockSubscription.symbol).where(StockSubscription.email == 'cabs0814@naver.com'):
             name = Stock.get(Stock.symbol == stock_item.symbol).name
             data = list(StockPrice.select().limit(25).where((StockPrice.date >= (datetime.now() - timedelta(days=50))) & (StockPrice.symbol == stock_item.symbol))
                         .order_by(StockPrice.date.desc()).dicts())
@@ -79,13 +79,12 @@ def bollinger_band():
                 decision['sell'].add(name)
             del data, name
             # TODO: custum exception
-        except:
-            discord.error_message("stock_db\n" + str(traceback.print_exc()))
+    except:
+        discord.error_message("stock_db\n" + str(traceback.print_exc()))
     sell_set = decision['sell'] & set(StockBuy.select().where(StockBuy.email == 'cabs0814@naver.com'))
     # print(f"{datetime.now().date()}\nbuy : {decision['buy']}\nsell : {decision['sell']}\nsell from buy : {sell_set}")
     discord.send_message(f"{datetime.now().date()}\nbuy : {decision['buy']}\nsell : {decision['sell']}\nsell from buy : {sell_set}")
     return decision
 
-
 # add_stock_price_1day()
-print(bollinger_band())
+# print(bollinger_band())
