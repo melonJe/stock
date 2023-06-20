@@ -29,17 +29,18 @@ class Stock(BaseModel):
     name = CharField(null=False)
 
 
-class StockSubscription(BaseModel):
+class StockBuy(BaseModel):
     id = BigAutoField(primary_key=True)
     email = CharField(null=False)
     symbol = CharField(null=False)
+    volume = IntegerField(null=False)
 
     class Meta:
+        db_table = 'stock_buy'
         constraints = [SQL('UNIQUE (email, symbol)')]
 
 
 class StockPrice(BaseModel):
-    id = BigAutoField(primary_key=True)
     symbol = CharField(null=False)
     date = DateField(null=False)
     open = BigIntegerField(null=False)
@@ -48,14 +49,15 @@ class StockPrice(BaseModel):
     low = BigIntegerField(null=False)
 
     class Meta:
-        constraints = [SQL('UNIQUE (symbol, date)')]
+        db_table = 'stock_price'
+        primary_key = CompositeKey('symbol', 'date')
 
 
-class StockBuy(BaseModel):
+class StockSubscription(BaseModel):
     id = BigAutoField(primary_key=True)
     email = CharField(null=False)
     symbol = CharField(null=False)
-    volume = IntegerField(null=False)
 
     class Meta:
+        db_table = 'stock_subscription'
         constraints = [SQL('UNIQUE (email, symbol)')]

@@ -5,7 +5,7 @@ import pandas as pd
 from datetime import datetime, timedelta
 from app.database.db_connect import *
 from app.helper import discord
-from app.service import stock, bollingerBands
+from app.service import bollingerBands
 
 
 def add_stock():
@@ -26,7 +26,8 @@ def add_stock_price_1day():
         return
     now = now.strftime('%Y-%m-%d')
     insert_set = list()
-    for stock_item in Stock.select(Stock.symbol):
+    stock = Stock.select(Stock.symbol)
+    for stock_item in stock:
         df_krx = FinanceDataReader.DataReader(stock_item.symbol, now, now)
         for idx, item in df_krx.iterrows():
             insert_set.append({'symbol': stock_item.symbol, 'date': idx, 'open': item['Open'], 'high': item['High'], 'close': item['Close'], 'low': item['Low']})
@@ -40,7 +41,8 @@ def add_stock_price_1week():
         return
     week_ago = (now - timedelta(days=7)).strftime('%Y-%m-%d')
     now = now.strftime('%Y-%m-%d')
-    for stock_item in Stock.select(Stock.symbol):
+    stock = Stock.select(Stock.symbol)
+    for stock_item in stock:
         insert_set = list()
         df_krx = FinanceDataReader.DataReader(stock_item.symbol, week_ago, now)
         for idx, item in df_krx.iterrows():
@@ -64,8 +66,9 @@ def bollinger_band():
         return
     decision = {'buy': set(), 'sell': set()}
     try:
-        # for stock_item in Stock.select(Stock.symbol):
-        for stock_item in StockSubscription.select(StockSubscription.symbol).where(StockSubscription.email == 'cabs0814@naver.com'):
+        # stock_subscription = Stock.select(Stock.symbol)
+        stock_subscription = StockSubscription.select(StockSubscription.symbol).where(StockSubscription.email == 'cabs0814@naver.com')
+        for stock_item in stock_subscription:
             name = Stock.get(Stock.symbol == stock_item.symbol).name
             data = list(StockPrice.select().limit(25).where((StockPrice.date >= (datetime.now() - timedelta(days=50))) & (StockPrice.symbol == stock_item.symbol))
                         .order_by(StockPrice.date.desc()).dicts())
@@ -78,11 +81,10 @@ def bollinger_band():
             if data.iloc[-1]['decision'] == 'sell':
                 decision['sell'].add(name)
             del data, name
-            # TODO: custum exception
+            # TODO: custom exception
     except:
         discord.error_message("stock_db\n" + str(traceback.print_exc()))
     sell_set = decision['sell'] & set(StockBuy.select().where(StockBuy.email == 'cabs0814@naver.com'))
-    # print(f"{datetime.now().date()}\nbuy : {decision['buy']}\nsell : {decision['sell']}\nsell from buy : {sell_set}")
     discord.send_message(f"{datetime.now().date()}\nbuy : {decision['buy']}\nsell : {decision['sell']}\nsell from buy : {sell_set}")
     return decision
 
