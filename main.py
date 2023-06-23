@@ -11,8 +11,8 @@ if __name__ == "__main__":
     DBConnect().db.create_tables([User, Stock, StockPrice, StockBuy, StockSubscription])
     schedule.every().sunday.do(schedule_helper.add_stock_price_1week)
     schedule.every().monday.do(schedule_helper.add_stock)
-    schedule.every().days.at("22:00").do(schedule_helper.add_stock_price_1day)
-    schedule.every().days.at("08:45").do(schedule_helper.bollinger_band)
+    schedule.every().day.at("22:00").do(schedule_helper.add_stock_price_1day)
+    schedule.every().day.at("07:00").do(schedule_helper.bollinger_band)
     # schedule.every().hours.do(schedule_helper.bollinger_band)
     while True:
         # print(datetime.now())

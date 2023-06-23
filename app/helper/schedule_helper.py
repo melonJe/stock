@@ -70,12 +70,12 @@ def bollinger_band():
         stock_subscription = StockSubscription.select(StockSubscription.symbol).where(StockSubscription.email == 'cabs0814@naver.com')
         for stock_item in stock_subscription:
             name = Stock.get(Stock.symbol == stock_item.symbol).name
-            data = list(StockPrice.select().limit(25).where((StockPrice.date >= (datetime.now() - timedelta(days=50))) & (StockPrice.symbol == stock_item.symbol))
+            data = list(StockPrice.select().limit(100).where((StockPrice.date >= (datetime.now() - timedelta(days=200))) & (StockPrice.symbol == stock_item.symbol))
                         .order_by(StockPrice.date.desc()).dicts())
             if not data:
                 continue
             data = pd.DataFrame(data).sort_values(by='date', ascending=True)
-            bollingerBands.bollinger_band(data)
+            bollingerBands.bollinger_band(data, window=80)
             if data.iloc[-1]['decision'] == 'buy':
                 decision['buy'].add(name)
             if data.iloc[-1]['decision'] == 'sell':
