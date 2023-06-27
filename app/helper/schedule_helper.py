@@ -9,7 +9,8 @@ from app.service import bollingerBands
 
 
 def add_stock():
-    if datetime.now().day != 1:
+    now = datetime.now()
+    if now.day != 1:
         return
     df_krx = FinanceDataReader.StockListing('KRX')
     insert_set = list()
@@ -17,7 +18,7 @@ def add_stock():
         insert_set.append({'symbol': item['Code'], 'name': item['Name']})
         print(item['Name'])
     Stock.insert_many(insert_set).on_conflict_ignore().execute()
-    print('add_stock')
+    print(f'add_stock   {now}')
 
 
 def add_stock_price_1day():
@@ -66,8 +67,8 @@ def bollinger_band():
         return
     decision = {'buy': set(), 'sell': set()}
     try:
-        # stock_subscription = Stock.select(Stock.symbol)
-        stock_subscription = StockSubscription.select(StockSubscription.symbol).where(StockSubscription.email == 'cabs0814@naver.com')
+        stock_subscription = Stock.select(Stock.symbol)
+        # stock_subscription = StockSubscription.select(StockSubscription.symbol).where(StockSubscription.email == 'cabs0814@naver.com')
         for stock_item in stock_subscription:
             name = Stock.get(Stock.symbol == stock_item.symbol).name
             data = list(StockPrice.select().limit(100).where((StockPrice.date >= (datetime.now() - timedelta(days=200))) & (StockPrice.symbol == stock_item.symbol))
@@ -87,6 +88,3 @@ def bollinger_band():
     sell_set = decision['sell'] & set(StockBuy.select().where(StockBuy.email == 'cabs0814@naver.com'))
     discord.send_message(f"{datetime.now().date()}\nbuy : {decision['buy']}\nsell : {decision['sell']}\nsell from buy : {sell_set}")
     return decision
-
-# add_stock_price_1day()
-# print(bollinger_band())

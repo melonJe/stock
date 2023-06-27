@@ -4,15 +4,15 @@ services:
   stock:
     image: stock:latest
     container_name: stock
-    networks:
-      - melon
+    #    networks:
+    #      - melon
     restart: always
     env_file:
       - .env
     environment:
       - TZ=Asia/Seoul
 
-networks:
-  melon:
-    name: melon-net
-    external: true
+#networks:
+#  melon:
+#    name: melon-net
+#    external: true
