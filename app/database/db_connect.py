@@ -1,21 +1,12 @@
+import config
 from peewee import *
 
-import config
-
-
-class DBConnect(object):
-    _instance = None
-
-    def __new__(cls):
-        if cls._instance is None:
-            cls._instance = super().__new__(cls)
-            cls._instance.db = MySQLDatabase(host=config.DB_HOST, port=config.DB_PORT, database=config.DB_NAME, user=config.DB_USER, password=config.DB_PASS)
-        return cls._instance
+mysql_db = MySQLDatabase('my_app', host=config.DB_HOST, port=config.DB_PORT, database=config.DB_NAME, user=config.DB_USER, password=config.DB_PASS)
 
 
 class BaseModel(Model):
     class Meta:
-        database = DBConnect().db
+        database = mysql_db
 
 
 class User(BaseModel):

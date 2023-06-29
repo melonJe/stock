@@ -1,6 +1,5 @@
 import time
 import schedule
-import config
 from app.database.db_connect import *
 from app.helper import schedule_helper
 
@@ -11,7 +10,7 @@ if __name__ == "__main__":
     print(f"DB_NAME {config.DB_NAME}")
     print(f"DB_USER {config.DB_USER}")
     print(f"DB_PASS {config.DB_PASS}")
-    DBConnect().db.create_tables([User, Stock, StockPrice, StockBuy, StockSubscription])
+    mysql_db.create_tables([User, Stock, StockPrice, StockBuy, StockSubscription])
     schedule.every().sunday.do(schedule_helper.add_stock_price_1week)
     schedule.every().monday.do(schedule_helper.add_stock)
     schedule.every().day.at("22:00").do(schedule_helper.add_stock_price_1day)
