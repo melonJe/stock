@@ -67,9 +67,9 @@ def bollinger_band():
         return
     decision = {'buy': set(), 'sell': set()}
     try:
-        stock_subscription = Stock.select(Stock.symbol)
-        # stock_subscription = StockSubscription.select(StockSubscription.symbol).where(StockSubscription.email == 'cabs0814@naver.com')
-        for stock_item in stock_subscription:
+        # stock = Stock.select(Stock.symbol)
+        stock = StockSubscription.select(StockSubscription.symbol).where(StockSubscription.email == 'cabs0814@naver.com')
+        for stock_item in stock:
             name = Stock.get(Stock.symbol == stock_item.symbol).name
             data = list(StockPrice.select().limit(100).where((StockPrice.date >= (datetime.now() - timedelta(days=200))) & (StockPrice.symbol == stock_item.symbol))
                         .order_by(StockPrice.date.desc()).dicts())
@@ -88,3 +88,6 @@ def bollinger_band():
     sell_set = decision['sell'] & set(StockBuy.select().where(StockBuy.email == 'cabs0814@naver.com'))
     discord.send_message(f"{datetime.now().date()}\nbuy : {decision['buy']}\nsell : {decision['sell']}\nsell from buy : {sell_set}")
     return decision
+
+
+bollinger_band()

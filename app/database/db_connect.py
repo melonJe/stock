@@ -1,12 +1,22 @@
 import config
 from peewee import *
 
-mysql_db = MySQLDatabase(host=config.DB_HOST, port=config.DB_PORT, database=config.DB_NAME, user=config.DB_USER, password=config.DB_PASS)
+
+class DBHelper(object):
+    _instance = None
+
+    def __new__(cls):
+        if cls._instance is None:
+            cls._instance = super().__new__(cls)
+            cls._instance.db = MySQLDatabase(host=config.DB_HOST, port=config.DB_PORT, database=config.DB_NAME, user=config.DB_USER, password=config.DB_PASS)
+        if cls._instance.db.is_closed():
+            cls._instance.db.connect()
+        return cls._instance
 
 
 class BaseModel(Model):
     class Meta:
-        database = mysql_db
+        database = DBHelper().db
 
 
 class User(BaseModel):
