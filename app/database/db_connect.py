@@ -1,7 +1,7 @@
 import config
 from peewee import *
 
-mysql_db = MySQLDatabase('my_app', host=config.DB_HOST, port=config.DB_PORT, database=config.DB_NAME, user=config.DB_USER, password=config.DB_PASS)
+mysql_db = MySQLDatabase(host=config.DB_HOST, port=config.DB_PORT, database=config.DB_NAME, user=config.DB_USER, password=config.DB_PASS)
 
 
 class BaseModel(Model):
