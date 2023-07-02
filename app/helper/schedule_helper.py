@@ -88,6 +88,3 @@ def bollinger_band():
     sell_set = decision['sell'] & set(StockBuy.select().where(StockBuy.email == 'cabs0814@naver.com'))
     discord.send_message(f"{datetime.now().date()}\nbuy : {decision['buy']}\nsell : {decision['sell']}\nsell from buy : {sell_set}")
     return decision
-
-
-bollinger_band()
