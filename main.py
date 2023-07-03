@@ -18,6 +18,9 @@ if __name__ == "__main__":
     while True:
         schedule.run_pending()
         time.sleep(0.9)
+        # TODO DB 연결을 끊김을 확인할 다른 방법 찾기
+        if DBHelper().db.is_closed():
+            DBHelper().db.connect()
 
 # schedule.every().hour.do(job)
 # schedule.every().day.at("10:30").do(job)

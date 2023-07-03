@@ -9,8 +9,6 @@ class DBHelper(object):
         if cls._instance is None:
             cls._instance = super().__new__(cls)
             cls._instance.db = MySQLDatabase(host=config.DB_HOST, port=config.DB_PORT, database=config.DB_NAME, user=config.DB_USER, password=config.DB_PASS)
-        if cls._instance.db.is_closed():
-            cls._instance.db.connect()
         return cls._instance
 
 
