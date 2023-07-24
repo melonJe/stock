@@ -1,62 +1,50 @@
+from datetime import datetime
+from sqlalchemy import create_engine, select, insert
+from sqlalchemy.orm import sessionmaker, DeclarativeBase, Mapped, mapped_column
+from sqlalchemy import String, BLOB, BigInteger, Integer, Date
 import config
-from peewee import *
+
+engine = create_engine(f'mysql+pymysql://{config.DB_USER}:{config.DB_PASS}@{config.DB_HOST}:{config.DB_PORT}/{config.DB_NAME}?charset=utf8mb4', pool_recycle=3600)
+session = sessionmaker(autoflush=False, autocommit=False, bind=engine)()
 
 
-class DBHelper(object):
-    _instance = None
-
-    def __new__(cls):
-        if cls._instance is None:
-            cls._instance = super().__new__(cls)
-            cls._instance.db = MySQLDatabase(host=config.DB_HOST, port=config.DB_PORT, database=config.DB_NAME, user=config.DB_USER, password=config.DB_PASS, autoconnect=False)
-        return cls._instance
+class Base(DeclarativeBase):
+    pass
 
 
-class BaseModel(Model):
-    class Meta:
-        database = DBHelper().db
+class User(Base):
+    __tablename__ = 'user'
+    email: Mapped[str] = mapped_column(String(255), primary_key=True)
+    pass_hash: Mapped[bytes] = mapped_column(BLOB(), nullable=False)
+    pass_salt: Mapped[bytes] = mapped_column(BLOB(), nullable=False)
 
 
-class User(BaseModel):
-    email = CharField(primary_key=True)
-    pass_hash = BigBitField(null=False)
-    pass_salt = BigBitField(null=False)
+class Stock(Base):
+    __tablename__ = 'stock'
+    symbol: Mapped[str] = mapped_column(String(255), primary_key=True)
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
 
 
-class Stock(BaseModel):
-    symbol = CharField(primary_key=True)
-    name = CharField(null=False)
+class StockBuy(Base):
+    __tablename__ = 'stock_buy'
+    id: Mapped[int] = mapped_column(BigInteger(), autoincrement=True, primary_key=True)
+    email: Mapped[str] = mapped_column(String(255), nullable=False, unique=True)
+    symbol: Mapped[str] = mapped_column(String(255), nullable=False, unique=True)
+    volume: Mapped[int] = mapped_column(Integer(), nullable=False)
 
 
-class StockBuy(BaseModel):
-    id = BigAutoField(primary_key=True)
-    email = CharField(null=False)
-    symbol = CharField(null=False)
-    volume = IntegerField(null=False)
-
-    class Meta:
-        db_table = 'stock_buy'
-        constraints = [SQL('UNIQUE (email, symbol)')]
-
-
-class StockPrice(BaseModel):
-    symbol = CharField(null=False)
-    date = DateField(null=False)
-    open = BigIntegerField(null=False)
-    high = BigIntegerField(null=False)
-    close = BigIntegerField(null=False)
-    low = BigIntegerField(null=False)
-
-    class Meta:
-        db_table = 'stock_price'
-        primary_key = CompositeKey('symbol', 'date')
+class StockPrice(Base):
+    __tablename__ = 'stock_price'
+    symbol: Mapped[str] = mapped_column(String(255), nullable=False, primary_key=True)
+    date = mapped_column(Date(), nullable=False, primary_key=True)
+    open: Mapped[int] = mapped_column(BigInteger(), nullable=False)
+    high: Mapped[int] = mapped_column(BigInteger(), nullable=False)
+    close: Mapped[int] = mapped_column(BigInteger(), nullable=False)
+    low: Mapped[int] = mapped_column(BigInteger(), nullable=False)
 
 
-class StockSubscription(BaseModel):
-    id = BigAutoField(primary_key=True)
-    email = CharField(null=False)
-    symbol = CharField(null=False)
-
-    class Meta:
-        db_table = 'stock_subscription'
-        constraints = [SQL('UNIQUE (email, symbol)')]
+class StockSubscription(Base):
+    __tablename__ = 'stock_subscription'
+    id: Mapped[int] = mapped_column(BigInteger(), autoincrement=True, primary_key=True)
+    email: Mapped[str] = mapped_column(String(255), nullable=False, unique=True)
+    symbol: Mapped[str] = mapped_column(String(255), nullable=False, unique=True)

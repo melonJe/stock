@@ -16,8 +16,7 @@ def add_stock():
     insert_set = list()
     for item in df_krx.to_dict('records'):
         insert_set.append({'symbol': item['Code'], 'name': item['Name']})
-        print(item['Name'])
-    Stock.insert_many(insert_set).on_conflict_ignore().execute()
+    session.execute(insert(Stock).prefix_with('REPLACE'), insert_set)
     print(f'add_stock   {now}')
 
 
@@ -27,13 +26,14 @@ def add_stock_price_1day():
         return
     now = now.strftime('%Y-%m-%d')
     insert_set = list()
-    stock = Stock.select(Stock.symbol)
-    for stock_item in stock:
-        df_krx = FinanceDataReader.DataReader(stock_item.symbol, now, now)
+    stock = session.scalars(select(Stock.symbol))
+    for stock_symbol in stock:
+        df_krx = FinanceDataReader.DataReader(stock_symbol, now, now)
         for idx, item in df_krx.iterrows():
-            insert_set.append({'symbol': stock_item.symbol, 'date': idx, 'open': item['Open'], 'high': item['High'], 'close': item['Close'], 'low': item['Low']})
-    StockPrice.insert_many(insert_set).on_conflict_ignore().execute()
+            insert_set.append({'symbol': stock_symbol, 'date': idx, 'open': item['Open'], 'high': item['High'], 'close': item['Close'], 'low': item['Low']})
+    session.execute(insert(StockPrice).prefix_with('IGNORE'), insert_set)
     print(f'add_stock_price_1day   {now}')
+    discord.send_message(f'add_stock_price_1week   {now}')
 
 
 def add_stock_price_1week():
@@ -42,40 +42,41 @@ def add_stock_price_1week():
         return
     week_ago = (now - timedelta(days=7)).strftime('%Y-%m-%d')
     now = now.strftime('%Y-%m-%d')
-    stock = Stock.select(Stock.symbol)
-    for stock_item in stock:
+    stock = session.scalars(select(Stock.symbol))
+    for stock_symbol in stock:
         insert_set = list()
-        df_krx = FinanceDataReader.DataReader(stock_item.symbol, week_ago, now)
+        df_krx = FinanceDataReader.DataReader(stock_symbol, week_ago, now)
         for idx, item in df_krx.iterrows():
-            insert_set.append({'symbol': stock_item.symbol, 'date': idx, 'open': item['Open'], 'high': item['High'], 'close': item['Close'], 'low': item['Low']})
-        StockPrice.insert_many(insert_set).on_conflict_ignore().execute()
+            insert_set.append({'symbol': stock_symbol, 'date': idx, 'open': item['Open'], 'high': item['High'], 'close': item['Close'], 'low': item['Low']})
+        # TODO 오류 발생 원인 모름
+        session.execute(insert(StockPrice).prefix_with('IGNORE'), insert_set)
     print(f'add_stock_price_1week   {now}')
+    discord.send_message(f'add_stock_price_1week   {now}')
 
 
 def add_stock_price_all():
-    for stock_item in Stock.select(Stock.symbol):
-        df_krx = FinanceDataReader.DataReader(stock_item.symbol)
+    for stock_symbol in session.scalars(select(Stock.symbol)):
+        df_krx = FinanceDataReader.DataReader(stock_symbol)
         insert_set = list()
         for idx, item in df_krx.iterrows():
-            insert_set.append({'symbol': stock_item.symbol, 'date': idx, 'open': item['Open'], 'high': item['High'], 'close': item['Close'], 'low': item['Low']})
-        StockPrice.insert_many(insert_set).on_conflict_ignore().execute()
+            insert_set.append({'symbol': stock_symbol, 'date': idx, 'open': item['Open'], 'high': item['High'], 'close': item['Close'], 'low': item['Low']})
+        session.execute(insert(StockPrice).prefix_with('IGNORE'), insert_set)
     print(f'add_stock_price_all')
 
 
 def bollinger_band():
-    if datetime.now().weekday() in (5, 6):
-        return
+    # if datetime.now().weekday() in (5, 6):
+    #     return
     decision = {'buy': set(), 'sell': set()}
     try:
         # stock = Stock.select(Stock.symbol)
-        stock = StockSubscription.select(StockSubscription.symbol).where(StockSubscription.email == 'cabs0814@naver.com')
-        for stock_item in stock:
-            name = Stock.get(Stock.symbol == stock_item.symbol).name
-            data = list(StockPrice.select().limit(100).where((StockPrice.date >= (datetime.now() - timedelta(days=200))) & (StockPrice.symbol == stock_item.symbol))
-                        .order_by(StockPrice.date.desc()).dicts())
-            if not data:
+        stock = session.scalars(select(StockSubscription.symbol).where(StockSubscription.email == 'cabs0814@naver.com'))
+        for stock_symbol in stock:
+            name = session.scalars(select(Stock.name).where(Stock.symbol == stock_symbol).order_by(Stock.name.desc())).first()
+            data = pd.read_sql(select(StockPrice).order_by(StockPrice.date.desc()).limit(100).where(
+                (StockPrice.date >= (datetime.now() - timedelta(days=200))) & (StockPrice.symbol == stock_symbol)), session.bind).sort_values(by='date', ascending=True)
+            if data.empty:
                 continue
-            data = pd.DataFrame(data).sort_values(by='date', ascending=True)
             bollingerBands.bollinger_band(data, window=80)
             if data.iloc[-1]['decision'] == 'buy':
                 decision['buy'].add(name)
@@ -85,6 +86,5 @@ def bollinger_band():
             # TODO: custom exception
     except:
         discord.error_message("stock_db\n" + str(traceback.print_exc()))
-    sell_set = decision['sell'] & set(StockBuy.select().where(StockBuy.email == 'cabs0814@naver.com'))
-    discord.send_message(f"{datetime.now().date()}\nbuy : {decision['buy']}\nsell : {decision['sell']}\nsell from buy : {sell_set}")
+    discord.send_message(f"{datetime.now().date()}\nbuy : {decision['buy']}\nsell : {decision['sell']}")
     return decision
