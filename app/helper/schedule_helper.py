@@ -32,6 +32,7 @@ def add_stock_price_1day():
         for idx, item in df_krx.iterrows():
             insert_set.append({'symbol': stock_symbol, 'date': idx, 'open': item['Open'], 'high': item['High'], 'close': item['Close'], 'low': item['Low']})
     session.execute(insert(StockPrice).prefix_with('IGNORE'), insert_set)
+    session.commit()
     print(f'add_stock_price_1day   {now}')
     discord.send_message(f'add_stock_price_1week   {now}')
 
@@ -48,8 +49,8 @@ def add_stock_price_1week():
         df_krx = FinanceDataReader.DataReader(stock_symbol, week_ago, now)
         for idx, item in df_krx.iterrows():
             insert_set.append({'symbol': stock_symbol, 'date': idx, 'open': item['Open'], 'high': item['High'], 'close': item['Close'], 'low': item['Low']})
-        # TODO 오류 발생 원인 모름
         session.execute(insert(StockPrice).prefix_with('IGNORE'), insert_set)
+        session.commit()
     print(f'add_stock_price_1week   {now}')
     discord.send_message(f'add_stock_price_1week   {now}')
 

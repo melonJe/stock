@@ -14,14 +14,14 @@ class Base(DeclarativeBase):
 
 class User(Base):
     __tablename__ = 'user'
-    email: Mapped[str] = mapped_column(String(255), primary_key=True)
+    email: Mapped[str] = mapped_column(String(255), nullable=True, primary_key=True)
     pass_hash: Mapped[bytes] = mapped_column(BLOB(), nullable=False)
     pass_salt: Mapped[bytes] = mapped_column(BLOB(), nullable=False)
 
 
 class Stock(Base):
     __tablename__ = 'stock'
-    symbol: Mapped[str] = mapped_column(String(255), primary_key=True)
+    symbol: Mapped[str] = mapped_column(String(255), nullable=True, primary_key=True)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
 
 
@@ -35,8 +35,8 @@ class StockBuy(Base):
 
 class StockPrice(Base):
     __tablename__ = 'stock_price'
-    symbol: Mapped[str] = mapped_column(String(255), nullable=False, primary_key=True)
-    date = mapped_column(Date(), nullable=False, primary_key=True)
+    symbol: Mapped[str] = mapped_column(String(255), nullable=True, primary_key=True)
+    date = mapped_column(Date(), nullable=True, primary_key=True)
     open: Mapped[int] = mapped_column(BigInteger(), nullable=False)
     high: Mapped[int] = mapped_column(BigInteger(), nullable=False)
     close: Mapped[int] = mapped_column(BigInteger(), nullable=False)
