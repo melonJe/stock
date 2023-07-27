@@ -1,10 +1,11 @@
 from datetime import datetime
-from sqlalchemy import create_engine, select, insert
+from sqlalchemy import create_engine, select, insert, String, BLOB, BigInteger, Integer, Date
 from sqlalchemy.orm import sessionmaker, DeclarativeBase, Mapped, mapped_column
-from sqlalchemy import String, BLOB, BigInteger, Integer, Date
+from sqlalchemy.pool import QueuePool
 import config
 
-engine = create_engine(f'mysql+pymysql://{config.DB_USER}:{config.DB_PASS}@{config.DB_HOST}:{config.DB_PORT}/{config.DB_NAME}?charset=utf8mb4', pool_pre_ping=True)
+engine = create_engine(f'mysql+pymysql://{config.DB_USER}:{config.DB_PASS}@{config.DB_HOST}:{config.DB_PORT}/{config.DB_NAME}?charset=utf8mb4',
+                       poolclass=QueuePool, pool_pre_ping=True)
 session = sessionmaker(autoflush=False, autocommit=False, bind=engine)()
 
 
