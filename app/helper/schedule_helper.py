@@ -103,6 +103,3 @@ def buy_sell(window=20):
     except:
         discord.error_message("stock_db\n" + str(traceback.print_exc()))
     return decision
-
-
-alert()
