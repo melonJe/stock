@@ -38,8 +38,8 @@ def bollinger_band(data, window=20, num_std=2, adx_window=14):
 
     data.loc[(data['close'] < data['lower_band']) & (data['close'].shift(1) >= data['lower_band'].shift(1)), 'decision'] = 'buy'
     data.loc[(data['close'] > data['upper_band']) & (data['close'].shift(1) <= data['upper_band'].shift(1)), 'decision'] = 'sell'
-    data.loc[(data['decision'] == 'buy') & (data['adx'] > 15), 'decision'] = 'sell'
-    # data.loc[(data['decision'] == 'sell') & (data['adx'] > 15), 'decision'] = 'buy'
+    data.loc[(data['decision'] == 'buy') & (data['adx'] > 25), 'decision'] = 'sell'
+    # data.loc[(data['decision'] == 'sell') & (data['adx'] > 25), 'decision'] = 'buy'
 
     del data['ewm'], data['rolling_std'], data['tr'], data['up_move'], data['down_move'], data['pdm'], data['mdm'], data['h-l'], data['h-c'], data['l-c'], data['smoothed_pdm'], \
         data['smoothed_mdm'], data['smoothed_tr'], data['pdi'], data['mdi'], data['dx']

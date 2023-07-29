@@ -65,12 +65,23 @@ def add_stock_price_all():
     print(f'add_stock_price_all')
 
 
-def bollinger_band():
+def alert():
+    message = f"{datetime.now().date()}\n"
+    window = buy_sell(window=5)
+    message += f"bollinger_band 5\n{window['buy']}\nsell : {window['sell']}\n\n"
+    window = buy_sell(window=20)
+    message += f"bollinger_band 20\n{window['buy']}\nsell : {window['sell']}\n\n"
+    window = buy_sell(window=60)
+    message += f"bollinger_band 60\n{window['buy']}\nsell : {window['sell']}"
+    discord.send_message(message)
+
+
+def buy_sell(window=20):
     # if datetime.now().weekday() in (5, 6):
     #     return
     decision = {'buy': set(), 'sell': set()}
     try:
-        # stock = Stock.select(Stock.symbol)
+        # stock = session.scalars(select(Stock.symbol))
         stock = session.scalars(select(StockSubscription.symbol).where(StockSubscription.email == 'cabs0814@naver.com'))
         for stock_symbol in stock:
             name = session.scalars(select(Stock.name).where(Stock.symbol == stock_symbol).order_by(Stock.name.desc())).first()
@@ -78,7 +89,11 @@ def bollinger_band():
                 (StockPrice.date >= (datetime.now() - timedelta(days=200))) & (StockPrice.symbol == stock_symbol)), session.bind).sort_values(by='date', ascending=True)
             if data.empty:
                 continue
-            bollingerBands.bollinger_band(data, window=80)
+            bollingerBands.bollinger_band(data, window)
+            # if data.iloc[-2]['open'] < data.iloc[-2]['close'] and data.iloc[-2]['open'] < data.iloc[-1]['open'] < data.iloc[-2]['close']:
+            #     continue
+            # if data.iloc[-2]['open'] > data.iloc[-2]['close'] and data.iloc[-2]['open'] > data.iloc[-1]['open'] > data.iloc[-2]['close']:
+            #     continue
             if data.iloc[-1]['decision'] == 'buy':
                 decision['buy'].add(name)
             if data.iloc[-1]['decision'] == 'sell':
@@ -87,5 +102,7 @@ def bollinger_band():
             # TODO: custom exception
     except:
         discord.error_message("stock_db\n" + str(traceback.print_exc()))
-    discord.send_message(f"{datetime.now().date()}\nbuy : {decision['buy']}\nsell : {decision['sell']}")
     return decision
+
+
+alert()

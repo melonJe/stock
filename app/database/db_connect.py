@@ -5,7 +5,7 @@ from sqlalchemy.pool import QueuePool
 import config
 
 engine = create_engine(f'mysql+pymysql://{config.DB_USER}:{config.DB_PASS}@{config.DB_HOST}:{config.DB_PORT}/{config.DB_NAME}?charset=utf8mb4',
-                       poolclass=QueuePool, pool_pre_ping=True)
+                       pool_recycle=3600, poolclass=QueuePool, pool_pre_ping=True)
 session = sessionmaker(autoflush=False, autocommit=False, bind=engine)()
 
 
