@@ -34,7 +34,7 @@ def add_stock_price_1day():
     session.execute(insert(StockPrice).prefix_with('IGNORE'), insert_set)
     session.commit()
     print(f'add_stock_price_1day   {now}')
-    discord.send_message(f'add_stock_price_1week   {now}')
+    discord.send_message(f'add_stock_price_1day   {now}')
 
 
 def add_stock_price_1week():
@@ -68,11 +68,11 @@ def add_stock_price_all():
 def alert():
     message = f"{datetime.now().date()}\n"
     window = buy_sell(window=5)
-    message += f"bollinger_band 5\n{window['buy']}\nsell : {window['sell']}\n\n"
+    message += f"bollinger_band 5\nbuy : {window['buy']}\nsell : {window['sell']}\n\n"
     window = buy_sell(window=20)
-    message += f"bollinger_band 20\n{window['buy']}\nsell : {window['sell']}\n\n"
+    message += f"bollinger_band 20\nbuy : {window['buy']}\nsell : {window['sell']}\n\n"
     window = buy_sell(window=60)
-    message += f"bollinger_band 60\n{window['buy']}\nsell : {window['sell']}"
+    message += f"bollinger_band 60\nbuy : {window['buy']}\nsell : {window['sell']}"
     discord.send_message(message)
 
 
