@@ -17,6 +17,7 @@ def add_stock():
     for item in df_krx.to_dict('records'):
         insert_set.append({'symbol': item['Code'], 'name': item['Name']})
     session.execute(insert(Stock).prefix_with('REPLACE'), insert_set)
+    session.commit()
     print(f'add_stock   {now}')
 
 
@@ -50,7 +51,7 @@ def add_stock_price_1week():
         for idx, item in df_krx.iterrows():
             insert_set.append({'symbol': stock_symbol, 'date': idx, 'open': item['Open'], 'high': item['High'], 'close': item['Close'], 'low': item['Low']})
         session.execute(insert(StockPrice).prefix_with('IGNORE'), insert_set)
-        session.commit()
+    session.commit()
     print(f'add_stock_price_1week   {now}')
     discord.send_message(f'add_stock_price_1week   {now}')
 
@@ -62,6 +63,7 @@ def add_stock_price_all():
         for idx, item in df_krx.iterrows():
             insert_set.append({'symbol': stock_symbol, 'date': idx, 'open': item['Open'], 'high': item['High'], 'close': item['Close'], 'low': item['Low']})
         session.execute(insert(StockPrice).prefix_with('IGNORE'), insert_set)
+    session.commit()
     print(f'add_stock_price_all')
 
 
