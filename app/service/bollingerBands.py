@@ -9,7 +9,7 @@ pd.set_option('display.max_columns', None)
 pd.set_option('display.max_rows', None)
 
 
-def bollinger_band(data, window=20, num_std=3, adx_window=14):
+def bollinger_band(data, window=20, num_std=2, adx_window=14):
     data['ewm'] = data['close'].ewm(span=window).mean()
     data['rolling_std'] = data['close'].rolling(window=window).std()
     data['upper_band'] = data['ewm'] + (data['rolling_std'] * num_std)

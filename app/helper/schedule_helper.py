@@ -65,18 +65,18 @@ def add_stock_price_all():
     print(f'add_stock_price_all')
 
 
-def alert():
+def alert(num_std=2):
     message = f"{datetime.now().date()}\n"
-    window = buy_sell(window=5)
+    window = buy_sell(window=5, num_std=num_std)
     message += f"bollinger_band 5\nbuy : {window['buy']}\nsell : {window['sell']}\n\n"
-    window = buy_sell(window=20)
+    window = buy_sell(window=20, num_std=num_std)
     message += f"bollinger_band 20\nbuy : {window['buy']}\nsell : {window['sell']}\n\n"
-    window = buy_sell(window=60)
+    window = buy_sell(window=60, num_std=num_std)
     message += f"bollinger_band 60\nbuy : {window['buy']}\nsell : {window['sell']}"
     discord.send_message(message)
 
 
-def buy_sell(window=20):
+def buy_sell(window=20, num_std=2):
     # if datetime.now().weekday() in (5, 6):
     #     return
     decision = {'buy': set(), 'sell': set()}
@@ -89,7 +89,7 @@ def buy_sell(window=20):
                 (StockPrice.date >= (datetime.now() - timedelta(days=200))) & (StockPrice.symbol == stock_symbol)), session.bind).sort_values(by='date', ascending=True)
             if data.empty:
                 continue
-            bollingerBands.bollinger_band(data, window)
+            bollingerBands.bollinger_band(data, window=window, num_std=num_std)
             # if data.iloc[-2]['open'] < data.iloc[-2]['close'] and data.iloc[-2]['open'] < data.iloc[-1]['open'] < data.iloc[-2]['close']:
             #     continue
             # if data.iloc[-2]['open'] > data.iloc[-2]['close'] and data.iloc[-2]['open'] > data.iloc[-1]['open'] > data.iloc[-2]['close']:
