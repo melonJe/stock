@@ -1,12 +1,12 @@
 from datetime import datetime
-from sqlalchemy import create_engine, select, insert, String, BLOB, BigInteger, Integer, Date
+from sqlalchemy import create_engine, select, insert, union, String, BLOB, BigInteger, Integer, Date
 from sqlalchemy.orm import sessionmaker, DeclarativeBase, Mapped, mapped_column
 from sqlalchemy.pool import QueuePool
 import config
 from sqlalchemy.orm import Session
 
 engine = create_engine(f'mysql+pymysql://{config.DB_USER}:{config.DB_PASS}@{config.DB_HOST}:{config.DB_PORT}/{config.DB_NAME}?charset=utf8mb4',
-                       poolclass=QueuePool, pool_pre_ping=True)  # pool_recycle=3600,
+                       pool_recycle=3600, poolclass=QueuePool, pool_pre_ping=True)
 session = sessionmaker(autoflush=False, autocommit=False, bind=engine)()
 
 

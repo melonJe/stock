@@ -2,10 +2,24 @@ import traceback
 
 import FinanceDataReader
 import pandas as pd
-from datetime import datetime, timedelta
+from datetime import timedelta
 from app.database.db_connect import *
 from app.helper import discord
 from app.service import bollingerBands
+
+
+# def update_subscription():
+#     now = datetime.now()
+#     if now.day != 1:
+#         return
+#     stock = session.scalars(select(Stock.symbol))
+#     insert_set = list()
+#     for stock_symbol in stock:
+#
+#
+#     session.execute(insert(Stock).prefix_with('REPLACE'), insert_set)
+#     session.commit()
+#     print(f'add_stock   {now}')
 
 
 def add_stock():
@@ -68,6 +82,8 @@ def add_stock_price_all():
 
 
 def alert(num_std=2):
+    if datetime.now().weekday() in (5, 6):
+        return
     message = f"{datetime.now().date()}\n"
     window = buy_sell(window=5, num_std=num_std)
     message += f"bollinger_band 5\nbuy : {window['buy']}\nsell : {window['sell']}\n\n"
@@ -79,13 +95,13 @@ def alert(num_std=2):
 
 
 def buy_sell(window=20, num_std=2):
-    # if datetime.now().weekday() in (5, 6):
-    #     return
     decision = {'buy': set(), 'sell': set()}
     try:
         # stock = session.scalars(select(Stock.symbol))
-        stock = session.scalars(select(StockSubscription.symbol).where(StockSubscription.email == 'cabs0814@naver.com'))
+        stock = session.scalars(union(select(StockSubscription.symbol).where(StockSubscription.email == 'cabs0814@naver.com'),
+                                      select(StockBuy.symbol).where(StockBuy.email == 'cabs0814@naver.com')))
         for stock_symbol in stock:
+            print(stock_symbol)
             name = session.scalars(select(Stock.name).where(Stock.symbol == stock_symbol).order_by(Stock.name.desc())).first()
             data = pd.read_sql(select(StockPrice).order_by(StockPrice.date.desc()).limit(100).where(
                 (StockPrice.date >= (datetime.now() - timedelta(days=200))) & (StockPrice.symbol == stock_symbol)), session.bind).sort_values(by='date', ascending=True)
