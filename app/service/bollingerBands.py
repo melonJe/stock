@@ -1,9 +1,4 @@
-from datetime import datetime, timedelta
-
-import FinanceDataReader
 import pandas as pd
-from app.database.db_connect import StockPrice, Stock
-from app.service import stock
 
 pd.set_option('display.max_columns', None)
 pd.set_option('display.max_rows', None)

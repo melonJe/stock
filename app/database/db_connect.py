@@ -1,5 +1,5 @@
 from datetime import datetime
-from sqlalchemy import create_engine, select, insert, union, String, BLOB, BigInteger, Integer, Date
+from sqlalchemy import create_engine, select, insert, delete, union, String, BLOB, BigInteger, Integer, Date
 from sqlalchemy.orm import sessionmaker, DeclarativeBase, Mapped, mapped_column
 from sqlalchemy.pool import QueuePool
 import config

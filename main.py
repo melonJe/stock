@@ -12,7 +12,8 @@ if __name__ == "__main__":
     print(f"DB_PASS {config.DB_PASS}")
     schedule.every().sunday.do(schedule_helper.add_stock_price_1week)
     schedule.every().monday.do(schedule_helper.add_stock)
-    schedule.every().day.at("22:00").do(schedule_helper.add_stock_price_1day)
+    schedule.every().day.at("16:30").do(schedule_helper.add_stock_price_1day)
+    schedule.every().day.at("18:00").do(schedule_helper.alert)
     schedule.every().day.at("08:30").do(schedule_helper.alert)
     while True:
         schedule.run_pending()
