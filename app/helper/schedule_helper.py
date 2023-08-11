@@ -14,7 +14,6 @@ def update_subscription():
     # if now.day != 1:
     #     return
     stock = set(session.scalars(select(Stock.symbol)))
-    # stock = {'004170'}
     insert_set = list()
     for stock_symbol in stock:
         value = 0
@@ -22,7 +21,6 @@ def update_subscription():
             if requests.get(f'https://navercomp.wisereport.co.kr/company/chart/c1030001.aspx?cmp_cd={stock_symbol}&frq=Y&rpt=ISM&finGubun=MAIN&chartType=svg',
                             headers={'Accept': 'application/json'}).json()['chartData1']['series'][0]['data'][-2] < 10000:
                 continue
-            current_ratio = -1
             page = requests.get(f'https://comp.fnguide.com/SVO2/ASP/SVD_FinanceRatio.asp?pGB=1&gicode=A{stock_symbol}&cID=&MenuYn=Y&ReportGB=&NewMenuID=104&stkGb=701').text
             soup = bs(page, "html.parser")
             current_ratio = float(soup.select('tr#p_grid1_1 > td.cle')[0].text)
@@ -56,7 +54,6 @@ def update_subscription():
         # delete(StockSubscription).where(StockSubscription.email == 'cabs0814@naver.com')
         session.execute(insert(StockSubscription), insert_set)
         session.commit()
-    print(f'add_stock   {now}')
 
 
 def add_stock():
@@ -64,12 +61,14 @@ def add_stock():
     if now.day != 1:
         return
     df_krx = FinanceDataReader.StockListing('KRX')
-    insert_set = list()
-    for item in df_krx.to_dict('records'):
-        insert_set.append({'symbol': item['Code'], 'name': item['Name']})
-    session.execute(insert(Stock).prefix_with('REPLACE'), insert_set)
+    insert_set = [{'symbol': item['Code'], 'name': item['Name']} for item in df_krx.to_dict('records')]
+    insert_stmt = insert(Stock).values(insert_set)
+    insert_stmt = insert_stmt.on_duplicate_key_update(
+        symbol=insert_stmt.inserted.symbol
+    )
+    session.execute(insert_stmt)
     session.commit()
-    print(f'add_stock   {now}')
+    discord.send_message(f'add_stock   {now}')
 
 
 def add_stock_price_1day():
@@ -83,9 +82,13 @@ def add_stock_price_1day():
         df_krx = FinanceDataReader.DataReader(stock_symbol, now, now)
         for idx, item in df_krx.iterrows():
             insert_set.append({'symbol': stock_symbol, 'date': idx, 'open': item['Open'], 'high': item['High'], 'close': item['Close'], 'low': item['Low']})
-    session.execute(insert(StockPrice).prefix_with('IGNORE'), insert_set)
+    insert_stmt = insert(StockPrice).values(insert_set)
+    insert_stmt = insert_stmt.on_duplicate_key_update(
+        symbol=insert_stmt.inserted.symbol,
+        date=insert_stmt.inserted.date
+    )
+    session.execute(insert_stmt)
     session.commit()
-    print(f'add_stock_price_1day   {now}')
     discord.send_message(f'add_stock_price_1day   {now}')
 
 
@@ -95,27 +98,36 @@ def add_stock_price_1week():
         return
     week_ago = (now - timedelta(days=7)).strftime('%Y-%m-%d')
     now = now.strftime('%Y-%m-%d')
-    stock = session.scalars(select(Stock.symbol))
-    for stock_symbol in stock:
-        insert_set = list()
+    for stock_symbol in session.scalars(select(Stock.symbol)):
         df_krx = FinanceDataReader.DataReader(stock_symbol, week_ago, now)
-        for idx, item in df_krx.iterrows():
-            insert_set.append({'symbol': stock_symbol, 'date': idx, 'open': item['Open'], 'high': item['High'], 'close': item['Close'], 'low': item['Low']})
-        session.execute(insert(StockPrice).prefix_with('IGNORE'), insert_set)
+        insert_set = [{'symbol': stock_symbol, 'date': idx, 'open': item['Open'], 'high': item['High'], 'close': item['Close'], 'low': item['Low']} for idx, item in
+                      df_krx.iterrows()]
+        if df_krx.empty:
+            continue
+        insert_stmt = insert(StockPrice).values(insert_set)
+        insert_stmt = insert_stmt.on_duplicate_key_update(
+            symbol=insert_stmt.inserted.symbol,
+            date=insert_stmt.inserted.date
+        )
+        session.execute(insert_stmt)
     session.commit()
-    print(f'add_stock_price_1week   {now}')
     discord.send_message(f'add_stock_price_1week   {now}')
 
 
 def add_stock_price_all():
     for stock_symbol in session.scalars(select(Stock.symbol)):
         df_krx = FinanceDataReader.DataReader(stock_symbol)
-        insert_set = list()
-        for idx, item in df_krx.iterrows():
-            insert_set.append({'symbol': stock_symbol, 'date': idx, 'open': item['Open'], 'high': item['High'], 'close': item['Close'], 'low': item['Low']})
-        session.execute(insert(StockPrice).prefix_with('IGNORE'), insert_set)
+        insert_set = [{'symbol': stock_symbol, 'date': idx, 'open': item['Open'], 'high': item['High'], 'close': item['Close'], 'low': item['Low']} for idx, item in
+                      df_krx.iterrows()]
+        if df_krx.empty:
+            continue
+        insert_stmt = insert(StockPrice).values(insert_set)
+        insert_stmt = insert_stmt.on_duplicate_key_update(
+            symbol=insert_stmt.inserted.symbol,
+            date=insert_stmt.inserted.date
+        )
+        session.execute(insert_stmt)
     session.commit()
-    print(f'add_stock_price_all')
 
 
 def alert(num_std=2):
@@ -135,7 +147,7 @@ def alert(num_std=2):
 def buy_sell(window=20, num_std=2):
     decision = {'buy': set(), 'sell': set()}
     try:
-        # stock = session.scalars(select(Stock.symbol))
+        # stock = Database().get_session(.)scalars(select(Stock.symbol))
         stock = session.scalars(union(select(StockSubscription.symbol).where(StockSubscription.email == 'cabs0814@naver.com'),
                                       select(StockBuy.symbol).where(StockBuy.email == 'cabs0814@naver.com')))
         for stock_symbol in stock:
@@ -158,3 +170,6 @@ def buy_sell(window=20, num_std=2):
     except:
         discord.error_message("stock_db\n" + str(traceback.print_exc()))
     return decision
+
+
+add_stock_price_1week()
