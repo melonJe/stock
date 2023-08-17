@@ -10,6 +10,7 @@ from bs4 import BeautifulSoup as bs
 
 
 def update_subscription():
+    # 방어적 투자
     now = datetime.now()
     # if now.day != 1:
     #     return
@@ -68,7 +69,7 @@ def add_stock():
     )
     session.execute(insert_stmt)
     session.commit()
-    discord.send_message(f'add_stock   {now}')
+    # discord.send_message(f'add_stock   {now}')
 
 
 def add_stock_price_1day():
@@ -89,7 +90,7 @@ def add_stock_price_1day():
     )
     session.execute(insert_stmt)
     session.commit()
-    discord.send_message(f'add_stock_price_1day   {now}')
+    # discord.send_message(f'add_stock_price_1day   {now}')
 
 
 def add_stock_price_1week():
@@ -111,7 +112,7 @@ def add_stock_price_1week():
         )
         session.execute(insert_stmt)
     session.commit()
-    discord.send_message(f'add_stock_price_1week   {now}')
+    # discord.send_message(f'add_stock_price_1week   {now}')
 
 
 def add_stock_price_all():
@@ -134,17 +135,19 @@ def alert(num_std=2):
     if datetime.now().weekday() in (5, 6):
         return
     message = f"{datetime.now().date()}\n"
-    window = buy_sell(window=5, num_std=num_std)
+    window = buy_sell_bollinger_band(window=5, num_std=num_std)
     message += f"bollinger_band 5\nbuy : {window['buy']}\nsell : {window['sell']}\n\n"
-    window = buy_sell(window=20, num_std=num_std)
+    window = buy_sell_bollinger_band(window=20, num_std=num_std)
     message += f"bollinger_band 20\nbuy : {window['buy']}\nsell : {window['sell']}\n\n"
-    window = buy_sell(window=60, num_std=num_std)
-    message += f"bollinger_band 60\nbuy : {window['buy']}\nsell : {window['sell']}"
+    window = buy_sell_bollinger_band(window=60, num_std=num_std)
+    message += f"bollinger_band 60\nbuy : {window['buy']}\nsell : {window['sell']}\n\n"
+    window = buy_sell_trend_judgment()
+    message += f"trend_judgment\nbuy : {window['buy']}\nsell : {window['sell']}"
     print(message)
-    discord.send_message(message)
+    # discord.send_message(message)
 
 
-def buy_sell(window=20, num_std=2):
+def buy_sell_bollinger_band(window=20, num_std=2):
     decision = {'buy': set(), 'sell': set()}
     try:
         # stock = Database().get_session(.)scalars(select(Stock.symbol))
@@ -168,8 +171,60 @@ def buy_sell(window=20, num_std=2):
             del data, name
             # TODO: custom exception
     except:
-        discord.error_message("stock_db\n" + str(traceback.print_exc()))
+        pass
+        # discord.error_message("stock_db\n" + str(traceback.print_exc()))
     return decision
 
 
-add_stock_price_1week()
+def buy_sell_trend_judgment():
+    decision = {'buy': set(), 'sell': set()}
+    try:
+        # stock = session.scalars(select(Stock.symbol))
+        stock = session.scalars(select(StockSubscription.symbol).where(StockSubscription.email == 'cabs0814@naver.com'))
+        for stock_symbol in stock:
+            name = session.scalars(select(Stock.name).where(Stock.symbol == stock_symbol).order_by(Stock.name.desc())).first()
+            data = pd.read_sql(select(StockPrice).order_by(StockPrice.date.desc()).limit(260).where(
+                (StockPrice.date >= (datetime.now() - timedelta(days=365))) & (StockPrice.symbol == stock_symbol)), session.bind).sort_values(by='date', ascending=True)
+            if data.empty:
+                continue
+            # TODO 추세 판단 알고리즘 적용
+            data['ma200'] = data['close'].rolling(window=200).mean()
+            data['ma150'] = data['close'].rolling(window=150).mean()
+            data['ma50'] = data['close'].rolling(window=50).mean()
+            if data.iloc[-1]['close'] < data.iloc[-1]['ma200']:
+                continue
+            if data.iloc[-1]['close'] < data.iloc[-1]['ma150']:
+                continue
+            if data.iloc[-1]['close'] < data.iloc[-1]['ma50']:
+                continue
+            if data.iloc[-1]['ma50'] < data.iloc[-1]['ma200']:
+                continue
+            if data.iloc[-1]['ma50'] < data.iloc[-1]['ma150']:
+                continue
+            if data.iloc[-1]['ma150'] < data.iloc[-1]['ma200']:
+                continue
+            if data.iloc[-1]['close'] < data['close'].max() * 0.75 and data.iloc[-1]['close'] / data['close'].max() > 0.95:
+                continue
+            if data.iloc[-1]['close'] < data['close'].min() * 1.25:
+                continue
+            decision['buy'].add(f"{name}  {data.iloc[-1]['close'] / data['close'].max()}")
+
+        stock = session.scalars(select(StockBuy.symbol).where(StockBuy.email == 'cabs0814@naver.com'))
+        for stock_symbol in stock:
+            name = session.scalars(select(Stock.name).where(Stock.symbol == stock_symbol).order_by(Stock.name.desc())).first()
+            data = pd.read_sql(select(StockPrice).order_by(StockPrice.date.desc()).limit(260).where(
+                (StockPrice.date >= (datetime.now() - timedelta(days=365))) & (StockPrice.symbol == stock_symbol)), session.bind).sort_values(by='date', ascending=True)
+            if data.empty:
+                continue
+            # TODO 추세 판단 알고리즘 적용
+            data['ma200'] = data['close'].rolling(window=200).mean()
+            if data.iloc[-1]['close'] < data.iloc[-1]['ma200']:
+                decision['sell'].add(name)
+            # TODO: custom exception
+    except:
+        pass
+        # discord.error_message("stock_db\n" + str(traceback.print_exc()))
+    return decision
+
+
+alert()
