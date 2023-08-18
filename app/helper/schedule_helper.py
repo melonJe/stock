@@ -172,8 +172,8 @@ def add_stock_price_all():
 
 
 def alert(num_std=2):
-    if datetime.now().weekday() in (5, 6):
-        return
+    # if datetime.now().weekday() in (5, 6):
+    #     return
     message = f"{datetime.now().date()}\n"
     window = buy_sell_bollinger_band(window=5, num_std=num_std)
     message += f"bollinger_band 5\nbuy : {window['buy']}\nsell : {window['sell']}\n\n"
@@ -191,7 +191,7 @@ def buy_sell_bollinger_band(window=20, num_std=2):
     decision = {'buy': set(), 'sell': set()}
     try:
         # stock = Database().get_session(.)scalars(select(Stock.symbol))
-        stock = session.scalars(union(select(StockSubscription.symbol).where(StockSubscription.email == 'cabs0814@naver.com'),
+        stock = session.scalars(union(select(StockSubscription.symbol).distinct(),
                                       select(StockBuy.symbol).where(StockBuy.email == 'cabs0814@naver.com')))
         for stock_symbol in stock:
             name = session.scalars(select(Stock.name).where(Stock.symbol == stock_symbol).order_by(Stock.name.desc())).first()
@@ -242,15 +242,13 @@ def buy_sell_trend_judgment():
                 continue
             if data.iloc[-1]['ma150'] < data.iloc[-1]['ma200']:
                 continue
-            if data.iloc[-1]['close'] < data['close'].max() * 0.75:
-                continue
-            if data.iloc[-1]['close'] / data['close'].max() < 0.90:
+            if data.iloc[-1]['close'] / data['close'].max() < 0.95:
                 continue
             if data.iloc[-1]['close'] < data['close'].min() * 1.25:
                 continue
             decision['buy'].add(f"{name}  {data.iloc[-1]['close'] / data['close'].max()}")
 
-        stock = session.scalars(select(StockSubscription.symbol).distinct())
+        stock = session.scalars(select(StockBuy.symbol).where(StockBuy.email == 'cabs0814@naver.com'))
         for stock_symbol in stock:
             name = session.scalars(select(Stock.name).where(Stock.symbol == stock_symbol).order_by(Stock.name.desc())).first()
             data = pd.read_sql(select(StockPrice).order_by(StockPrice.date.desc()).limit(260).where(
@@ -267,5 +265,4 @@ def buy_sell_trend_judgment():
     return decision
 
 
-add_stock_price_1week()
 alert()
