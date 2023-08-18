@@ -75,14 +75,14 @@ def update_subscription_aggressive_investor():
             # if any([x < 0 for x in eps_growth_rate_rate]):
             #     continue
 
-            sales_growth_rate = [float(x.text) for x in soup.select('tr#p_grid2_1 > td.r')[:-1]]
+            sales_growth_rate = [float(x.text) for x in soup.select('tr#p_grid1_8 > td.r')[:-1]]
             if len(sales_growth_rate) < 1 and any([x < 0 for x in sales_growth_rate]):
                 continue
             # sales_growth_rate_rate = [sales_growth_rate[i + 1] - sales_growth_rate[i] for i in range(len(sales_growth_rate) - 1)]
             # if any([x < 0 for x in sales_growth_rate_rate]):
             #     continue
 
-            operating_profit_rate = [float(x.text) for x in soup.select('tr#p_grid2_2 > td.r')[:-1]]
+            operating_profit_rate = [float(x.text) for x in soup.select('tr#p_grid1_10 > td.r')[:-1]]
             if len(operating_profit_rate) < 1 and any([x < 0 for x in operating_profit_rate]):
                 continue
             # operating_profit_rate_rate = [operating_profit_rate[i + 1] - operating_profit_rate[i] for i in range(len(operating_profit_rate) - 1)]
