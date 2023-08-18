@@ -63,7 +63,6 @@ def update_subscription_aggressive_investor():
     # if now.day != 1:
     #     return
     stock = set(session.scalars(select(Stock.symbol)))
-    # stock = ['365550']
     insert_set = list()
     for stock_symbol in stock:
         try:
@@ -136,7 +135,7 @@ def add_stock_price_1day():
 
 def add_stock_price_1week():
     now = datetime.now()
-    if now.weekday() in (5, 6):
+    if now.weekday() not in (5, 6):
         return
     week_ago = (now - timedelta(days=7)).strftime('%Y-%m-%d')
     now = now.strftime('%Y-%m-%d')
