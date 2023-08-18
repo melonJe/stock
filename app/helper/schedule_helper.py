@@ -9,7 +9,7 @@ from app.service import bollingerBands
 from bs4 import BeautifulSoup as bs
 
 
-def update_subscription():
+def update_subscription_defensive_investor():
     # 방어적 투자
     now = datetime.now()
     # if now.day != 1:
@@ -51,6 +51,47 @@ def update_subscription():
         if per * pbr > 22.5:
             continue
         insert_set.append({'email': 'cabs0814@naver.com', 'symbol': stock_symbol})
+    if insert_set:
+        # delete(StockSubscription).where(StockSubscription.email == 'cabs0814@naver.com')
+        session.execute(insert(StockSubscription), insert_set)
+        session.commit()
+
+
+def update_subscription_aggressive_investor():
+    # 공격적 투자
+    now = datetime.now()
+    # if now.day != 1:
+    #     return
+    stock = set(session.scalars(select(Stock.symbol)))
+    # stock = ['365550']
+    insert_set = list()
+    for stock_symbol in stock:
+        try:
+            page = requests.get(f'https://comp.fnguide.com/SVO2/ASP/SVD_FinanceRatio.asp?pGB=1&gicode=A{stock_symbol}&cID=&MenuYn=Y&ReportGB=&NewMenuID=104&stkGb=701').text
+            soup = bs(page, "html.parser")
+            eps_growth_rate = [float(x.text) for x in soup.select('tr#p_grid1_12 > td.r')[:-1]]
+            if len(eps_growth_rate) < 1 or any([x < 0 for x in eps_growth_rate]):
+                continue
+            # eps_growth_rate_rate = [eps_growth_rate[i + 1] - eps_growth_rate[i] for i in range(len(eps_growth_rate) - 1)]
+            # if any([x < 0 for x in eps_growth_rate_rate]):
+            #     continue
+
+            sales_growth_rate = [float(x.text) for x in soup.select('tr#p_grid2_1 > td.r')[:-1]]
+            if len(sales_growth_rate) < 1 and any([x < 0 for x in sales_growth_rate]):
+                continue
+            # sales_growth_rate_rate = [sales_growth_rate[i + 1] - sales_growth_rate[i] for i in range(len(sales_growth_rate) - 1)]
+            # if any([x < 0 for x in sales_growth_rate_rate]):
+            #     continue
+
+            operating_profit_rate = [float(x.text) for x in soup.select('tr#p_grid2_2 > td.r')[:-1]]
+            if len(operating_profit_rate) < 1 and any([x < 0 for x in operating_profit_rate]):
+                continue
+            # operating_profit_rate_rate = [operating_profit_rate[i + 1] - operating_profit_rate[i] for i in range(len(operating_profit_rate) - 1)]
+            # if any([x < 0 for x in operating_profit_rate_rate]):
+            #     continue
+        except:
+            continue
+        insert_set.append({'email': 'jmayermj@google.com', 'symbol': stock_symbol})
     if insert_set:
         # delete(StockSubscription).where(StockSubscription.email == 'cabs0814@naver.com')
         session.execute(insert(StockSubscription), insert_set)
@@ -179,8 +220,8 @@ def buy_sell_bollinger_band(window=20, num_std=2):
 def buy_sell_trend_judgment():
     decision = {'buy': set(), 'sell': set()}
     try:
-        # stock = session.scalars(select(Stock.symbol))
-        stock = session.scalars(select(StockSubscription.symbol).where(StockSubscription.email == 'cabs0814@naver.com'))
+        stock = session.scalars(select(Stock.symbol))
+        # stock = session.scalars(select(StockSubscription.symbol).where(StockSubscription.email == 'cabs0814@naver.com'))
         for stock_symbol in stock:
             name = session.scalars(select(Stock.name).where(Stock.symbol == stock_symbol).order_by(Stock.name.desc())).first()
             data = pd.read_sql(select(StockPrice).order_by(StockPrice.date.desc()).limit(260).where(
@@ -203,7 +244,9 @@ def buy_sell_trend_judgment():
                 continue
             if data.iloc[-1]['ma150'] < data.iloc[-1]['ma200']:
                 continue
-            if data.iloc[-1]['close'] < data['close'].max() * 0.75 and data.iloc[-1]['close'] / data['close'].max() > 0.95:
+            if data.iloc[-1]['close'] < data['close'].max() * 0.75:
+                continue
+            if data.iloc[-1]['close'] / data['close'].max() < 0.90:
                 continue
             if data.iloc[-1]['close'] < data['close'].min() * 1.25:
                 continue
@@ -225,6 +268,3 @@ def buy_sell_trend_judgment():
         pass
         # discord.error_message("stock_db\n" + str(traceback.print_exc()))
     return decision
-
-
-alert()
