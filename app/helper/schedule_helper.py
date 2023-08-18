@@ -220,15 +220,14 @@ def buy_sell_bollinger_band(window=20, num_std=2):
 def buy_sell_trend_judgment():
     decision = {'buy': set(), 'sell': set()}
     try:
-        stock = session.scalars(select(Stock.symbol))
-        # stock = session.scalars(select(StockSubscription.symbol).where(StockSubscription.email == 'cabs0814@naver.com'))
+        # stock = session.scalars(select(Stock.symbol))
+        stock = session.scalars(select(StockSubscription.symbol).distinct())
         for stock_symbol in stock:
             name = session.scalars(select(Stock.name).where(Stock.symbol == stock_symbol).order_by(Stock.name.desc())).first()
             data = pd.read_sql(select(StockPrice).order_by(StockPrice.date.desc()).limit(260).where(
                 (StockPrice.date >= (datetime.now() - timedelta(days=365))) & (StockPrice.symbol == stock_symbol)), session.bind).sort_values(by='date', ascending=True)
             if data.empty:
                 continue
-            # TODO 추세 판단 알고리즘 적용
             data['ma200'] = data['close'].rolling(window=200).mean()
             data['ma150'] = data['close'].rolling(window=150).mean()
             data['ma50'] = data['close'].rolling(window=50).mean()
@@ -252,14 +251,13 @@ def buy_sell_trend_judgment():
                 continue
             decision['buy'].add(f"{name}  {data.iloc[-1]['close'] / data['close'].max()}")
 
-        stock = session.scalars(select(StockBuy.symbol).where(StockBuy.email == 'cabs0814@naver.com'))
+        stock = session.scalars(select(StockSubscription.symbol).distinct())
         for stock_symbol in stock:
             name = session.scalars(select(Stock.name).where(Stock.symbol == stock_symbol).order_by(Stock.name.desc())).first()
             data = pd.read_sql(select(StockPrice).order_by(StockPrice.date.desc()).limit(260).where(
                 (StockPrice.date >= (datetime.now() - timedelta(days=365))) & (StockPrice.symbol == stock_symbol)), session.bind).sort_values(by='date', ascending=True)
             if data.empty:
                 continue
-            # TODO 추세 판단 알고리즘 적용
             data['ma200'] = data['close'].rolling(window=200).mean()
             if data.iloc[-1]['close'] < data.iloc[-1]['ma200']:
                 decision['sell'].add(name)
@@ -268,3 +266,7 @@ def buy_sell_trend_judgment():
         pass
         # discord.error_message("stock_db\n" + str(traceback.print_exc()))
     return decision
+
+
+add_stock_price_1week()
+alert()
