@@ -263,6 +263,3 @@ def buy_sell_trend_judgment():
         pass
         # discord.error_message("stock_db\n" + str(traceback.print_exc()))
     return decision
-
-
-alert()
