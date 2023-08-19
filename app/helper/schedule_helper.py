@@ -68,31 +68,36 @@ def update_subscription_aggressive_investor():
         try:
             page = requests.get(f'https://comp.fnguide.com/SVO2/ASP/SVD_FinanceRatio.asp?pGB=1&gicode=A{stock_symbol}&cID=&MenuYn=Y&ReportGB=&NewMenuID=104&stkGb=701').text
             soup = bs(page, "html.parser")
-            eps_growth_rate = [float(x.text) for x in soup.select('tr#p_grid1_12 > td.r')[:-1]]
-            if len(eps_growth_rate) < 1 or any([x < 0 for x in eps_growth_rate]):
-                continue
-            # eps_growth_rate_rate = [eps_growth_rate[i + 1] - eps_growth_rate[i] for i in range(len(eps_growth_rate) - 1)]
-            # if any([x < 0 for x in eps_growth_rate_rate]):
-            #     continue
 
             sales_growth_rate = [float(x.text) for x in soup.select('tr#p_grid1_8 > td.r')[:-1]]
-            if len(sales_growth_rate) < 1 and any([x < 0 for x in sales_growth_rate]):
+            # sales_growth_rate = [float(x.text) for x in soup.select('tr#p_grid2_1 > td.r')[:-1]]
+            if len(sales_growth_rate) < 1 or any([x < 0 for x in sales_growth_rate]):
                 continue
             # sales_growth_rate_rate = [sales_growth_rate[i + 1] - sales_growth_rate[i] for i in range(len(sales_growth_rate) - 1)]
             # if any([x < 0 for x in sales_growth_rate_rate]):
             #     continue
 
             operating_profit_rate = [float(x.text) for x in soup.select('tr#p_grid1_10 > td.r')[:-1]]
-            if len(operating_profit_rate) < 1 and any([x < 0 for x in operating_profit_rate]):
+            # operating_profit_rate = [float(x.text) for x in soup.select('tr#p_grid2_2 > td.r')[:-1]]
+            if len(operating_profit_rate) < 1 or any([x < 0 for x in operating_profit_rate]):
                 continue
             # operating_profit_rate_rate = [operating_profit_rate[i + 1] - operating_profit_rate[i] for i in range(len(operating_profit_rate) - 1)]
             # if any([x < 0 for x in operating_profit_rate_rate]):
             #     continue
+
+            eps_growth_rate = [float(x.text) for x in soup.select('tr#p_grid1_12 > td.r')[:-1]]
+            # eps_growth_rate = [float(x.text) for x in soup.select('tr#p_grid2_4 > td.r')[:-1]]
+            if len(eps_growth_rate) < 1 or any([x < 0 for x in eps_growth_rate]):
+                continue
+            # eps_growth_rate_rate = [eps_growth_rate[i + 1] - eps_growth_rate[i] for i in range(len(eps_growth_rate) - 1)]
+            # if any([x < 0 for x in eps_growth_rate_rate]):
+            #     continue
         except:
             continue
-        insert_set.append({'email': 'jmayermj@google.com', 'symbol': stock_symbol})
+        insert_set.append({'email': 'jmayermj@gmail.com', 'symbol': stock_symbol})
     if insert_set:
         # delete(StockSubscription).where(StockSubscription.email == 'cabs0814@naver.com')
+        # print(insert_set)
         session.execute(insert(StockSubscription), insert_set)
         session.commit()
 
@@ -175,12 +180,12 @@ def alert(num_std=2):
     # if datetime.now().weekday() in (5, 6):
     #     return
     message = f"{datetime.now().date()}\n"
-    window = buy_sell_bollinger_band(window=5, num_std=num_std)
-    message += f"bollinger_band 5\nbuy : {window['buy']}\nsell : {window['sell']}\n\n"
-    window = buy_sell_bollinger_band(window=20, num_std=num_std)
-    message += f"bollinger_band 20\nbuy : {window['buy']}\nsell : {window['sell']}\n\n"
-    window = buy_sell_bollinger_band(window=60, num_std=num_std)
-    message += f"bollinger_band 60\nbuy : {window['buy']}\nsell : {window['sell']}\n\n"
+    # window = buy_sell_bollinger_band(window=5, num_std=num_std)
+    # message += f"bollinger_band 5\nbuy : {window['buy']}\nsell : {window['sell']}\n\n"
+    # window = buy_sell_bollinger_band(window=20, num_std=num_std)
+    # message += f"bollinger_band 20\nbuy : {window['buy']}\nsell : {window['sell']}\n\n"
+    # window = buy_sell_bollinger_band(window=60, num_std=num_std)
+    # message += f"bollinger_band 60\nbuy : {window['buy']}\nsell : {window['sell']}\n\n"
     window = buy_sell_trend_judgment()
     message += f"trend_judgment\nbuy : {window['buy']}\nsell : {window['sell']}"
     print(message)
@@ -220,7 +225,7 @@ def buy_sell_trend_judgment():
     decision = {'buy': set(), 'sell': set()}
     try:
         # stock = session.scalars(select(Stock.symbol))
-        stock = session.scalars(select(StockSubscription.symbol).distinct())
+        stock = session.scalars(select(StockSubscription.symbol).where(StockSubscription.email == 'jmayermj@gmail.com'))
         for stock_symbol in stock:
             name = session.scalars(select(Stock.name).where(Stock.symbol == stock_symbol).order_by(Stock.name.desc())).first()
             data = pd.read_sql(select(StockPrice).order_by(StockPrice.date.desc()).limit(260).where(
@@ -263,3 +268,6 @@ def buy_sell_trend_judgment():
         pass
         # discord.error_message("stock_db\n" + str(traceback.print_exc()))
     return decision
+
+
+alert()
