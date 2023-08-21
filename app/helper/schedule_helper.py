@@ -14,47 +14,48 @@ def update_subscription_defensive_investor():
     now = datetime.now()
     # if now.day != 1:
     #     return
-    stock = set(session.scalars(select(Stock.symbol)))
-    insert_set = list()
-    for stock_symbol in stock:
-        value = 0
-        try:
-            if requests.get(f'https://navercomp.wisereport.co.kr/company/chart/c1030001.aspx?cmp_cd={stock_symbol}&frq=Y&rpt=ISM&finGubun=MAIN&chartType=svg',
-                            headers={'Accept': 'application/json'}).json()['chartData1']['series'][0]['data'][-2] < 10000:
+    with session.begin():
+        stock = set(session.scalars(select(Stock.symbol)))
+        insert_set = list()
+        for stock_symbol in stock:
+            value = 0
+            try:
+                if requests.get(f'https://navercomp.wisereport.co.kr/company/chart/c1030001.aspx?cmp_cd={stock_symbol}&frq=Y&rpt=ISM&finGubun=MAIN&chartType=svg',
+                                headers={'Accept': 'application/json'}).json()['chartData1']['series'][0]['data'][-2] < 10000:
+                    continue
+                page = requests.get(f'https://comp.fnguide.com/SVO2/ASP/SVD_FinanceRatio.asp?pGB=1&gicode=A{stock_symbol}&cID=&MenuYn=Y&ReportGB=&NewMenuID=104&stkGb=701').text
+                soup = bs(page, "html.parser")
+                current_ratio = float(soup.select('tr#p_grid1_1 > td.cle')[0].text)
+                if current_ratio < 200:
+                    continue
+                page = requests.get(f'https://navercomp.wisereport.co.kr/v2/company/c1010001.aspx?cmp_cd={stock_symbol}').text
+                soup = bs(page, "html.parser")
+                elements = soup.select('td.cmp-table-cell > dl > dt.line-left')
+                per = -1
+                pbr = -1
+                dividend_rate = -1
+                for x in elements:
+                    item = x.text.split(' ')
+                    if item[0] == 'PER':
+                        per = float(item[1])
+                    if item[0] == 'PBR':
+                        pbr = float(item[1])
+                    if item[0] == '현금배당수익률':
+                        dividend_rate = float(item[1][:-1])
+            except:
                 continue
-            page = requests.get(f'https://comp.fnguide.com/SVO2/ASP/SVD_FinanceRatio.asp?pGB=1&gicode=A{stock_symbol}&cID=&MenuYn=Y&ReportGB=&NewMenuID=104&stkGb=701').text
-            soup = bs(page, "html.parser")
-            current_ratio = float(soup.select('tr#p_grid1_1 > td.cle')[0].text)
-            if current_ratio < 200:
+            del item
+            if dividend_rate == -1:
                 continue
-            page = requests.get(f'https://navercomp.wisereport.co.kr/v2/company/c1010001.aspx?cmp_cd={stock_symbol}').text
-            soup = bs(page, "html.parser")
-            elements = soup.select('td.cmp-table-cell > dl > dt.line-left')
-            per = -1
-            pbr = -1
-            dividend_rate = -1
-            for x in elements:
-                item = x.text.split(' ')
-                if item[0] == 'PER':
-                    per = float(item[1])
-                if item[0] == 'PBR':
-                    pbr = float(item[1])
-                if item[0] == '현금배당수익률':
-                    dividend_rate = float(item[1][:-1])
-        except:
-            continue
-        del item
-        if dividend_rate == -1:
-            continue
-        if per > 15:
-            continue
-        if per * pbr > 22.5:
-            continue
-        insert_set.append({'email': 'cabs0814@naver.com', 'symbol': stock_symbol})
-    if insert_set:
-        # delete(StockSubscription).where(StockSubscription.email == 'cabs0814@naver.com')
-        session.execute(insert(StockSubscription), insert_set)
-        session.commit()
+            if per > 15:
+                continue
+            if per * pbr > 22.5:
+                continue
+            insert_set.append({'email': 'cabs0814@naver.com', 'symbol': stock_symbol})
+        if insert_set:
+            # delete(StockSubscription).where(StockSubscription.email == 'cabs0814@naver.com')
+            session.execute(insert(StockSubscription), insert_set)
+            session.commit()
 
 
 def update_subscription_aggressive_investor():
@@ -62,44 +63,39 @@ def update_subscription_aggressive_investor():
     now = datetime.now()
     # if now.day != 1:
     #     return
-    stock = set(session.scalars(select(Stock.symbol)))
-    insert_set = list()
-    for stock_symbol in stock:
-        try:
-            page = requests.get(f'https://comp.fnguide.com/SVO2/ASP/SVD_FinanceRatio.asp?pGB=1&gicode=A{stock_symbol}&cID=&MenuYn=Y&ReportGB=&NewMenuID=104&stkGb=701').text
-            soup = bs(page, "html.parser")
-
-            sales_growth_rate = [float(x.text) for x in soup.select('tr#p_grid1_8 > td.r')[:-1]]
-            # sales_growth_rate = [float(x.text) for x in soup.select('tr#p_grid2_1 > td.r')[:-1]]
-            if len(sales_growth_rate) < 1 or any([x < 0 for x in sales_growth_rate]):
+    with session.begin():
+        stock = set(session.scalars(select(Stock.symbol)))
+        # stock = ['45014K']
+        insert_set = list()
+        for stock_symbol in stock:
+            insert_true = True
+            try:
+                page = requests.get(f'https://comp.fnguide.com/SVO2/ASP/SVD_FinanceRatio.asp?pGB=1&gicode=A{stock_symbol}&cID=&MenuYn=Y&ReportGB=&NewMenuID=104&stkGb=701').text
+                soup = bs(page, "html.parser")
+                tr_tag = soup.select('tr')
+                if not tr_tag:
+                    continue
+                for item in tr_tag:
+                    check = item.select('th > div > div > dl > dt')
+                    if isinstance(check, list) and check and check[0].text in ['매출액증가율', '영업이익증가율', 'EPS증가율']:
+                        rate = [float(x.text.replace(',', '')) for x in item.select('td.r')[:-1]]
+                        # rate.pop(1)
+                        if len(rate) < 1 or any([x <= 0 for x in rate]):
+                            insert_true = False
+                        # rate_rate = [rate[i + 1] - rate[i] for i in range(len(rate) - 1)]
+                        # if any([x < 0 for x in rate_rate]):
+                        #     insert_true = False
+                    if not insert_true:
+                        break
+            except:
                 continue
-            # sales_growth_rate_rate = [sales_growth_rate[i + 1] - sales_growth_rate[i] for i in range(len(sales_growth_rate) - 1)]
-            # if any([x < 0 for x in sales_growth_rate_rate]):
-            #     continue
-
-            operating_profit_rate = [float(x.text) for x in soup.select('tr#p_grid1_10 > td.r')[:-1]]
-            # operating_profit_rate = [float(x.text) for x in soup.select('tr#p_grid2_2 > td.r')[:-1]]
-            if len(operating_profit_rate) < 1 or any([x < 0 for x in operating_profit_rate]):
-                continue
-            # operating_profit_rate_rate = [operating_profit_rate[i + 1] - operating_profit_rate[i] for i in range(len(operating_profit_rate) - 1)]
-            # if any([x < 0 for x in operating_profit_rate_rate]):
-            #     continue
-
-            eps_growth_rate = [float(x.text) for x in soup.select('tr#p_grid1_12 > td.r')[:-1]]
-            # eps_growth_rate = [float(x.text) for x in soup.select('tr#p_grid2_4 > td.r')[:-1]]
-            if len(eps_growth_rate) < 1 or any([x < 0 for x in eps_growth_rate]):
-                continue
-            # eps_growth_rate_rate = [eps_growth_rate[i + 1] - eps_growth_rate[i] for i in range(len(eps_growth_rate) - 1)]
-            # if any([x < 0 for x in eps_growth_rate_rate]):
-            #     continue
-        except:
-            continue
-        insert_set.append({'email': 'jmayermj@gmail.com', 'symbol': stock_symbol})
-    if insert_set:
-        # delete(StockSubscription).where(StockSubscription.email == 'cabs0814@naver.com')
-        # print(insert_set)
-        session.execute(insert(StockSubscription), insert_set)
-        session.commit()
+            if insert_true:
+                insert_set.append({'email': 'jmayermj@gmail.com', 'symbol': stock_symbol})
+        if insert_set:
+            # delete(StockSubscription).where(StockSubscription.email == 'cabs0814@naver.com')
+            print(insert_set)
+            session.execute(insert(StockSubscription), insert_set)
+            session.commit()
 
 
 def add_stock():
@@ -112,8 +108,9 @@ def add_stock():
     insert_stmt = insert_stmt.on_duplicate_key_update(
         symbol=insert_stmt.inserted.symbol
     )
-    session.execute(insert_stmt)
-    session.commit()
+    with session.begin():
+        session.execute(insert_stmt)
+        session.commit()
     # discord.send_message(f'add_stock   {now}')
 
 
@@ -123,19 +120,20 @@ def add_stock_price_1day():
         return
     now = now.strftime('%Y-%m-%d')
     insert_set = list()
-    stock = session.scalars(select(Stock.symbol))
-    for stock_symbol in stock:
-        df_krx = FinanceDataReader.DataReader(stock_symbol, now, now)
-        for idx, item in df_krx.iterrows():
-            insert_set.append({'symbol': stock_symbol, 'date': idx, 'open': item['Open'], 'high': item['High'], 'close': item['Close'], 'low': item['Low']})
-    insert_stmt = insert(StockPrice).values(insert_set)
-    insert_stmt = insert_stmt.on_duplicate_key_update(
-        symbol=insert_stmt.inserted.symbol,
-        date=insert_stmt.inserted.date
-    )
-    session.execute(insert_stmt)
-    session.commit()
-    # discord.send_message(f'add_stock_price_1day   {now}')
+    with session.begin():
+        stock = session.scalars(select(Stock.symbol))
+        for stock_symbol in stock:
+            df_krx = FinanceDataReader.DataReader(stock_symbol, now, now)
+            for idx, item in df_krx.iterrows():
+                insert_set.append({'symbol': stock_symbol, 'date': idx, 'open': item['Open'], 'high': item['High'], 'close': item['Close'], 'low': item['Low']})
+        insert_stmt = insert(StockPrice).values(insert_set)
+        insert_stmt = insert_stmt.on_duplicate_key_update(
+            symbol=insert_stmt.inserted.symbol,
+            date=insert_stmt.inserted.date
+        )
+        session.execute(insert_stmt)
+        session.commit()
+        # discord.send_message(f'add_stock_price_1day   {now}')
 
 
 def add_stock_price_1week():
@@ -144,36 +142,38 @@ def add_stock_price_1week():
         return
     week_ago = (now - timedelta(days=7)).strftime('%Y-%m-%d')
     now = now.strftime('%Y-%m-%d')
-    for stock_symbol in session.scalars(select(Stock.symbol)):
-        df_krx = FinanceDataReader.DataReader(stock_symbol, week_ago, now)
-        insert_set = [{'symbol': stock_symbol, 'date': idx, 'open': item['Open'], 'high': item['High'], 'close': item['Close'], 'low': item['Low']} for idx, item in
-                      df_krx.iterrows()]
-        if df_krx.empty:
-            continue
-        insert_stmt = insert(StockPrice).values(insert_set)
-        insert_stmt = insert_stmt.on_duplicate_key_update(
-            symbol=insert_stmt.inserted.symbol,
-            date=insert_stmt.inserted.date
-        )
-        session.execute(insert_stmt)
-    session.commit()
-    # discord.send_message(f'add_stock_price_1week   {now}')
+    with session.begin():
+        for stock_symbol in session.scalars(select(Stock.symbol)):
+            df_krx = FinanceDataReader.DataReader(stock_symbol, week_ago, now)
+            insert_set = [{'symbol': stock_symbol, 'date': idx, 'open': item['Open'], 'high': item['High'], 'close': item['Close'], 'low': item['Low']} for idx, item in
+                          df_krx.iterrows()]
+            if df_krx.empty:
+                continue
+            insert_stmt = insert(StockPrice).values(insert_set)
+            insert_stmt = insert_stmt.on_duplicate_key_update(
+                symbol=insert_stmt.inserted.symbol,
+                date=insert_stmt.inserted.date
+            )
+            session.execute(insert_stmt)
+        session.commit()
+        # discord.send_message(f'add_stock_price_1week   {now}')
 
 
 def add_stock_price_all():
-    for stock_symbol in session.scalars(select(Stock.symbol)):
-        df_krx = FinanceDataReader.DataReader(stock_symbol)
-        insert_set = [{'symbol': stock_symbol, 'date': idx, 'open': item['Open'], 'high': item['High'], 'close': item['Close'], 'low': item['Low']} for idx, item in
-                      df_krx.iterrows()]
-        if df_krx.empty:
-            continue
-        insert_stmt = insert(StockPrice).values(insert_set)
-        insert_stmt = insert_stmt.on_duplicate_key_update(
-            symbol=insert_stmt.inserted.symbol,
-            date=insert_stmt.inserted.date
-        )
-        session.execute(insert_stmt)
-    session.commit()
+    with session.begin():
+        for stock_symbol in session.scalars(select(Stock.symbol)):
+            df_krx = FinanceDataReader.DataReader(stock_symbol)
+            insert_set = [{'symbol': stock_symbol, 'date': idx, 'open': item['Open'], 'high': item['High'], 'close': item['Close'], 'low': item['Low']} for idx, item in
+                          df_krx.iterrows()]
+            if df_krx.empty:
+                continue
+            insert_stmt = insert(StockPrice).values(insert_set)
+            insert_stmt = insert_stmt.on_duplicate_key_update(
+                symbol=insert_stmt.inserted.symbol,
+                date=insert_stmt.inserted.date
+            )
+            session.execute(insert_stmt)
+        session.commit()
 
 
 def alert(num_std=2):
@@ -195,26 +195,27 @@ def alert(num_std=2):
 def buy_sell_bollinger_band(window=20, num_std=2):
     decision = {'buy': set(), 'sell': set()}
     try:
-        # stock = Database().get_session(.)scalars(select(Stock.symbol))
-        stock = session.scalars(union(select(StockSubscription.symbol).distinct(),
-                                      select(StockBuy.symbol).where(StockBuy.email == 'cabs0814@naver.com')))
-        for stock_symbol in stock:
-            name = session.scalars(select(Stock.name).where(Stock.symbol == stock_symbol).order_by(Stock.name.desc())).first()
-            data = pd.read_sql(select(StockPrice).order_by(StockPrice.date.desc()).limit(100).where(
-                (StockPrice.date >= (datetime.now() - timedelta(days=200))) & (StockPrice.symbol == stock_symbol)), session.bind).sort_values(by='date', ascending=True)
-            if data.empty:
-                continue
-            bollingerBands.bollinger_band(data, window=window, num_std=num_std)
-            # if data.iloc[-2]['open'] < data.iloc[-2]['close'] and data.iloc[-2]['open'] < data.iloc[-1]['open'] < data.iloc[-2]['close']:
-            #     continue
-            # if data.iloc[-2]['open'] > data.iloc[-2]['close'] and data.iloc[-2]['open'] > data.iloc[-1]['open'] > data.iloc[-2]['close']:
-            #     continue
-            if data.iloc[-1]['decision'] == 'buy':
-                decision['buy'].add(name)
-            if data.iloc[-1]['decision'] == 'sell':
-                decision['sell'].add(name)
-            del data, name
-            # TODO: custom exception
+        with session.begin():
+            # stock = Database().get_session(.)scalars(select(Stock.symbol))
+            stock = session.scalars(union(select(StockSubscription.symbol).distinct(),
+                                          select(StockBuy.symbol).where(StockBuy.email == 'cabs0814@naver.com')))
+            for stock_symbol in stock:
+                name = session.scalars(select(Stock.name).where(Stock.symbol == stock_symbol).order_by(Stock.name.desc())).first()
+                data = pd.read_sql(select(StockPrice).order_by(StockPrice.date.desc()).limit(100).where(
+                    (StockPrice.date >= (datetime.now() - timedelta(days=200))) & (StockPrice.symbol == stock_symbol)), session.bind).sort_values(by='date', ascending=True)
+                if data.empty:
+                    continue
+                bollingerBands.bollinger_band(data, window=window, num_std=num_std)
+                # if data.iloc[-2]['open'] < data.iloc[-2]['close'] and data.iloc[-2]['open'] < data.iloc[-1]['open'] < data.iloc[-2]['close']:
+                #     continue
+                # if data.iloc[-2]['open'] > data.iloc[-2]['close'] and data.iloc[-2]['open'] > data.iloc[-1]['open'] > data.iloc[-2]['close']:
+                #     continue
+                if data.iloc[-1]['decision'] == 'buy':
+                    decision['buy'].add(name)
+                if data.iloc[-1]['decision'] == 'sell':
+                    decision['sell'].add(name)
+                del data, name
+                # TODO: custom exception
     except:
         pass
         # discord.error_message("stock_db\n" + str(traceback.print_exc()))
@@ -224,50 +225,48 @@ def buy_sell_bollinger_band(window=20, num_std=2):
 def buy_sell_trend_judgment():
     decision = {'buy': set(), 'sell': set()}
     try:
-        # stock = session.scalars(select(Stock.symbol))
-        stock = session.scalars(select(StockSubscription.symbol).where(StockSubscription.email == 'jmayermj@gmail.com'))
-        for stock_symbol in stock:
-            name = session.scalars(select(Stock.name).where(Stock.symbol == stock_symbol).order_by(Stock.name.desc())).first()
-            data = pd.read_sql(select(StockPrice).order_by(StockPrice.date.desc()).limit(260).where(
-                (StockPrice.date >= (datetime.now() - timedelta(days=365))) & (StockPrice.symbol == stock_symbol)), session.bind).sort_values(by='date', ascending=True)
-            if data.empty:
-                continue
-            data['ma200'] = data['close'].rolling(window=200).mean()
-            data['ma150'] = data['close'].rolling(window=150).mean()
-            data['ma50'] = data['close'].rolling(window=50).mean()
-            if data.iloc[-1]['close'] < data.iloc[-1]['ma200']:
-                continue
-            if data.iloc[-1]['close'] < data.iloc[-1]['ma150']:
-                continue
-            if data.iloc[-1]['close'] < data.iloc[-1]['ma50']:
-                continue
-            if data.iloc[-1]['ma50'] < data.iloc[-1]['ma200']:
-                continue
-            if data.iloc[-1]['ma50'] < data.iloc[-1]['ma150']:
-                continue
-            if data.iloc[-1]['ma150'] < data.iloc[-1]['ma200']:
-                continue
-            if data.iloc[-1]['close'] / data['close'].max() < 0.95:
-                continue
-            if data.iloc[-1]['close'] < data['close'].min() * 1.25:
-                continue
-            decision['buy'].add(f"{name}  {data.iloc[-1]['close'] / data['close'].max()}")
+        with session.begin():
+            # stock = session.scalars(select(Stock.symbol))
+            stock = session.scalars(select(StockSubscription.symbol).where(StockSubscription.email == 'jmayermj@gmail.com'))
+            for stock_symbol in stock:
+                name = session.scalars(select(Stock.name).where(Stock.symbol == stock_symbol).order_by(Stock.name.desc())).first()
+                data = pd.read_sql(select(StockPrice).order_by(StockPrice.date.desc()).limit(260).where(
+                    (StockPrice.date >= (datetime.now() - timedelta(days=365))) & (StockPrice.symbol == stock_symbol)), session.bind).sort_values(by='date', ascending=True)
+                if data.empty:
+                    continue
+                data['ma200'] = data['close'].rolling(window=200).mean()
+                data['ma150'] = data['close'].rolling(window=150).mean()
+                data['ma50'] = data['close'].rolling(window=50).mean()
+                if data.iloc[-1]['close'] < data.iloc[-1]['ma200']:
+                    continue
+                if data.iloc[-1]['close'] < data.iloc[-1]['ma150']:
+                    continue
+                if data.iloc[-1]['close'] < data.iloc[-1]['ma50']:
+                    continue
+                if data.iloc[-1]['ma50'] < data.iloc[-1]['ma200']:
+                    continue
+                if data.iloc[-1]['ma50'] < data.iloc[-1]['ma150']:
+                    continue
+                if data.iloc[-1]['ma150'] < data.iloc[-1]['ma200']:
+                    continue
+                if data.iloc[-1]['close'] / data['close'].max() < 0.75:
+                    continue
+                if data.iloc[-1]['close'] < data['close'].min() * 1.25:
+                    continue
+                decision['buy'].add(f"{name}  {data.iloc[-1]['close'] / data['close'].max()}")
 
-        stock = session.scalars(select(StockBuy.symbol).where(StockBuy.email == 'cabs0814@naver.com'))
-        for stock_symbol in stock:
-            name = session.scalars(select(Stock.name).where(Stock.symbol == stock_symbol).order_by(Stock.name.desc())).first()
-            data = pd.read_sql(select(StockPrice).order_by(StockPrice.date.desc()).limit(260).where(
-                (StockPrice.date >= (datetime.now() - timedelta(days=365))) & (StockPrice.symbol == stock_symbol)), session.bind).sort_values(by='date', ascending=True)
-            if data.empty:
-                continue
-            data['ma200'] = data['close'].rolling(window=200).mean()
-            if data.iloc[-1]['close'] < data.iloc[-1]['ma200']:
-                decision['sell'].add(name)
-            # TODO: custom exception
+            stock = session.scalars(select(StockBuy.symbol).where(StockBuy.email == 'cabs0814@naver.com'))
+            for stock_symbol in stock:
+                name = session.scalars(select(Stock.name).where(Stock.symbol == stock_symbol).order_by(Stock.name.desc())).first()
+                data = pd.read_sql(select(StockPrice).order_by(StockPrice.date.desc()).limit(260).where(
+                    (StockPrice.date >= (datetime.now() - timedelta(days=365))) & (StockPrice.symbol == stock_symbol)), session.bind).sort_values(by='date', ascending=True)
+                if data.empty:
+                    continue
+                data['ma200'] = data['close'].rolling(window=200).mean()
+                if data.iloc[-1]['close'] < data.iloc[-1]['ma200']:
+                    decision['sell'].add(name)
+                # TODO: custom exception
     except:
         pass
         # discord.error_message("stock_db\n" + str(traceback.print_exc()))
     return decision
-
-
-alert()
