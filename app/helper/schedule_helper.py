@@ -189,7 +189,7 @@ def alert(num_std=2):
     window = buy_sell_trend_judgment()
     message += f"trend_judgment\nbuy : {window['buy']}\nsell : {window['sell']}"
     print(message)
-    # discord.send_message(message)
+    discord.send_message(message)
 
 
 def buy_sell_bollinger_band(window=20, num_std=2):
