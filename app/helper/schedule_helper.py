@@ -248,13 +248,13 @@ def buy_sell_trend_judgment():
                 data['ma200'] = data['close'].rolling(window=200).mean()
                 data['ma150'] = data['close'].rolling(window=150).mean()
                 data['ma50'] = data['close'].rolling(window=50).mean()
-                if data.iloc[-1]['ma200'] < data.iloc[-1]['ma150'] < data.iloc[-1]['ma50'] < data.iloc[-1]['close']:
+                if not (data.iloc[-1]['ma200'] < data.iloc[-1]['ma150'] < data.iloc[-1]['ma50'] < data.iloc[-1]['close']):
                     decision['sell'].add(name)
                     continue
-                if not (data.iloc[-1]['close'] < data['close'].max() * 0.75):
+                if data.iloc[-1]['close'] < data['close'].max() * 0.75:
                     decision['sell'].add(name)
                     continue
-                if not (data.iloc[-1]['close'] < data['close'].min() * 1.25):
+                if data.iloc[-1]['close'] < data['close'].min() * 1.25:
                     decision['sell'].add(name)
                     continue
                 # TODO: custom exception
