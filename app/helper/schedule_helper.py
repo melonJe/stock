@@ -104,33 +104,27 @@ def add_stock():
         return
     df_krx = FinanceDataReader.StockListing('KRX')
     data_to_insert = [{'symbol': item['Code'], 'name': item['Name']} for item in df_krx.to_dict('records')]
-    insert_sql = """
-        INSERT INTO stock (symbol, name)
-        VALUES (:symbol, :name)
-        ON CONFLICT (symbol) DO NOTHING
-    """
     with session.begin():
-        session.execute(text(insert_sql), data_to_insert)
-        session.commit()
+        if data_to_insert:
+            stmt = insert(Stock).values(data_to_insert).on_conflict_do_nothing(index_elements=["symbol"])
+            session.execute(stmt)
     # discord.send_message(f'add_stock   {now}')
 
 
 def add_stock_price_all():
-    insert_sql = """
-                           INSERT INTO stock_price (symbol, date, open, high, close, low)
-                           VALUES (:symbol, :date, :open, :high, :close, :low)
-                           ON CONFLICT (symbol, date) DO UPDATE
-                           SET open = EXCLUDED.open, high = EXCLUDED.high, close = EXCLUDED.close, low = EXCLUDED.low
-                       """
     with session.begin():
-        year_ago_5 = datetime.now().year - 5
+        one_year_ago = datetime.now().year - 1
         for stock_symbol in session.scalars(select(Stock.symbol)):
-            df_krx = FinanceDataReader.DataReader(stock_symbol, year_ago_5)
+            df_krx = FinanceDataReader.DataReader(stock_symbol, one_year_ago)
             data_to_insert = [{'symbol': stock_symbol, 'date': idx, 'open': item['Open'], 'high': item['High'], 'close': item['Close'], 'low': item['Low']} for idx, item in
                               df_krx.iterrows()]
-            if df_krx.empty:
-                continue
-            session.execute(text(insert_sql), data_to_insert)
+            if data_to_insert:
+                stmt = insert(StockPrice).values(data_to_insert)
+                stmt = stmt.on_conflict_do_update(
+                    index_elements=['symbol', 'date'],
+                    set_={'open': stmt.excluded.open, 'high': stmt.excluded.high, 'close': stmt.excluded.close, 'low': stmt.excluded.low},
+                )
+                session.execute(stmt)
         session.commit()
 
 
@@ -140,20 +134,18 @@ def add_stock_price_1week():
         return
     week_ago = (now - timedelta(days=7)).strftime('%Y-%m-%d')
     now = now.strftime('%Y-%m-%d')
-    insert_sql = """
-                        INSERT INTO stock_price (symbol, date, open, high, close, low)
-                        VALUES (:symbol, :date, :open, :high, :close, :low)
-                        ON CONFLICT (symbol, date) DO UPDATE
-                        SET open = EXCLUDED.open, high = EXCLUDED.high, close = EXCLUDED.close, low = EXCLUDED.low
-                    """
     with session.begin():
         for stock_symbol in session.scalars(select(Stock.symbol)):
             df_krx = FinanceDataReader.DataReader(stock_symbol, week_ago, now)
             data_to_insert = [{'symbol': stock_symbol, 'date': idx, 'open': item['Open'], 'high': item['High'], 'close': item['Close'], 'low': item['Low']} for idx, item in
                               df_krx.iterrows()]
-            if df_krx.empty:
-                continue
-            session.execute(text(insert_sql), data_to_insert)
+            if data_to_insert:
+                stmt = insert(StockPrice).values(data_to_insert)
+                stmt = stmt.on_conflict_do_update(
+                    index_elements=['symbol', 'date'],
+                    set_={'open': stmt.excluded.open, 'high': stmt.excluded.high, 'close': stmt.excluded.close, 'low': stmt.excluded.low},
+                )
+                session.execute(stmt)
         session.commit()
         # discord.send_message(f'add_stock_price_1week   {now}')
 
@@ -164,20 +156,19 @@ def add_stock_price_1day():
         return
     now = now.strftime('%Y-%m-%d')
     data_to_insert = list()
-    insert_sql = """
-                        INSERT INTO stock_price (symbol, date, open, high, close, low)
-                        VALUES (:symbol, :date, :open, :high, :close, :low)
-                        ON CONFLICT (symbol, date) DO UPDATE
-                        SET open = EXCLUDED.open, high = EXCLUDED.high, close = EXCLUDED.close, low = EXCLUDED.low
-                    """
     with session.begin():
         stock = session.scalars(select(Stock.symbol))
         for stock_symbol in stock:
             df_krx = FinanceDataReader.DataReader(stock_symbol, now, now)
             for idx, item in df_krx.iterrows():
                 data_to_insert.append({'symbol': stock_symbol, 'date': idx, 'open': item['Open'], 'high': item['High'], 'close': item['Close'], 'low': item['Low']})
-            break
-        session.execute(text(insert_sql), data_to_insert)
+        if data_to_insert:
+            stmt = insert(StockPrice).values(data_to_insert)
+            stmt = stmt.on_conflict_do_update(
+                index_elements=['symbol', 'date'],
+                set_={'open': stmt.excluded.open, 'high': stmt.excluded.high, 'close': stmt.excluded.close, 'low': stmt.excluded.low},
+            )
+            session.execute(stmt)
         session.commit()
         # discord.send_message(f'add_stock_price_1day   {now}')
 
@@ -273,6 +264,3 @@ def buy_sell_trend_judgment():
         pass
         # discord.error_message("stock_db\n" + str(traceback.print_exc()))
     return decision
-
-
-add_stock_price_all()
