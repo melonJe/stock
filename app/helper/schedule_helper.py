@@ -79,7 +79,6 @@ def update_subscription_aggressive_investor():
                     check = item.select('th > div > div > dl > dt')
                     if isinstance(check, list) and check and check[0].text in ['매출액증가율', '영업이익증가율', 'EPS증가율']:
                         rate = [float(x.text.replace(',', '')) for x in item.select('td.r')[:-1]]
-                        rate.pop(1)
                         if len(rate) < 1 or any([x <= 0 for x in rate]):
                             insert_true = False
                         # rate_rate = [rate[i + 1] - rate[i] for i in range(len(rate) - 1)]
@@ -92,7 +91,6 @@ def update_subscription_aggressive_investor():
             if insert_true:
                 data_to_insert.append({'email': 'jmayermj@gmail.com', 'symbol': stock_symbol})
         if data_to_insert:
-            print(data_to_insert)
             session.query(StockSubscription).filter(StockSubscription.email == 'jmayermj@gmail.com').delete()
             session.execute(insert(StockSubscription), data_to_insert)
             session.commit()
@@ -185,7 +183,7 @@ def alert(num_std=2):
     # message += f"bollinger_band 60\nbuy : {window['buy']}\nsell : {window['sell']}\n\n"
     window = buy_sell_trend_judgment()
     message += f"trend_judgment\nbuy : {window['buy']}\nsell : {window['sell']}"
-    print(message)
+    # print(message)
     discord.send_message(message)
 
 
@@ -234,7 +232,7 @@ def buy_sell_trend_judgment():
                 data['ma200'] = data['close'].rolling(window=200).mean()
                 data['ma150'] = data['close'].rolling(window=150).mean()
                 data['ma50'] = data['close'].rolling(window=50).mean()
-                if data.iloc[-1]['close'] < data.iloc[-1]['ma50'] < data.iloc[-1]['ma150'] < data.iloc[-1]['ma200']:
+                if not (data.iloc[-1]['ma200'] < data.iloc[-1]['ma150'] < data.iloc[-1]['ma50'] < data.iloc[-1]['close']):
                     continue
                 if data.iloc[-1]['close'] < data['close'].max() * 0.75:
                     continue
@@ -250,7 +248,7 @@ def buy_sell_trend_judgment():
                 data['ma200'] = data['close'].rolling(window=200).mean()
                 data['ma150'] = data['close'].rolling(window=150).mean()
                 data['ma50'] = data['close'].rolling(window=50).mean()
-                if not (data.iloc[-1]['close'] < data.iloc[-1]['ma50'] < data.iloc[-1]['ma150'] < data.iloc[-1]['ma200']):
+                if data.iloc[-1]['ma200'] < data.iloc[-1]['ma150'] < data.iloc[-1]['ma50'] < data.iloc[-1]['close']:
                     decision['sell'].add(name)
                     continue
                 if not (data.iloc[-1]['close'] < data['close'].max() * 0.75):
