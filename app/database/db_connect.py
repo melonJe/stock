@@ -7,8 +7,7 @@ from sqlalchemy.pool import QueuePool
 import config
 from sqlalchemy.orm import Session
 
-engine = create_engine(f'mysql+pymysql://{config.DB_USER}:{config.DB_PASS}@{config.DB_HOST}:{config.DB_PORT}/{config.DB_NAME}?charset=utf8mb4',
-                       pool_recycle=3600, poolclass=QueuePool, pool_pre_ping=True)
+engine = create_engine(f'postgresql+psycopg2://{config.DB_USER}:{config.DB_PASS}@{config.DB_HOST}:{config.DB_PORT}/{config.DB_NAME}')
 session = sessionmaker(autoflush=False, autocommit=False, bind=engine)()
 
 
@@ -31,9 +30,8 @@ class Stock(Base):
 
 class StockBuy(Base):
     __tablename__ = 'stock_buy'
-    id: Mapped[int] = mapped_column(BigInteger(), autoincrement=True, primary_key=True)
-    email: Mapped[str] = mapped_column(String(255), nullable=False, unique=True)
-    symbol: Mapped[str] = mapped_column(String(255), nullable=False, unique=True)
+    email: Mapped[str] = mapped_column(String(255), nullable=True, primary_key=True)
+    symbol: Mapped[str] = mapped_column(String(255), nullable=True, primary_key=True)
     volume: Mapped[int] = mapped_column(Integer(), nullable=False)
 
 
@@ -49,6 +47,5 @@ class StockPrice(Base):
 
 class StockSubscription(Base):
     __tablename__ = 'stock_subscription'
-    id: Mapped[int] = mapped_column(BigInteger(), autoincrement=True, primary_key=True)
-    email: Mapped[str] = mapped_column(String(255), nullable=False, unique=True)
-    symbol: Mapped[str] = mapped_column(String(255), nullable=False, unique=True)
+    email: Mapped[str] = mapped_column(String(255), nullable=True, primary_key=True)
+    symbol: Mapped[str] = mapped_column(String(255), nullable=True, primary_key=True)

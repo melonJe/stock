@@ -16,7 +16,7 @@ def update_subscription_defensive_investor():
     #     return
     with session.begin():
         stock = set(session.scalars(select(Stock.symbol)))
-        insert_set = list()
+        data_to_insert = list()
         for stock_symbol in stock:
             value = 0
             try:
@@ -51,10 +51,10 @@ def update_subscription_defensive_investor():
                 continue
             if per * pbr > 22.5:
                 continue
-            insert_set.append({'email': 'cabs0814@naver.com', 'symbol': stock_symbol})
-        if insert_set:
-            # delete(StockSubscription).where(StockSubscription.email == 'cabs0814@naver.com')
-            session.execute(insert(StockSubscription), insert_set)
+            data_to_insert.append({'email': 'cabs0814@naver.com', 'symbol': stock_symbol})
+        if data_to_insert:
+            session.query(StockSubscription).filter(StockSubscription.email == 'cabs0814@naver.com').delete()
+            session.execute(insert(StockSubscription), data_to_insert)
             session.commit()
 
 
@@ -66,7 +66,7 @@ def update_subscription_aggressive_investor():
     with session.begin():
         stock = set(session.scalars(select(Stock.symbol)))
         # stock = ['45014K']
-        insert_set = list()
+        data_to_insert = list()
         for stock_symbol in stock:
             insert_true = True
             try:
@@ -79,7 +79,7 @@ def update_subscription_aggressive_investor():
                     check = item.select('th > div > div > dl > dt')
                     if isinstance(check, list) and check and check[0].text in ['매출액증가율', '영업이익증가율', 'EPS증가율']:
                         rate = [float(x.text.replace(',', '')) for x in item.select('td.r')[:-1]]
-                        # rate.pop(1)
+                        rate.pop(1)
                         if len(rate) < 1 or any([x <= 0 for x in rate]):
                             insert_true = False
                         # rate_rate = [rate[i + 1] - rate[i] for i in range(len(rate) - 1)]
@@ -90,11 +90,11 @@ def update_subscription_aggressive_investor():
             except:
                 continue
             if insert_true:
-                insert_set.append({'email': 'jmayermj@gmail.com', 'symbol': stock_symbol})
-        if insert_set:
-            # delete(StockSubscription).where(StockSubscription.email == 'cabs0814@naver.com')
-            print(insert_set)
-            session.execute(insert(StockSubscription), insert_set)
+                data_to_insert.append({'email': 'jmayermj@gmail.com', 'symbol': stock_symbol})
+        if data_to_insert:
+            print(data_to_insert)
+            session.query(StockSubscription).filter(StockSubscription.email == 'jmayermj@gmail.com').delete()
+            session.execute(insert(StockSubscription), data_to_insert)
             session.commit()
 
 
@@ -103,37 +103,35 @@ def add_stock():
     if now.day != 1:
         return
     df_krx = FinanceDataReader.StockListing('KRX')
-    insert_set = [{'symbol': item['Code'], 'name': item['Name']} for item in df_krx.to_dict('records')]
-    insert_stmt = insert(Stock).values(insert_set)
-    insert_stmt = insert_stmt.on_duplicate_key_update(
-        symbol=insert_stmt.inserted.symbol
-    )
+    data_to_insert = [{'symbol': item['Code'], 'name': item['Name']} for item in df_krx.to_dict('records')]
+    insert_sql = """
+        INSERT INTO stock (symbol, name)
+        VALUES (:symbol, :name)
+        ON CONFLICT (symbol) DO NOTHING
+    """
     with session.begin():
-        session.execute(insert_stmt)
+        session.execute(text(insert_sql), data_to_insert)
         session.commit()
     # discord.send_message(f'add_stock   {now}')
 
 
-def add_stock_price_1day():
-    now = datetime.now()
-    if now.weekday() in (5, 6):
-        return
-    now = now.strftime('%Y-%m-%d')
-    insert_set = list()
+def add_stock_price_all():
+    insert_sql = """
+                           INSERT INTO stock_price (symbol, date, open, high, close, low)
+                           VALUES (:symbol, :date, :open, :high, :close, :low)
+                           ON CONFLICT (symbol, date) DO UPDATE
+                           SET open = EXCLUDED.open, high = EXCLUDED.high, close = EXCLUDED.close, low = EXCLUDED.low
+                       """
     with session.begin():
-        stock = session.scalars(select(Stock.symbol))
-        for stock_symbol in stock:
-            df_krx = FinanceDataReader.DataReader(stock_symbol, now, now)
-            for idx, item in df_krx.iterrows():
-                insert_set.append({'symbol': stock_symbol, 'date': idx, 'open': item['Open'], 'high': item['High'], 'close': item['Close'], 'low': item['Low']})
-        insert_stmt = insert(StockPrice).values(insert_set)
-        insert_stmt = insert_stmt.on_duplicate_key_update(
-            symbol=insert_stmt.inserted.symbol,
-            date=insert_stmt.inserted.date
-        )
-        session.execute(insert_stmt)
+        year_ago_5 = datetime.now().year - 5
+        for stock_symbol in session.scalars(select(Stock.symbol)):
+            df_krx = FinanceDataReader.DataReader(stock_symbol, year_ago_5)
+            data_to_insert = [{'symbol': stock_symbol, 'date': idx, 'open': item['Open'], 'high': item['High'], 'close': item['Close'], 'low': item['Low']} for idx, item in
+                              df_krx.iterrows()]
+            if df_krx.empty:
+                continue
+            session.execute(text(insert_sql), data_to_insert)
         session.commit()
-        # discord.send_message(f'add_stock_price_1day   {now}')
 
 
 def add_stock_price_1week():
@@ -142,38 +140,46 @@ def add_stock_price_1week():
         return
     week_ago = (now - timedelta(days=7)).strftime('%Y-%m-%d')
     now = now.strftime('%Y-%m-%d')
+    insert_sql = """
+                        INSERT INTO stock_price (symbol, date, open, high, close, low)
+                        VALUES (:symbol, :date, :open, :high, :close, :low)
+                        ON CONFLICT (symbol, date) DO UPDATE
+                        SET open = EXCLUDED.open, high = EXCLUDED.high, close = EXCLUDED.close, low = EXCLUDED.low
+                    """
     with session.begin():
         for stock_symbol in session.scalars(select(Stock.symbol)):
             df_krx = FinanceDataReader.DataReader(stock_symbol, week_ago, now)
-            insert_set = [{'symbol': stock_symbol, 'date': idx, 'open': item['Open'], 'high': item['High'], 'close': item['Close'], 'low': item['Low']} for idx, item in
-                          df_krx.iterrows()]
+            data_to_insert = [{'symbol': stock_symbol, 'date': idx, 'open': item['Open'], 'high': item['High'], 'close': item['Close'], 'low': item['Low']} for idx, item in
+                              df_krx.iterrows()]
             if df_krx.empty:
                 continue
-            insert_stmt = insert(StockPrice).values(insert_set)
-            insert_stmt = insert_stmt.on_duplicate_key_update(
-                symbol=insert_stmt.inserted.symbol,
-                date=insert_stmt.inserted.date
-            )
-            session.execute(insert_stmt)
+            session.execute(text(insert_sql), data_to_insert)
         session.commit()
         # discord.send_message(f'add_stock_price_1week   {now}')
 
 
-def add_stock_price_all():
+def add_stock_price_1day():
+    now = datetime.now()
+    if now.weekday() in (5, 6):
+        return
+    now = now.strftime('%Y-%m-%d')
+    data_to_insert = list()
+    insert_sql = """
+                        INSERT INTO stock_price (symbol, date, open, high, close, low)
+                        VALUES (:symbol, :date, :open, :high, :close, :low)
+                        ON CONFLICT (symbol, date) DO UPDATE
+                        SET open = EXCLUDED.open, high = EXCLUDED.high, close = EXCLUDED.close, low = EXCLUDED.low
+                    """
     with session.begin():
-        for stock_symbol in session.scalars(select(Stock.symbol)):
-            df_krx = FinanceDataReader.DataReader(stock_symbol)
-            insert_set = [{'symbol': stock_symbol, 'date': idx, 'open': item['Open'], 'high': item['High'], 'close': item['Close'], 'low': item['Low']} for idx, item in
-                          df_krx.iterrows()]
-            if df_krx.empty:
-                continue
-            insert_stmt = insert(StockPrice).values(insert_set)
-            insert_stmt = insert_stmt.on_duplicate_key_update(
-                symbol=insert_stmt.inserted.symbol,
-                date=insert_stmt.inserted.date
-            )
-            session.execute(insert_stmt)
+        stock = session.scalars(select(Stock.symbol))
+        for stock_symbol in stock:
+            df_krx = FinanceDataReader.DataReader(stock_symbol, now, now)
+            for idx, item in df_krx.iterrows():
+                data_to_insert.append({'symbol': stock_symbol, 'date': idx, 'open': item['Open'], 'high': item['High'], 'close': item['Close'], 'low': item['Low']})
+            break
+        session.execute(text(insert_sql), data_to_insert)
         session.commit()
+        # discord.send_message(f'add_stock_price_1day   {now}')
 
 
 def alert(num_std=2):
@@ -237,19 +243,9 @@ def buy_sell_trend_judgment():
                 data['ma200'] = data['close'].rolling(window=200).mean()
                 data['ma150'] = data['close'].rolling(window=150).mean()
                 data['ma50'] = data['close'].rolling(window=50).mean()
-                if data.iloc[-1]['close'] < data.iloc[-1]['ma200']:
+                if data.iloc[-1]['close'] < data.iloc[-1]['ma50'] < data.iloc[-1]['ma150'] < data.iloc[-1]['ma200']:
                     continue
-                if data.iloc[-1]['close'] < data.iloc[-1]['ma150']:
-                    continue
-                if data.iloc[-1]['close'] < data.iloc[-1]['ma50']:
-                    continue
-                if data.iloc[-1]['ma50'] < data.iloc[-1]['ma200']:
-                    continue
-                if data.iloc[-1]['ma50'] < data.iloc[-1]['ma150']:
-                    continue
-                if data.iloc[-1]['ma150'] < data.iloc[-1]['ma200']:
-                    continue
-                if data.iloc[-1]['close'] / data['close'].max() < 0.75:
+                if data.iloc[-1]['close'] < data['close'].max() * 0.75:
                     continue
                 if data.iloc[-1]['close'] < data['close'].min() * 1.25:
                     continue
@@ -260,13 +256,23 @@ def buy_sell_trend_judgment():
                 name = session.scalars(select(Stock.name).where(Stock.symbol == stock_symbol).order_by(Stock.name.desc())).first()
                 data = pd.read_sql(select(StockPrice).order_by(StockPrice.date.desc()).limit(260).where(
                     (StockPrice.date >= (datetime.now() - timedelta(days=365))) & (StockPrice.symbol == stock_symbol)), session.bind).sort_values(by='date', ascending=True)
-                if data.empty:
-                    continue
                 data['ma200'] = data['close'].rolling(window=200).mean()
-                if data.iloc[-1]['close'] < data.iloc[-1]['ma200']:
+                data['ma150'] = data['close'].rolling(window=150).mean()
+                data['ma50'] = data['close'].rolling(window=50).mean()
+                if not (data.iloc[-1]['close'] < data.iloc[-1]['ma50'] < data.iloc[-1]['ma150'] < data.iloc[-1]['ma200']):
                     decision['sell'].add(name)
+                    continue
+                if not (data.iloc[-1]['close'] < data['close'].max() * 0.75):
+                    decision['sell'].add(name)
+                    continue
+                if not (data.iloc[-1]['close'] < data['close'].min() * 1.25):
+                    decision['sell'].add(name)
+                    continue
                 # TODO: custom exception
     except:
         pass
         # discord.error_message("stock_db\n" + str(traceback.print_exc()))
     return decision
+
+
+add_stock_price_all()
