@@ -53,7 +53,7 @@ def update_subscription_defensive_investor():
                 continue
             data_to_insert.append({'email': 'cabs0814@naver.com', 'symbol': stock_symbol})
         if data_to_insert:
-            session.query(StockSubscription).filter(StockSubscription.email == 'cabs0814@naver.com').delete()
+            session.execute(delete(StockSubscription).where(StockSubscription.email == 'cabs0814@naver.com'))
             session.execute(insert(StockSubscription), data_to_insert)
             session.commit()
 
@@ -79,6 +79,7 @@ def update_subscription_aggressive_investor():
                     check = item.select('th > div > div > dl > dt')
                     if isinstance(check, list) and check and check[0].text in ['매출액증가율', '영업이익증가율', 'EPS증가율']:
                         rate = [float(x.text.replace(',', '')) for x in item.select('td.r')[:-1]]
+                        rate.pop(1)
                         if len(rate) < 1 or any([x <= 0 for x in rate]):
                             insert_true = False
                         # rate_rate = [rate[i + 1] - rate[i] for i in range(len(rate) - 1)]
@@ -91,7 +92,7 @@ def update_subscription_aggressive_investor():
             if insert_true:
                 data_to_insert.append({'email': 'jmayermj@gmail.com', 'symbol': stock_symbol})
         if data_to_insert:
-            session.query(StockSubscription).filter(StockSubscription.email == 'jmayermj@gmail.com').delete()
+            session.execute(delete(StockSubscription).where(StockSubscription.email == 'jmayermj@gmail.com'))
             session.execute(insert(StockSubscription), data_to_insert)
             session.commit()
 
@@ -113,7 +114,7 @@ def add_stock_price_all():
     with session.begin():
         one_year_ago = datetime.now().year - 1
         for stock_symbol in session.scalars(select(Stock.symbol)):
-            df_krx = FinanceDataReader.DataReader(stock_symbol, one_year_ago)
+            df_krx = FinanceDataReader.DataReader(stock_symbol, str(one_year_ago))
             data_to_insert = [{'symbol': stock_symbol, 'date': idx, 'open': item['Open'], 'high': item['High'], 'close': item['Close'], 'low': item['Low']} for idx, item in
                               df_krx.iterrows()]
             if data_to_insert:
@@ -212,7 +213,7 @@ def buy_sell_bollinger_band(window=20, num_std=2):
                 del data, name
                 # TODO: custom exception
     except:
-        pass
+        str(traceback.print_exc())
         # discord.error_message("stock_db\n" + str(traceback.print_exc()))
     return decision
 
@@ -259,6 +260,9 @@ def buy_sell_trend_judgment():
                     continue
                 # TODO: custom exception
     except:
-        pass
+        str(traceback.print_exc())
         # discord.error_message("stock_db\n" + str(traceback.print_exc()))
     return decision
+
+
+update_subscription_aggressive_investor()
