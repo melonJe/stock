@@ -263,6 +263,3 @@ def buy_sell_trend_judgment():
         str(traceback.print_exc())
         # discord.error_message("stock_db\n" + str(traceback.print_exc()))
     return decision
-
-
-update_subscription_aggressive_investor()
