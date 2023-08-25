@@ -5,11 +5,6 @@ from app.helper import schedule_helper
 
 if __name__ == "__main__":
     print(f"main.py 시작 {datetime.now()}")
-    print(f"DB_HOST {config.DB_HOST}")
-    print(f"DB_PORT {config.DB_PORT}")
-    print(f"DB_NAME {config.DB_NAME}")
-    print(f"DB_USER {config.DB_USER}")
-    print(f"DB_PASS {config.DB_PASS}")
     schedule.every().sunday.do(schedule_helper.add_stock_price_1week)
     schedule.every().monday.do(schedule_helper.add_stock)
     schedule.every().day.at("18:00").do(schedule_helper.add_stock_price_1day)
