@@ -221,8 +221,8 @@ def buy_sell_trend_judgment():
     decision = {'buy': set(), 'sell': set()}
     try:
         with session.begin():
-            # stock = session.scalars(select(Stock.symbol))
-            stock = session.scalars(select(StockSubscription.symbol).where(StockSubscription.email == 'jmayermj@gmail.com'))
+            stock = session.scalars(select(StockSubscription.symbol))
+            # stock = session.scalars(select(StockSubscription.symbol).where(StockSubscription.email == 'jmayermj@gmail.com'))
             for stock_symbol in stock:
                 name = session.scalars(select(Stock.name).where(Stock.symbol == stock_symbol).order_by(Stock.name.desc())).first()
                 data = pd.read_sql(select(StockPrice).order_by(StockPrice.date.desc()).limit(260).where(
@@ -262,6 +262,3 @@ def buy_sell_trend_judgment():
         str(traceback.print_exc())
         # discord.error_message("stock_db\n" + str(traceback.print_exc()))
     return decision
-
-
-update_subscription_defensive_investor()
