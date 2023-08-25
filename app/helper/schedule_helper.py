@@ -79,7 +79,6 @@ def update_subscription_aggressive_investor():
                     check = item.select('th > div > div > dl > dt')
                     if isinstance(check, list) and check and check[0].text in ['매출액증가율', '영업이익증가율', 'EPS증가율']:
                         rate = [float(x.text.replace(',', '')) for x in item.select('td.r')[:-1]]
-                        rate.pop(1)
                         if len(rate) < 1 or any([x <= 0 for x in rate]):
                             insert_true = False
                         # rate_rate = [rate[i + 1] - rate[i] for i in range(len(rate) - 1)]
@@ -263,3 +262,6 @@ def buy_sell_trend_judgment():
         str(traceback.print_exc())
         # discord.error_message("stock_db\n" + str(traceback.print_exc()))
     return decision
+
+
+update_subscription_defensive_investor()
