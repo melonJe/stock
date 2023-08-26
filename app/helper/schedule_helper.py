@@ -172,8 +172,8 @@ def add_stock_price_1day():
 
 
 def alert(num_std=2):
-    # if datetime.now().weekday() in (5, 6):
-    #     return
+    if datetime.now().weekday() in (5, 6):
+        return
     message = f"{datetime.now().date()}\n"
     # window = buy_sell_bollinger_band(window=5, num_std=num_std)
     # message += f"bollinger_band 5\nbuy : {window['buy']}\nsell : {window['sell']}\n\n"
