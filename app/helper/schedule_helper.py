@@ -221,8 +221,8 @@ def buy_sell_trend_judgment():
     decision = {'buy': set(), 'sell': set()}
     try:
         with session.begin():
-            stock = session.scalars(select(StockSubscription.symbol))
-            # stock = session.scalars(select(StockSubscription.symbol).where(StockSubscription.email == 'jmayermj@gmail.com'))
+            # stock = session.scalars(select(StockSubscription.symbol))
+            stock = session.scalars(select(StockSubscription.symbol).where(StockSubscription.email == 'jmayermj@gmail.com'))
             for stock_symbol in stock:
                 name = session.scalars(select(Stock.name).where(Stock.symbol == stock_symbol).order_by(Stock.name.desc())).first()
                 data = pd.read_sql(select(StockPrice).order_by(StockPrice.date.desc()).limit(260).where(
