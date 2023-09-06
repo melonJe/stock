@@ -9,6 +9,8 @@ services:
     restart: always
     env_file:
       - .env
+    ports:
+      - "18000:8000"
     environment:
       - TZ=Asia/Seoul
 

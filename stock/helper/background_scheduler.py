@@ -1,12 +1,16 @@
 import traceback
 import FinanceDataReader
 import requests
-import pandas as pd
-from datetime import timedelta
-from app.database.db_connect import *
-from app.helper import discord
-from app.service import bollingerBands
+import developpandas as pd
+from datetime import timedelta, datetime
+from django.conf import settings
+from stock.model.stock import *
+from stock.helper import discord
+from stock.service import bollingerBands
 from bs4 import BeautifulSoup as bs
+from apscheduler.triggers.cron import CronTrigger
+from apscheduler.schedulers.background import BackgroundScheduler
+from django_apscheduler.jobstores import DjangoJobStore
 
 
 def update_subscription_defensive_investor():
@@ -68,7 +72,7 @@ def update_subscription_aggressive_investor():
         # stock = ['45014K']
         data_to_insert = list()
         for stock_symbol in stock:
-            insert_true = True
+            insert_true = 0  # 6 is true
             try:
                 page = requests.get(f'https://comp.fnguide.com/SVO2/ASP/SVD_FinanceRatio.asp?pGB=1&gicode=A{stock_symbol}&cID=&MenuYn=Y&ReportGB=&NewMenuID=104&stkGb=701').text
                 soup = bs(page, "html.parser")
@@ -79,16 +83,14 @@ def update_subscription_aggressive_investor():
                     check = item.select('th > div > div > dl > dt')
                     if isinstance(check, list) and check and check[0].text in ['매출액증가율', '영업이익증가율', 'EPS증가율']:
                         rate = [float(x.text.replace(',', '')) for x in item.select('td.r')[:-1]]
-                        if len(rate) < 1 or any([x <= 0 for x in rate]):
-                            insert_true = False
+                        if len(rate) < 1 or all([x > 0 for x in rate]):
+                            insert_true += 1
                         # rate_rate = [rate[i + 1] - rate[i] for i in range(len(rate) - 1)]
                         # if any([x < 0 for x in rate_rate]):
                         #     insert_true = False
-                    if not insert_true:
-                        break
             except:
                 continue
-            if insert_true:
+            if insert_true == 6:
                 data_to_insert.append({'email': 'jmayermj@gmail.com', 'symbol': stock_symbol})
         if data_to_insert:
             session.execute(delete(StockSubscription).where(StockSubscription.email == 'jmayermj@gmail.com'))
@@ -262,3 +264,73 @@ def buy_sell_trend_judgment():
         str(traceback.print_exc())
         # discord.error_message("stock_db\n" + str(traceback.print_exc()))
     return decision
+
+
+def test():
+    print('test')
+
+
+def start():
+    scheduler = BackgroundScheduler(timezone=settings.TIME_ZONE)  # BlockingScheduler를 사용할 수도 있습니다.
+    scheduler.add_jobstore(DjangoJobStore(), "default")
+
+    scheduler.add_job(
+        test,
+        trigger=CronTrigger(second='*'),
+        id="test",
+        max_instances=1,
+        replace_existing=True,
+    )
+
+    scheduler.add_job(
+        update_subscription_defensive_investor,
+        trigger=CronTrigger(day=1, hour=1),
+        id="update_subscription_defensive_investor",  # id는 고유해야합니다.
+        max_instances=1,
+        replace_existing=True,
+    )
+
+    scheduler.add_job(
+        update_subscription_aggressive_investor,
+        trigger=CronTrigger(day=1, hour=1),
+        id="update_subscription_aggressive_investor",
+        max_instances=1,
+        replace_existing=True,
+    )
+
+    scheduler.add_job(
+        add_stock,
+        trigger=CronTrigger(day=1, hour=0),
+        id="add_stock",
+        max_instances=1,
+        replace_existing=True,
+    )
+
+    scheduler.add_job(
+        add_stock_price_1week,
+        trigger=CronTrigger(day_of_week="sat"),
+        id="add_stock_price_1week",
+        max_instances=1,
+        replace_existing=True,
+    )
+
+    scheduler.add_job(
+        add_stock_price_1day,
+        trigger=CronTrigger(day_of_week="mon-fri", hour=18),
+        id="add_stock_price_1day",
+        max_instances=1,
+        replace_existing=True,
+    )
+
+    scheduler.add_job(
+        alert,
+        trigger=CronTrigger(day_of_week="mon-fri", hour=20),
+        id="alert",
+        max_instances=1,
+        replace_existing=True,
+    )
+
+    try:
+        scheduler.start()  # 없으면 동작하지 않습니다.
+    except KeyboardInterrupt:
+        scheduler.shutdown()

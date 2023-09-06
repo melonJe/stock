@@ -1,14 +1,14 @@
 import requests
-import config
+import setting_env
 
 
 def send_message(content):
-    requests.post(url=config.DISCORD_MESSAGE, data={
+    requests.post(url=setting_env.DISCORD_MESSAGE, data={
         'content': content
     })
 
 
 def error_message(content):
-    requests.post(url=config.DISCORD_ERROR, data={
+    requests.post(url=setting_env.DISCORD_ERROR, data={
         'content': content
     })
