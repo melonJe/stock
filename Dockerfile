@@ -8,5 +8,6 @@ EXPOSE 8000
 
 COPY . /app
 RUN pip install -r /app/requirements.txt
+RUN python manage.py migrate
 
-ENTRYPOINT ["python", "manage.py", "runserver"]
+ENTRYPOINT ["python", "-u", "manage.py", "runserver"]
