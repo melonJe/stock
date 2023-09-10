@@ -36,7 +36,7 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'django_apscheduler',
-    'scheduler.apps.SchedulerConfig',
+    'scheduler',
     'stock',
 ]
 
@@ -129,12 +129,4 @@ STATIC_URL = 'static/'
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # user setting
-SCHEDULER_JOBSTORES = {
-    'default': {
-        'ENGINE': 'django_apscheduler.jobstores:DjangoJobStore',
-    },
-}
-
-SCHEDULER_JOB_MODEL = 'django_apscheduler.DjangoJob'
-
-APPSCHEDULER_API_ENABLED = True
+SCHEDULER_ENABLED = True

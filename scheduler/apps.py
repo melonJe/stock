@@ -7,6 +7,6 @@ class SchedulerConfig(AppConfig):
     name = 'scheduler'
 
     def ready(self):
-        if settings.APPSCHEDULER_API_ENABLED:
+        if settings.SCHEDULER_ENABLED:
             from . import background_scheduler
             background_scheduler.start()

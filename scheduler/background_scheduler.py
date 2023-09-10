@@ -240,7 +240,7 @@ def buy_sell_trend_judgment():
 
 def start():
     scheduler = BackgroundScheduler(timezone=settings.TIME_ZONE)  # BlockingScheduler를 사용할 수도 있습니다.
-    scheduler.add_jobstore(DjangoJobStore(), "default")
+    scheduler.add_jobstore(DjangoJobStore(), "djangojobstore")
 
     scheduler.add_job(
         update_subscription_defensive_investor,
