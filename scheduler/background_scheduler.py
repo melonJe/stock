@@ -15,6 +15,7 @@ from django_apscheduler.jobstores import DjangoJobStore
 
 
 def update_subscription_defensive_investor():
+    print(f'{datetime.now()} update_subscription_defensive_investor 시작')
     # 방어적 투자
     now = datetime.now()
     # if now.day != 1:
@@ -62,6 +63,7 @@ def update_subscription_defensive_investor():
 
 
 def update_subscription_aggressive_investor():
+    print(f'{datetime.now()} update_subscription_aggressive_investor 시작')
     # 공격적 투자
     now = datetime.now()
     # if now.day != 1:
@@ -99,6 +101,7 @@ def add_stock():
     now = datetime.now()
     if now.day != 1:
         return
+    print(f'{datetime.now()} add_stock 시작')
     df_krx = FinanceDataReader.StockListing('KRX')
     data_to_insert = [{'symbol': item['Code'], 'name': item['Name']} for item in df_krx.to_dict('records')]
     if data_to_insert:
@@ -108,6 +111,7 @@ def add_stock():
 
 
 def add_stock_price_all():
+    print(f'{datetime.now()} add_stock_price_all 시작')
     one_year_ago = datetime.now().year - 1
     for stock in Stock.objects.values():
         df_krx = FinanceDataReader.DataReader(stock["symbol"], str(one_year_ago))
@@ -122,6 +126,7 @@ def add_stock_price_1week():
     now = datetime.now()
     if now.weekday() not in (5, 6):
         return
+    print(f'{datetime.now()} add_stock_price_1week 시작')
     week_ago = (now - timedelta(days=7)).strftime('%Y-%m-%d')
     now = now.strftime('%Y-%m-%d')
     for stock in Stock.objects.values():
@@ -138,6 +143,7 @@ def add_stock_price_1day():
     now = datetime.now()
     if now.weekday() in (5, 6):
         return
+    print(f'{datetime.now()} add_stock_price_1day 시작')
     now = now.strftime('%Y-%m-%d')
     data_to_insert = list()
     for stock in Stock.objects.values():
@@ -152,6 +158,7 @@ def add_stock_price_1day():
 def alert(num_std=2):
     if datetime.now().weekday() in (5, 6):
         return
+    print(f'{datetime.now()} alert 시작')
     message = f"{datetime.now().date()}\n"
     # window = buy_sell_bollinger_band(window=5, num_std=num_std)
     # message += f"bollinger_band 5\nbuy : {window['buy']}\nsell : {window['sell']}\n\n"
