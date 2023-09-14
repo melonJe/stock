@@ -35,7 +35,6 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
-    'django_apscheduler',
     'scheduler',
     'stock',
 ]
@@ -129,4 +128,6 @@ STATIC_URL = 'static/'
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # user setting
+DATABASE_ROUTERS = ['stock.dbrouter.DBRouter']
+APSCHEDULER_RUN_NOW_TIMEOUT = 1800
 SCHEDULER_ENABLED = True

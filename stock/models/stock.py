@@ -1,5 +1,7 @@
 from django.db import models
 
+from stock.models.user import User
+
 
 class Stock(models.Model):
     class Meta:
@@ -15,39 +17,39 @@ class Stock(models.Model):
 class StockBuy(models.Model):
     class Meta:
         db_table = 'stock_buy'
-        unique_together = (('email', 'symbol'),)
         app_label = 'users_db'
+        unique_together = (('email', 'symbol'),)
 
     objects = models.Manager()
 
-    email = models.CharField()
-    symbol = models.CharField()
+    email = models.ForeignKey(User, models.DO_NOTHING, db_column='email')
+    symbol = models.ForeignKey(Stock, models.DO_NOTHING, db_column='symbol')
     volume = models.IntegerField()
 
 
 class StockPrice(models.Model):
     class Meta:
         db_table = 'stock_price'
-        unique_together = (('symbol', 'date'),)
         app_label = 'users_db'
+        unique_together = (('symbol', 'date'),)
 
     objects = models.Manager()
 
-    symbol = models.CharField()
+    symbol = models.ForeignKey(Stock, models.DO_NOTHING, db_column='symbol')
     date = models.DateField()
-    open = models.BigIntegerField()
-    high = models.BigIntegerField()
-    close = models.BigIntegerField()
-    low = models.BigIntegerField()
+    open = models.IntegerField()
+    high = models.IntegerField()
+    close = models.IntegerField()
+    low = models.IntegerField()
 
 
 class StockSubscription(models.Model):
     class Meta:
         db_table = 'stock_subscription'
-        unique_together = (('email', 'symbol'),)
         app_label = 'users_db'
+        unique_together = (('email', 'symbol'),)
 
     objects = models.Manager()
 
-    email = models.CharField()
-    symbol = models.CharField()
+    email = models.ForeignKey(User, models.DO_NOTHING, db_column='email')
+    symbol = models.ForeignKey(Stock, models.DO_NOTHING, db_column='symbol')

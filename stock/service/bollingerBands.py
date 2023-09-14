@@ -31,6 +31,8 @@ def bollinger_band(data, window=20, num_std=2, adx_window=14):
     data.loc[data['close'] < data['lower_band'], 'signal'] = 1
     data.loc[data['close'] > data['upper_band'], 'signal'] = -1
 
+    data['decision'] = '0'
+
     data.loc[(data['close'] < data['lower_band']) & (data['close'].shift(1) >= data['lower_band'].shift(1)), 'decision'] = 'buy'
     data.loc[(data['close'] > data['upper_band']) & (data['close'].shift(1) <= data['upper_band'].shift(1)), 'decision'] = 'sell'
     data.loc[(data['decision'] == 'buy') & (data['adx'] > 15), 'decision'] = 'sell'

@@ -11,7 +11,6 @@ from stock.service import bollingerBands
 from bs4 import BeautifulSoup as bs
 from apscheduler.triggers.cron import CronTrigger
 from apscheduler.schedulers.background import BackgroundScheduler
-from django_apscheduler.jobstores import DjangoJobStore
 
 
 def update_subscription_defensive_investor():
@@ -106,7 +105,7 @@ def add_stock():
     data_to_insert = [{'symbol': item['Code'], 'name': item['Name']} for item in df_krx.to_dict('records')]
     if data_to_insert:
         data_to_insert = [StockSubscription(**vals) for vals in data_to_insert]
-        Stock.objects.bulk_create(data_to_insert, ignore_conflicts=True)
+        Stock.objects.bulk_create(data_to_insert, ignore_conflicts=True, unique_fields=['symbol', 'date'])
     # discord.send_message(f'add_stock   {now}')
 
 
@@ -119,7 +118,7 @@ def add_stock_price_all():
                           df_krx.iterrows()]
         if data_to_insert:
             data_to_insert = [StockPrice(**vals) for vals in data_to_insert]
-            StockPrice.objects.bulk_create(data_to_insert, update_conflicts=True)
+            StockPrice.objects.bulk_create(data_to_insert, update_conflicts=True, unique_fields=['symbol', 'date'], update_fields=['open', 'high', 'close', 'low'])
 
 
 def add_stock_price_1week():
@@ -135,7 +134,7 @@ def add_stock_price_1week():
                           df_krx.iterrows()]
         if data_to_insert:
             data_to_insert = [StockPrice(**vals) for vals in data_to_insert]
-            StockPrice.objects.bulk_create(data_to_insert, update_conflicts=True)
+            StockPrice.objects.bulk_create(data_to_insert, update_conflicts=True, unique_fields=['symbol', 'date'], update_fields=['open', 'high', 'close', 'low'])
     # discord.send_message(f'add_stock_price_1week   {now}')
 
 
@@ -152,7 +151,7 @@ def add_stock_price_1day():
             data_to_insert.append({'symbol': stock["symbol"], 'date': idx, 'open': item['Open'], 'high': item['High'], 'close': item['Close'], 'low': item['Low']})
     if data_to_insert:
         data_to_insert = [StockPrice(**vals) for vals in data_to_insert]
-        StockPrice.objects.bulk_create(data_to_insert, update_conflicts=True)
+        StockPrice.objects.bulk_create(data_to_insert, update_conflicts=True, unique_fields=['symbol', 'date'], update_fields=['open', 'high', 'close', 'low'])
 
 
 def alert(num_std=2):
@@ -160,27 +159,25 @@ def alert(num_std=2):
         return
     print(f'{datetime.now()} alert 시작')
     message = f"{datetime.now().date()}\n"
-    # window = buy_sell_bollinger_band(window=5, num_std=num_std)
-    # message += f"bollinger_band 5\nbuy : {window['buy']}\nsell : {window['sell']}\n\n"
-    # window = buy_sell_bollinger_band(window=20, num_std=num_std)
-    # message += f"bollinger_band 20\nbuy : {window['buy']}\nsell : {window['sell']}\n\n"
-    # window = buy_sell_bollinger_band(window=60, num_std=num_std)
-    # message += f"bollinger_band 60\nbuy : {window['buy']}\nsell : {window['sell']}\n\n"
+    window = buy_sell_bollinger_band(window=5, num_std=num_std)
+    message += f"bollinger_band 5\nbuy : {[x.symbol.name for x in window['buy']]}\nsell : {[x.symbol.name for x in window['sell']]}\n\n"
+    window = buy_sell_bollinger_band(window=20, num_std=num_std)
+    message += f"bollinger_band 20\nbuy : {[x.symbol.name for x in window['buy']]}\nsell : {[x.symbol.name for x in window['sell']]}\n\n"
+    window = buy_sell_bollinger_band(window=60, num_std=num_std)
+    message += f"bollinger_band 60\nbuy : {[x.symbol.name for x in window['buy']]}\nsell : {[x.symbol.name for x in window['sell']]}\n\n"
     window = buy_sell_trend_judgment()
-    message += f"trend_judgment\nbuy : {window['buy']}\nsell : {window['sell']}"
-    # print(message)
-    discord.send_message(message)
+    message += f"trend_judgment\nbuy : {[x.symbol.name for x in window['buy']]}\nsell : {[x.symbol.name for x in window['sell']]}"
+    print(message)
+    # discord.send_message(message)
 
 
 def buy_sell_bollinger_band(window=20, num_std=2):
     decision = {'buy': set(), 'sell': set()}
     try:
-        stock = StockSubscription.objects.all().distinct('symbol')
-        stock = StockSubscription.objects.all().union(StockBuy.objects.filter(email='cabs0814@naver.com'))
-        for s in stock:
-            data = pd.DataFrame(
-                list(StockPrice.objects.filter(date__range=[datetime.now(), datetime.now() - timedelta(days=200)], symbol=s['symbol']).order_by('date').desc())).sort_values(
-                by='date', ascending=True)
+        # stock = StockSubscription.objects.all().distinct('symbol')
+        stocks = StockSubscription.objects.filter(email='cabs0814@naver.com').select_related("symbol").all()
+        for stock in stocks:
+            data = pd.DataFrame(StockPrice.objects.filter(date__range=[datetime.now() - timedelta(days=365), datetime.now()], symbol=stock.symbol).order_by('date').values())
             if data.empty:
                 continue
             bollingerBands.bollinger_band(data, window=window, num_std=num_std)
@@ -189,9 +186,9 @@ def buy_sell_bollinger_band(window=20, num_std=2):
             # if data.iloc[-2]['open'] > data.iloc[-2]['close'] and data.iloc[-2]['open'] > data.iloc[-1]['open'] > data.iloc[-2]['close']:
             #     continue
             if data.iloc[-1]['decision'] == 'buy':
-                decision['buy'].add(s['name'])
+                decision['buy'].add(stock)
             if data.iloc[-1]['decision'] == 'sell':
-                decision['sell'].add(s['name'])
+                decision['sell'].add(stock)
             # TODO: custom exception
     except:
         str(traceback.print_exc())
@@ -202,12 +199,10 @@ def buy_sell_bollinger_band(window=20, num_std=2):
 def buy_sell_trend_judgment():
     decision = {'buy': set(), 'sell': set()}
     try:
-        # stock = StockSubscription.objects.all()
-        stock = StockSubscription.objects.filter(email='jmayermj@gmail.com')
-        for s in stock:
-            data = pd.DataFrame(
-                list(StockPrice.objects.order_by('date').desc().filter(date__range=[datetime.now(), datetime.now() - timedelta(days=365)], symbol=s['symbol']))).sort_values(
-                by='date', ascending=True)
+        stocks = StockSubscription.objects.select_related("symbol").all()
+        # stocks = StockSubscription.objects.filter(email='jmayermj@gmail.com')
+        for stock in stocks:
+            data = pd.DataFrame(StockPrice.objects.filter(date__range=[datetime.now() - timedelta(days=365), datetime.now()], symbol=stock.symbol).order_by('date').values())
             if data.empty:
                 continue
             data['ma200'] = data['close'].rolling(window=200).mean()
@@ -219,26 +214,25 @@ def buy_sell_trend_judgment():
                 continue
             if data.iloc[-1]['close'] < data['close'].min() * 1.25:
                 continue
-            decision['buy'].add(f"{s['name']}  {data.iloc[-1]['close'] / data['close'].max()}")
+            decision['buy'].add(stock)
 
-        stock = StockBuy.objects.filter(email='cabs0814@naver.com')
-        for s in stock:
-            data = pd.DataFrame(
-                list(StockPrice.objects.order_by('date').desc().filter(date__range=[datetime.now(), datetime.now() - timedelta(days=365)], symbol=s['symbol']))).sort_values(
-                by='date', ascending=True)
-            data['ma200'] = data['close'].rolling(window=200).mean()
-            data['ma150'] = data['close'].rolling(window=150).mean()
-            data['ma50'] = data['close'].rolling(window=50).mean()
-            if not (data.iloc[-1]['ma200'] < data.iloc[-1]['ma150'] < data.iloc[-1]['ma50'] < data.iloc[-1]['close']):
-                decision['sell'].add(s['name'])
-                continue
-            if data.iloc[-1]['close'] < data['close'].max() * 0.75:
-                decision['sell'].add(s['name'])
-                continue
-            if data.iloc[-1]['close'] < data['close'].min() * 1.25:
-                decision['sell'].add(s['name'])
-                continue
-            # TODO: custom exception
+        # TODO 판매 알고리즘 수정
+        # stocks = StockBuy.objects.filter(email='cabs0814@naver.com')
+        # for stock in stocks:
+        #     data = pd.DataFrame(StockPrice.objects.filter(date__range=[datetime.now() - timedelta(days=365), datetime.now()], symbol=stock.symbol).order_by('date').values())
+        #     data['ma200'] = data['close'].rolling(window=200).mean()
+        #     data['ma150'] = data['close'].rolling(window=150).mean()
+        #     data['ma50'] = data['close'].rolling(window=50).mean()
+        #     if not (data.iloc[-1]['ma200'] < data.iloc[-1]['ma150'] < data.iloc[-1]['ma50'] < data.iloc[-1]['close']):
+        #         decision['sell'].add(stock.name)
+        #         continue
+        #     if data.iloc[-1]['close'] < data['close'].max() * 0.75:
+        #         decision['sell'].add(stock.name)
+        #         continue
+        #     if data.iloc[-1]['close'] < data['close'].min() * 1.25:
+        #         decision['sell'].add(stock.name)
+        #         continue
+        # TODO: custom exception
     except:
         str(traceback.print_exc())
         # discord.error_message("stock_db\n" + str(traceback.print_exc()))
@@ -246,13 +240,12 @@ def buy_sell_trend_judgment():
 
 
 def start():
-    scheduler = BackgroundScheduler(timezone=settings.TIME_ZONE)  # BlockingScheduler를 사용할 수도 있습니다.
-    scheduler.add_jobstore(DjangoJobStore(), "djangojobstore")
+    scheduler = BackgroundScheduler(misfire_grace_time=3600, coalesce=True, timezone=settings.TIME_ZONE)
 
     scheduler.add_job(
         update_subscription_defensive_investor,
         trigger=CronTrigger(day=1, hour=1),
-        id="update_subscription_defensive_investor",  # id는 고유해야합니다.
+        id="update_subscription_defensive_investor",
         max_instances=1,
         replace_existing=True,
     )
