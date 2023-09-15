@@ -8,5 +8,5 @@ class SchedulerConfig(AppConfig):
     def ready(self):
         if settings.SCHEDULER_ENABLED:
             from . import background_scheduler
-            # background_scheduler.alert()
+            # background_scheduler.add_stock_price_1week()
             background_scheduler.start()

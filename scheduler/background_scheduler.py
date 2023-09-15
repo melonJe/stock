@@ -102,7 +102,7 @@ def add_stock():
         return
     print(f'{datetime.now()} add_stock 시작')
     df_krx = FinanceDataReader.StockListing('KRX')
-    data_to_insert = [{'symbol': item['Code'], 'name': item['Name']} for item in df_krx.to_dict('records')]
+    data_to_insert = [{'symbol': Stock.objects.get(symbol=item['Code']), 'name': item['Name']} for item in df_krx.to_dict('records')]
     if data_to_insert:
         data_to_insert = [StockSubscription(**vals) for vals in data_to_insert]
         Stock.objects.bulk_create(data_to_insert, ignore_conflicts=True, unique_fields=['symbol', 'date'])
@@ -114,8 +114,9 @@ def add_stock_price_all():
     one_year_ago = datetime.now().year - 1
     for stock in Stock.objects.values():
         df_krx = FinanceDataReader.DataReader(stock["symbol"], str(one_year_ago))
-        data_to_insert = [{'symbol': stock["symbol"], 'date': idx, 'open': item['Open'], 'high': item['High'], 'close': item['Close'], 'low': item['Low']} for idx, item in
-                          df_krx.iterrows()]
+        stock_instance = Stock.objects.get(symbol=stock['symbol'])
+        data_to_insert = [{'symbol': stock_instance, 'date': idx, 'open': item['Open'], 'high': item['High'], 'close': item['Close'], 'low': item['Low']}
+                          for idx, item in df_krx.iterrows()]
         if data_to_insert:
             data_to_insert = [StockPrice(**vals) for vals in data_to_insert]
             StockPrice.objects.bulk_create(data_to_insert, update_conflicts=True, unique_fields=['symbol', 'date'], update_fields=['open', 'high', 'close', 'low'])
@@ -123,15 +124,16 @@ def add_stock_price_all():
 
 def add_stock_price_1week():
     now = datetime.now()
-    if now.weekday() not in (5, 6):
-        return
+    # if now.weekday() not in (5, 6):
+    #     return
     print(f'{datetime.now()} add_stock_price_1week 시작')
     week_ago = (now - timedelta(days=7)).strftime('%Y-%m-%d')
     now = now.strftime('%Y-%m-%d')
     for stock in Stock.objects.values():
         df_krx = FinanceDataReader.DataReader(stock["symbol"], week_ago, now)
-        data_to_insert = [{'symbol': stock["symbol"], 'date': idx, 'open': item['Open'], 'high': item['High'], 'close': item['Close'], 'low': item['Low']} for idx, item in
-                          df_krx.iterrows()]
+        stock_instance = Stock.objects.get(symbol=stock['symbol'])
+        data_to_insert = [{'symbol': stock_instance, 'date': idx, 'open': item['Open'], 'high': item['High'], 'close': item['Close'], 'low': item['Low']}
+                          for idx, item in df_krx.iterrows()]
         if data_to_insert:
             data_to_insert = [StockPrice(**vals) for vals in data_to_insert]
             StockPrice.objects.bulk_create(data_to_insert, update_conflicts=True, unique_fields=['symbol', 'date'], update_fields=['open', 'high', 'close', 'low'])
@@ -147,8 +149,9 @@ def add_stock_price_1day():
     data_to_insert = list()
     for stock in Stock.objects.values():
         df_krx = FinanceDataReader.DataReader(stock["symbol"], now, now)
+        stock_instance = Stock.objects.get(symbol=stock['symbol'])
         for idx, item in df_krx.iterrows():
-            data_to_insert.append({'symbol': stock["symbol"], 'date': idx, 'open': item['Open'], 'high': item['High'], 'close': item['Close'], 'low': item['Low']})
+            data_to_insert.append({'symbol': stock_instance, 'date': idx, 'open': item['Open'], 'high': item['High'], 'close': item['Close'], 'low': item['Low']})
     if data_to_insert:
         data_to_insert = [StockPrice(**vals) for vals in data_to_insert]
         StockPrice.objects.bulk_create(data_to_insert, update_conflicts=True, unique_fields=['symbol', 'date'], update_fields=['open', 'high', 'close', 'low'])
