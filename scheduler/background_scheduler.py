@@ -265,7 +265,7 @@ def korea_investment_trading():
             previous_stock_price = StockPrice.objects.filter(symbol=stock.symbol.symbol).order_by('-date').first().values()
             inquire_stock = account.inquire_stock(stock.symbol.symbol)
             volume = max(math.ceil(int(inquire_stock["ord_psbl_qty"]) / 2), 1)
-            if not inquire_stock or account.buy(stock=stock.symbol.symbol, price=max(math.ceil(float(inquire_stock["pchs_avg_pric"]) * 1.05), previous_stock_price.close), volume=volume):
+            if not inquire_stock or int(inquire_stock["ord_psbl_qty"]) < 1 or account.buy(stock=stock.symbol.symbol, price=max(math.ceil(float(inquire_stock["pchs_avg_pric"]) * 1.05), previous_stock_price.close), volume=volume):
                 decision["buy"].discard(stock.symbol.symbol)
         for stock in decision["buy"]:
             previous_stock_price = StockPrice.objects.filter(symbol=stock.symbol.symbol).order_by('-date').first().values()
