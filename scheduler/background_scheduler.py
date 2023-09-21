@@ -269,7 +269,7 @@ def korea_investment_trading():
                 decision["buy"].discard(stock.symbol.symbol)
         for stock in decision["buy"]:
             previous_stock_price = StockPrice.objects.filter(symbol=stock.symbol.symbol).order_by('-date').first().values()
-            volume = int(min(int(inquire_balance["tot_evlu_amt"]) * 0.018, int(inquire_balance["prvs_rcdl_excc_amt"])) / previous_stock_price.close)
+            volume = int(min(int(inquire_balance["tot_evlu_amt"]) * 0.018, int(inquire_balance["dnca_tot_amt"])) / previous_stock_price.close)
             inquire_stock = account.inquire_stock(stock.symbol.symbol)
             if inquire_stock:
                 volume = min(volume, int((int(inquire_balance["tot_evlu_amt"]) * 0.2 - int(inquire_stock["pchs_amt"])) / previous_stock_price.close))
