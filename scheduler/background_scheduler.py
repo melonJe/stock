@@ -260,12 +260,20 @@ def korea_investment_trading():
     account = KoreaInvestment(app_key := setting_env.APP_KEY, app_secret=setting_env.APP_SECRET, account_number=setting_env.ACCOUNT_NUMBER, account_cord=setting_env.ACCOUNT_CORD)
     decision = buy_sell_trend_judgment()  # decision = {'buy': set(), 'sell': set()}
     inquire_balance = account.inquire_balance()
-    while decision["buy"] or decision["sell"]:
+    while decision["sell"] or decision["buy"]:
         for stock in decision["sell"]:
             previous_stock_price = StockPrice.objects.filter(symbol=stock.symbol.symbol).order_by('-date').first().values()
             inquire_stock = account.inquire_stock(stock.symbol.symbol)
-            volume = max(math.ceil(int(inquire_stock["ord_psbl_qty"]) / 2), 1)
-            if not inquire_stock or int(inquire_stock["ord_psbl_qty"]) < 1 or account.buy(stock=stock.symbol.symbol, price=max(math.ceil(float(inquire_stock["pchs_avg_pric"]) * 1.05), previous_stock_price.close), volume=volume):
+            if not inquire_stock:
+                decision["buy"].discard(stock.symbol.symbol)
+                continue
+            volume = 0
+            if int(inquire_stock["ord_psbl_qty"]) != 0:
+                volume = max(int(math.ceil(int(inquire_stock["ord_psbl_qty"]) / 2)), 1)
+            # TODO 손익분기점 반영하여 price 계산하기
+            if float(inquire_stock["pchs_avg_pric"]) * 1.05 < previous_stock_price.close:
+                volume = 0
+            if account.buy(stock=stock.symbol.symbol, price=previous_stock_price.close, volume=volume):
                 decision["buy"].discard(stock.symbol.symbol)
         for stock in decision["buy"]:
             previous_stock_price = StockPrice.objects.filter(symbol=stock.symbol.symbol).order_by('-date').first().values()

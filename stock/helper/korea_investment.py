@@ -129,3 +129,6 @@ class KoreaInvestment:
             return None
         else:
             raise requests.exceptions.HTTPError(f"""HTTP 요청 실패. 상태 코드: {response.status_code}\n{response.content}""")
+
+# account = KoreaInvestment(app_key := setting_env.APP_KEY, app_secret=setting_env.APP_SECRET, account_number=setting_env.ACCOUNT_NUMBER, account_cord=setting_env.ACCOUNT_CORD)
+# print(account.inquire_stock(stock="003030"))
