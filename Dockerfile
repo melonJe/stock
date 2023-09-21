@@ -8,6 +8,6 @@ EXPOSE 8000
 
 COPY . /app
 RUN pip install -r /app/requirements.txt
-RUN python manage.py migrate
+RUN python3 manage.py migrate
 
 ENTRYPOINT ["python3", "-u", "manage.py", "runserver", "0:8000", "--noreload"]
