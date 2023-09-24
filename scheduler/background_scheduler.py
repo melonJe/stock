@@ -266,25 +266,25 @@ def korea_investment_trading():
     dnca_tot_amt = inquire_balance["dnca_tot_amt"] - inquire_balance["tot_evlu_amt"] * 0.10
     while sell or buy:
         for symbol in sell:
-            previous_stock_price = StockPrice.objects.filter(symbol=symbol).order_by('-date').first()
+            previous_stock = StockPrice.objects.filter(symbol=symbol).order_by('-date').first()
             inquire_stock = account.get_owned_stock_info(symbol)
             if inquire_stock and inquire_stock["ord_psbl_qty"] == 0:
                 sell.discard(symbol)
                 continue
             volume = max(int(math.ceil(inquire_stock["ord_psbl_qty"] / 2)), 1)
-            if inquire_stock["pchs_avg_pric"] * 1.05 < previous_stock_price.close:  # 수익률 확인
+            if inquire_stock["pchs_avg_pric"] * 1.05 < previous_stock.close:  # 수익률 확인
                 volume = 0
-            if account.buy(stock=symbol, price=previous_stock_price.close, volume=volume):
+            if account.buy(stock=symbol, price=previous_stock.close, volume=volume):
                 sell.discard(symbol)
         for symbol in buy:
-            previous_stock_price = StockPrice.objects.filter(symbol=symbol).order_by('-date').first()
-            volume = int(inquire_balance["tot_evlu_amt"] * 0.018 / previous_stock_price.close)
-            volume = min(1 if volume == 0 else volume, int(dnca_tot_amt / previous_stock_price.close))
+            previous_stock = StockPrice.objects.filter(symbol=symbol).order_by('-date').first()
+            volume = int(inquire_balance["tot_evlu_amt"] * 0.018 / previous_stock.close)
+            volume = min(1 if volume == 0 else volume, int(dnca_tot_amt / previous_stock.close))
             inquire_stock = account.get_owned_stock_info(symbol)
             if volume > 0 and inquire_stock:
-                volume = min(volume, int((inquire_balance["tot_evlu_amt"] * 0.2 - inquire_stock["pchs_amt"]) / previous_stock_price.close))
-            if volume < 1 or account.buy(stock=symbol, price=previous_stock_price.close, volume=volume):
-                dnca_tot_amt -= previous_stock_price.close * volume
+                volume = min(volume, int((inquire_balance["tot_evlu_amt"] * 0.2 - inquire_stock["pchs_amt"]) / previous_stock.close))
+            if volume < 1 or account.buy(stock=symbol, price=previous_stock.close, volume=volume):
+                dnca_tot_amt -= previous_stock.close * volume
                 buy.discard(symbol)
     if setting_env.SIMULATE:
         return
