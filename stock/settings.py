@@ -129,5 +129,5 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # user setting
 DATABASE_ROUTERS = ['stock.dbrouter.DBRouter']
-APSCHEDULER_RUN_NOW_TIMEOUT = 1800
+APSCHEDULER_RUN_NOW_TIMEOUT = 86400
 SCHEDULER_ENABLED = True

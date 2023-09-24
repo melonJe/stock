@@ -18,7 +18,8 @@ DEBUG_MODE = True if os.getenv("DEBUG_MODE") == 'True' else False
 
 APP_KEY = os.getenv("APP_KEY")
 APP_SECRET = os.getenv("APP_SECRET")
-TR_ID = "T" if os.getenv("SIMULATE") == "False" else "V"
-DOMAIN = "https://openapi.koreainvestment.com:9443" if os.getenv("SIMULATE") == "False" else "https://openapivts.koreainvestment.com:29443"
+SIMULATE = False if os.getenv("SIMULATE") == "False" else True
+TR_ID = "V" if SIMULATE else "T"
+DOMAIN = "https://openapivts.koreainvestment.com:29443" if SIMULATE else "https://openapi.koreainvestment.com:9443"
 ACCOUNT_NUMBER = os.getenv("ACCOUNT_NUMBER")
 ACCOUNT_CORD = os.getenv("ACCOUNT_CORD")

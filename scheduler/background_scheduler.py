@@ -1,10 +1,11 @@
-import math
-import traceback
 import FinanceDataReader
-import requests
+import math
 import pandas as pd
+import requests
 import setting_env
-from datetime import timedelta, datetime
+import traceback
+from time import sleep
+from datetime import timedelta, datetime, time
 from django.conf import settings
 from stock.helper.korea_investment import KoreaInvestment
 from stock.models.stock import *
@@ -257,37 +258,41 @@ def buy_sell_trend_judgment():
 
 
 def korea_investment_trading():
-    account = KoreaInvestment(app_key := setting_env.APP_KEY, app_secret=setting_env.APP_SECRET, account_number=setting_env.ACCOUNT_NUMBER, account_cord=setting_env.ACCOUNT_CORD)
+    account = KoreaInvestment(app_key=setting_env.APP_KEY, app_secret=setting_env.APP_SECRET, account_number=setting_env.ACCOUNT_NUMBER, account_cord=setting_env.ACCOUNT_CORD)
     decision = buy_sell_trend_judgment()  # decision = {'buy': set(), 'sell': set()}
-    inquire_balance = account.inquire_balance()
-    while decision["sell"] or decision["buy"]:
-        for stock in decision["sell"]:
-            previous_stock_price = StockPrice.objects.filter(symbol=stock.symbol.symbol).order_by('-date').first().values()
-            inquire_stock = account.inquire_stock(stock.symbol.symbol)
-            if not inquire_stock:
-                decision["buy"].discard(stock.symbol.symbol)
+    buy = set(x.symbol.symbol for x in decision['buy'])
+    sell = set(x.symbol.symbol for x in decision['sell'])
+    inquire_balance = account.get_account_info()
+    dnca_tot_amt = inquire_balance["dnca_tot_amt"] - inquire_balance["tot_evlu_amt"] * 0.10
+    while sell or buy:
+        for symbol in sell:
+            previous_stock_price = StockPrice.objects.filter(symbol=symbol).order_by('-date').first()
+            inquire_stock = account.get_owned_stock_info(symbol)
+            if inquire_stock and inquire_stock["ord_psbl_qty"] == 0:
+                sell.discard(symbol)
                 continue
-            volume = 0
-            if int(inquire_stock["ord_psbl_qty"]) != 0:
-                volume = max(int(math.ceil(int(inquire_stock["ord_psbl_qty"]) / 2)), 1)
-            # TODO 손익분기점 반영하여 price 계산하기
-            if float(inquire_stock["pchs_avg_pric"]) * 1.05 < previous_stock_price.close:
+            volume = max(int(math.ceil(inquire_stock["ord_psbl_qty"] / 2)), 1)
+            if inquire_stock["pchs_avg_pric"] * 1.05 < previous_stock_price.close:  # 수익률 확인
                 volume = 0
-            if account.buy(stock=stock.symbol.symbol, price=previous_stock_price.close, volume=volume):
-                decision["buy"].discard(stock.symbol.symbol)
-        for stock in decision["buy"]:
-            previous_stock_price = StockPrice.objects.filter(symbol=stock.symbol.symbol).order_by('-date').first().values()
-            volume = int(min(int(inquire_balance["tot_evlu_amt"]) * 0.018, int(inquire_balance["dnca_tot_amt"])) / previous_stock_price.close)
-            inquire_stock = account.inquire_stock(stock.symbol.symbol)
-            if inquire_stock:
-                volume = min(volume, int((int(inquire_balance["tot_evlu_amt"]) * 0.2 - int(inquire_stock["pchs_amt"])) / previous_stock_price.close))
-            if volume < 1 or account.buy(stock=stock.symbol.symbol, price=previous_stock_price.close, volume=volume):
-                decision["buy"].discard(stock.symbol.symbol)
-
-        # TODO 테스트 코드 추후 삭제
-        print([x.symbol.name for x in decision["buy"]])
-        print([x.symbol.name for x in decision["sell"]])
-        break
+            if account.buy(stock=symbol, price=previous_stock_price.close, volume=volume):
+                sell.discard(symbol)
+        for symbol in buy:
+            previous_stock_price = StockPrice.objects.filter(symbol=symbol).order_by('-date').first()
+            volume = int(inquire_balance["tot_evlu_amt"] * 0.018 / previous_stock_price.close)
+            volume = min(1 if volume == 0 else volume, int(dnca_tot_amt / previous_stock_price.close))
+            inquire_stock = account.get_owned_stock_info(symbol)
+            if volume > 0 and inquire_stock:
+                volume = min(volume, int((inquire_balance["tot_evlu_amt"] * 0.2 - inquire_stock["pchs_amt"]) / previous_stock_price.close))
+            if volume < 1 or account.buy(stock=symbol, price=previous_stock_price.close, volume=volume):
+                dnca_tot_amt -= previous_stock_price.close * volume
+                buy.discard(symbol)
+    if setting_env.SIMULATE:
+        return
+    while datetime.now().time() < time(10, 30, 0):
+        sleep(60)
+    correctable_stock = account.get_cancellable_or_correctable_stock()
+    for item in correctable_stock:
+        account.modify_stock_order(order_no=item['odno'], volume=item['psbl_qty'])
 
 
 def start():
