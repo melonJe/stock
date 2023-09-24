@@ -2,6 +2,8 @@ import requests
 import setting_env
 import urllib.parse
 
+from stock.helper import discord
+
 
 def str_to_number(item: str):
     try:
@@ -37,7 +39,7 @@ class KoreaInvestment:
             data = response.json()
             self.__access_token = data["token_type"] + " " + data["access_token"]
         else:
-            raise requests.exceptions.HTTPError(f"""HTTP 요청 실패. 상태 코드: {response.status_code}\n{response.json()}""")
+            discord.error_message(f"""stock_db\nHTTP 요청 실패. 상태 코드 : {response.status_code}\n{response.json()}""")
 
     def buy(self, stock: str, price: int, volume: int, ord_dvsn: str = "00"):
         headers = {
@@ -59,9 +61,12 @@ class KoreaInvestment:
         response = requests.post(setting_env.DOMAIN + "/uapi/domestic-stock/v1/trading/order-cash", headers=headers, json=data)
         if response.status_code == 200:
             data = response.json()
-            return True if data["rt_cd"] == "0" else False
+            if data["rt_cd"] == "0":
+                return True
+            else:
+                discord.error_message(f"""stock_db\n응답 코드 : {data["msg_cd"]}\n응답 메세지 : {data["msg"]}""")
         else:
-            return False
+            discord.error_message(f"""stock_db\nHTTP 요청 실패. 상태 코드 : {response.status_code}\n{response.json()}""")
 
     def sell(self, stock: str, price: int, volume: int, order_type: str = "00"):
         headers = {
@@ -83,9 +88,12 @@ class KoreaInvestment:
         response = requests.post(setting_env.DOMAIN + "/uapi/domestic-stock/v1/trading/order-cash", headers=headers, json=data)
         if response.status_code == 200:
             data = response.json()
-            return True if data["rt_cd"] == "0" else False
+            if data["rt_cd"] == "0":
+                return True
+            else:
+                discord.error_message(f"""stock_db\n응답 코드 : {data["msg_cd"]}\n응답 메세지 : {data["msg"]}\n{data["output"]}""")
         else:
-            return False
+            discord.error_message(f"""stock_db\nHTTP 요청 실패. 상태 코드 : {response.status_code}\n{response.json()}""")
 
     def get_account_info(self):
         headers = {
@@ -114,7 +122,7 @@ class KoreaInvestment:
                 data[key] = str_to_number(data[key])
             return data
         else:
-            return False
+            discord.error_message(f"""stock_db\nHTTP 요청 실패. 상태 코드 : {response.status_code}\n{response.json()}""")
 
     def get_owned_stock_info(self, stock: str = None):
         headers = {
@@ -156,7 +164,7 @@ class KoreaInvestment:
                         data[index][key] = str_to_number(data[index][key])
                 return data
         else:
-            return False
+            discord.error_message(f"""stock_db\nHTTP 요청 실패. 상태 코드 : {response.status_code}\n{response.json()}""")
 
     def get_cancellable_or_correctable_stock(self):
         if setting_env.SIMULATE:
@@ -179,7 +187,7 @@ class KoreaInvestment:
         if response.status_code == 200:
             return response.json()["output1"]
         else:
-            return False
+            discord.error_message(f"""stock_db\nHTTP 요청 실패. 상태 코드 : {response.status_code}\n{response.json()}""")
 
     def modify_stock_order(self, order_no: str, volume: str, price: str = '0', order_type: str = '03', order_code: str = '01', all_or_none: str = 'Y'):
         headers = {
@@ -203,9 +211,7 @@ class KoreaInvestment:
         if response.status_code == 200:
             return True
         else:
-            return False
+            discord.error_message(f"""stock_db\nHTTP 요청 실패. 상태 코드 : {response.status_code}\n{response.json()}""")
 
-
-account = KoreaInvestment(app_key=setting_env.APP_KEY, app_secret=setting_env.APP_SECRET, account_number=setting_env.ACCOUNT_NUMBER, account_cord=setting_env.ACCOUNT_CORD)
-# print(account.inquire_balance())
-# print(account.inquire_stock(stock="003030"))
+# account = KoreaInvestment(app_key=setting_env.APP_KEY, app_secret=setting_env.APP_SECRET, account_number=setting_env.ACCOUNT_NUMBER, account_cord=setting_env.ACCOUNT_CORD)
+# print(account.get_owned_stock_info(stock="003030"))

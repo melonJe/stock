@@ -1,5 +1,7 @@
 import FinanceDataReader
 import math
+
+import numpy as np
 import pandas as pd
 import requests
 import setting_env
@@ -185,8 +187,8 @@ def alert(num_std=2):
     message += f"bollinger_band 60\nbuy : {[x.symbol.name for x in window['buy']]}\nsell : {[x.symbol.name for x in window['sell']]}\n\n"
     window = buy_sell_trend_judgment()
     message += f"trend_judgment\nbuy : {[x.symbol.name for x in window['buy']]}\nsell : {[x.symbol.name for x in window['sell']]}"
-    # print(message)
-    discord.send_message(message)
+    print(message)
+    # discord.send_message(message)
 
 
 def buy_sell_bollinger_band(window=20, num_std=2):
@@ -235,22 +237,16 @@ def buy_sell_trend_judgment():
             decision['buy'].add(stock)
 
         # TODO 판매 알고리즘 수정
-        # stocks = StockBuy.objects.filter(email='cabs0814@naver.com')
-        # for stock in stocks:
-        #     data = pd.DataFrame(StockPrice.objects.filter(date__range=[datetime.now() - timedelta(days=365), datetime.now()], symbol=stock.symbol).order_by('date').values())
-        #     data['ma200'] = data['close'].rolling(window=200).mean()
-        #     data['ma150'] = data['close'].rolling(window=150).mean()
-        #     data['ma50'] = data['close'].rolling(window=50).mean()
-        #     if not (data.iloc[-1]['ma200'] < data.iloc[-1]['ma150'] < data.iloc[-1]['ma50'] < data.iloc[-1]['close']):
-        #         decision['sell'].add(stock.name)
-        #         continue
-        #     if data.iloc[-1]['close'] < data['close'].max() * 0.75:
-        #         decision['sell'].add(stock.name)
-        #         continue
-        #     if data.iloc[-1]['close'] < data['close'].min() * 1.25:
-        #         decision['sell'].add(stock.name)
-        #         continue
-        # TODO: custom exception
+        account = KoreaInvestment(app_key=setting_env.APP_KEY, app_secret=setting_env.APP_SECRET, account_number=setting_env.ACCOUNT_NUMBER, account_cord=setting_env.ACCOUNT_CORD)
+        stocks = account.get_owned_stock_info()
+        for stock in stocks:
+            data = pd.DataFrame(StockPrice.objects.filter(date__range=[datetime.now() - timedelta(days=28), datetime.now()], symbol=stock['pdno']).order_by('date').values())
+            data['up'] = np.where(data['close'].diff(1) > 0, data['close'].diff(1), 0)
+            data['down'] = np.where(data['close'].diff(1) < 0, data['close'].diff(1) * -1, 0)
+            data['all_down'] = data['down'].rolling(window=10).mean()
+            data['all_up'] = data['up'].rolling(window=10).mean()
+            if data.iloc[-1]["all_down"] / (data.iloc[-1]["all_up"] + data.iloc[-1]["all_down"]) > 0.8:
+                decision['sell'].add(StockSubscription.objects.select_related("symbol").filter(symbol=stock['pdno']).first())
     except:
         str(traceback.print_exc())
         # discord.error_message("stock_db\n" + str(traceback.print_exc()))
@@ -268,13 +264,13 @@ def korea_investment_trading():
         for symbol in sell:
             previous_stock = StockPrice.objects.filter(symbol=symbol).order_by('-date').first()
             inquire_stock = account.get_owned_stock_info(symbol)
-            if inquire_stock and inquire_stock["ord_psbl_qty"] == 0:
+            if not inquire_stock or inquire_stock["evlu_pfls_rt"] <= 5 or inquire_stock["ord_psbl_qty"] == 0:
                 sell.discard(symbol)
                 continue
-            volume = max(int(math.ceil(inquire_stock["ord_psbl_qty"] / 2)), 1)
-            if inquire_stock["pchs_avg_pric"] * 1.05 < previous_stock.close:  # 수익률 확인
-                volume = 0
-            if account.buy(stock=symbol, price=previous_stock.close, volume=volume):
+            volume = math.ceil(inquire_balance["tot_evlu_amt"] * 0.05)
+            if volume > inquire_balance["ord_psbl_qty"]:
+                volume = inquire_balance["ord_psbl_qty"]
+            if volume < 1 or account.buy(stock=symbol, price=previous_stock.close, volume=volume):
                 sell.discard(symbol)
         for symbol in buy:
             previous_stock = StockPrice.objects.filter(symbol=symbol).order_by('-date').first()
