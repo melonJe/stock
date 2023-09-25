@@ -263,8 +263,8 @@ def stock_automated_trading_system():  # 파이썬 주식 자동매매 시스템
         data = pd.DataFrame(StockPrice.objects.filter(date__range=[datetime.now() - timedelta(days=28), datetime.now()], symbol=stock.symbol).order_by('date').values())
         data['up'] = np.where(data['close'].diff(1) > 0, data['close'].diff(1), 0)
         data['down'] = np.where(data['close'].diff(1) < 0, data['close'].diff(1) * -1, 0)
-        data['all_down'] = data['down'].rolling(window=2).mean()
-        data['all_up'] = data['up'].rolling(window=2).mean()
+        data['all_down'] = data['down'].rolling(window=14).mean()
+        data['all_up'] = data['up'].rolling(window=14).mean()
         data['ma20'] = data['close'].rolling(window=20).mean()
         data['ma60'] = data['close'].rolling(window=60).mean()
         if data.iloc[-1]['close'] < data.iloc[-3]['close'] * 0.98 or data.iloc[-1]["ma60"] < data.iloc[-1]["ma20"] and data.iloc[-1]["all_up"] / (data.iloc[-1]["all_up"] + data.iloc[-1]["all_down"]) < 0.05:
@@ -276,8 +276,8 @@ def stock_automated_trading_system():  # 파이썬 주식 자동매매 시스템
         data = pd.DataFrame(StockPrice.objects.filter(date__range=[datetime.now() - timedelta(days=28), datetime.now()], symbol=stock['pdno']).order_by('date').values())
         data['up'] = np.where(data['close'].diff(1) > 0, data['close'].diff(1), 0)
         data['down'] = np.where(data['close'].diff(1) < 0, data['close'].diff(1) * -1, 0)
-        data['all_down'] = data['down'].rolling(window=2).mean()
-        data['all_up'] = data['up'].rolling(window=2).mean()
+        data['all_down'] = data['down'].rolling(window=14).mean()
+        data['all_up'] = data['up'].rolling(window=14).mean()
         if data.iloc[-1]["all_up"] / (data.iloc[-1]["all_up"] + data.iloc[-1]["all_down"]) > 0.8:
             decision['sell'].add(StockSubscription.objects.select_related("symbol").filter(symbol=stock['pdno']).first())
 
@@ -303,6 +303,7 @@ def korea_investment_trading_initial_yield_growth_stock_investment():
                 volume = inquire_balance["ord_psbl_qty"]
             if volume < 1 or account.buy(stock=symbol, price=previous_stock.close, volume=volume):
                 sell.discard(symbol)
+                sleep(1)
         for symbol in buy.copy():
             previous_stock = StockPrice.objects.filter(symbol=symbol).order_by('-date').first()
             volume = int(inquire_balance["tot_evlu_amt"] * 0.018 / previous_stock.close)  # 총 평가 금액의 1.8% 씩 구매
@@ -314,6 +315,7 @@ def korea_investment_trading_initial_yield_growth_stock_investment():
             if volume < 1 or account.buy(stock=symbol, price=previous_stock.close, volume=volume):
                 dnca_tot_amt -= previous_stock.close * volume
                 buy.discard(symbol)
+                sleep(1)
         sleep(60)
     if setting_env.SIMULATE:
         return
