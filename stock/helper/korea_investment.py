@@ -64,7 +64,7 @@ class KoreaInvestment:
             if data["rt_cd"] == "0":
                 return True
             else:
-                discord.error_message(f"""stock_db\n응답 코드 : {data["msg_cd"]}\n응답 메세지 : {data["msg"]}""")
+                discord.error_message(f"""stock_db\n응답 코드 : {data["msg_cd"]}\n응답 메세지 : {data["msg1"]}""")
         else:
             discord.error_message(f"""stock_db\nHTTP 요청 실패. 상태 코드 : {response.status_code}\n{response.json()}""")
 
@@ -91,7 +91,7 @@ class KoreaInvestment:
             if data["rt_cd"] == "0":
                 return True
             else:
-                discord.error_message(f"""stock_db\n응답 코드 : {data["msg_cd"]}\n응답 메세지 : {data["msg"]}\n{data["output"]}""")
+                discord.error_message(f"""stock_db\n응답 코드 : {data["msg_cd"]}\n응답 메세지 : {data["msg1"]}""")
         else:
             discord.error_message(f"""stock_db\nHTTP 요청 실패. 상태 코드 : {response.status_code}\n{response.json()}""")
 
