@@ -291,7 +291,7 @@ def korea_investment_trading_initial_yield_growth_stock_investment():
     sell = set(x.symbol.symbol for x in decision['sell'])
     inquire_balance = account.get_account_info()
     dnca_tot_amt = inquire_balance["dnca_tot_amt"] - inquire_balance["tot_evlu_amt"] * 0.10  # 사용 가능한 금액 계산 (총 평가 금액의 10% 제외한 예수금)
-    while sell or buy:
+    while datetime.now().time() < time(15, 0, 0) and (sell or buy):
         for symbol in sell.copy():
             previous_stock = StockPrice.objects.filter(symbol=symbol).order_by('-date').first()
             inquire_stock = account.get_owned_stock_info(symbol)
