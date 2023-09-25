@@ -220,7 +220,6 @@ def buy_sell_trend_judgment():
     decision = {'buy': set(), 'sell': set()}
     try:
         stocks = StockSubscription.objects.select_related("symbol").all()
-        # stocks = StockSubscription.objects.filter(email='jmayermj@gmail.com').select_related("symbol").all()
         for stock in stocks:
             data = pd.DataFrame(StockPrice.objects.filter(date__range=[datetime.now() - timedelta(days=28), datetime.now()], symbol=stock.symbol).order_by('date').values())
             data['up'] = np.where(data['close'].diff(1) > 0, data['close'].diff(1), 0)
