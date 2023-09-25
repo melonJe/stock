@@ -185,7 +185,7 @@ def alert(num_std=2):
     # message += f"bollinger_band 20\nbuy : {[x.symbol.name for x in window['buy']]}\nsell : {[x.symbol.name for x in window['sell']]}\n\n"
     # window = buy_sell_bollinger_band(window=60, num_std=num_std)
     # message += f"bollinger_band 60\nbuy : {[x.symbol.name for x in window['buy']]}\nsell : {[x.symbol.name for x in window['sell']]}\n\n"
-    window = buy_sell_trend_judgment()
+    window = initial_yield_growth_stock_investment()
     message += f"trend_judgment\nbuy : {[x.symbol.name for x in window['buy']]}\nsell : {[x.symbol.name for x in window['sell']]}"
     print(message)
     # discord.send_message(message)
@@ -216,11 +216,10 @@ def buy_sell_bollinger_band(window=20, num_std=2):
     return decision
 
 
-def buy_sell_trend_judgment():
+def initial_yield_growth_stock_investment():
     decision = {'buy': set(), 'sell': set()}
     try:
         stocks = StockSubscription.objects.select_related("symbol").all()
-        # stocks = StockSubscription.objects.filter(email='jmayermj@gmail.com').select_related("symbol").all()
         for stock in stocks:
             data = pd.DataFrame(StockPrice.objects.filter(date__range=[datetime.now() - timedelta(days=365), datetime.now()], symbol=stock.symbol).order_by('date').values())
             if data.empty:
@@ -246,7 +245,7 @@ def buy_sell_trend_judgment():
             data['ma50'] = data['close'].rolling(window=50).mean()
             if data.iloc[-1]['close'] < data.iloc[-1]['ma50']:
                 sell_true = True
-            if data.iloc[-1]['close'] < data['close'].min() * 1.25:
+            if data.iloc[-1]['close'] < data['close'].max() * 0.75:
                 sell_true = True
             if sell_true:
                 decision['sell'].add(StockSubscription.objects.filter(symbol=stock['pdno']).select_related("symbol").first())
@@ -256,9 +255,37 @@ def buy_sell_trend_judgment():
     return decision
 
 
-def korea_investment_trading():
+def stock_automated_trading_system():  # 파이썬 주식 자동매매 시스템 - 박준성
+    decision = {'buy': set(), 'sell': set()}
+    # stocks = StockSubscription.objects.select_related("symbol").all()
+    stocks = StockSubscription.objects.filter(email='jmayermj@gmail.com').select_related("symbol").all()
+    for stock in stocks:
+        data = pd.DataFrame(StockPrice.objects.filter(date__range=[datetime.now() - timedelta(days=28), datetime.now()], symbol=stock.symbol).order_by('date').values())
+        data['up'] = np.where(data['close'].diff(1) > 0, data['close'].diff(1), 0)
+        data['down'] = np.where(data['close'].diff(1) < 0, data['close'].diff(1) * -1, 0)
+        data['all_down'] = data['down'].rolling(window=10).mean()
+        data['all_up'] = data['up'].rolling(window=10).mean()
+        data['ma20'] = data['close'].rolling(window=20).mean()
+        data['ma60'] = data['close'].rolling(window=60).mean()
+        if data.iloc[-1]['close'] < data.iloc[-3]['close'] * 0.98 or data.iloc[-1]["ma60"] < data.iloc[-1]["ma20"] and data.iloc[-1]["all_up"] / (data.iloc[-1]["all_up"] + data.iloc[-1]["all_down"]) < 0.05:
+            decision['buy'].add(stock)
+
     account = KoreaInvestment(app_key=setting_env.APP_KEY, app_secret=setting_env.APP_SECRET, account_number=setting_env.ACCOUNT_NUMBER, account_cord=setting_env.ACCOUNT_CORD)
-    decision = buy_sell_trend_judgment()  # decision = {'buy': set(), 'sell': set()}
+    stocks = account.get_owned_stock_info()
+    for stock in stocks:
+        data = pd.DataFrame(StockPrice.objects.filter(date__range=[datetime.now() - timedelta(days=28), datetime.now()], symbol=stock['pdno']).order_by('date').values())
+        data['up'] = np.where(data['close'].diff(1) > 0, data['close'].diff(1), 0)
+        data['down'] = np.where(data['close'].diff(1) < 0, data['close'].diff(1) * -1, 0)
+        data['all_down'] = data['down'].rolling(window=10).mean()
+        data['all_up'] = data['up'].rolling(window=10).mean()
+        if data.iloc[-1]["all_up"] / (data.iloc[-1]["all_up"] + data.iloc[-1]["all_down"]) > 0.8:
+            decision['sell'].add(StockSubscription.objects.select_related("symbol").filter(symbol=stock['pdno']).first())
+    return decision
+
+
+def korea_investment_trading_initial_yield_growth_stock_investment():
+    account = KoreaInvestment(app_key=setting_env.APP_KEY, app_secret=setting_env.APP_SECRET, account_number=setting_env.ACCOUNT_NUMBER, account_cord=setting_env.ACCOUNT_CORD)
+    decision = initial_yield_growth_stock_investment()  # decision = {'buy': set(), 'sell': set()}
     buy = set(x.symbol.symbol for x in decision['buy'])
     sell = set(x.symbol.symbol for x in decision['sell'])
     inquire_balance = account.get_account_info()
@@ -330,9 +357,9 @@ def start():
     )
 
     scheduler.add_job(
-        korea_investment_trading,
+        korea_investment_trading_initial_yield_growth_stock_investment,
         trigger=CronTrigger(day_of_week="mon-fri", hour=8, minute=45),
-        id="korea_investment_trading",
+        id="korea_investment_trading_initial_yield_growth_stock_investment",
         max_instances=1,
         replace_existing=True,
     )
