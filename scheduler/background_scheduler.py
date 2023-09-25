@@ -251,7 +251,7 @@ def korea_investment_trading():
         for symbol in sell.copy():
             previous_stock = StockPrice.objects.filter(symbol=symbol).order_by('-date').first()
             inquire_stock = account.get_owned_stock_info(symbol)
-            if not inquire_stock or inquire_stock["evlu_pfls_rt"] <= 2.5 or inquire_stock["ord_psbl_qty"] == 0:
+            if not inquire_stock or -10 <= inquire_stock["evlu_pfls_rt"] <= 2.5 or inquire_stock["ord_psbl_qty"] == 0:
                 sell.discard(symbol)
                 continue
             volume = math.ceil(inquire_balance["tot_evlu_amt"] * 0.05)
