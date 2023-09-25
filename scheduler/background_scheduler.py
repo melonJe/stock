@@ -174,21 +174,21 @@ def add_stock_price_1day():
                                        update_fields=['open', 'high', 'close', 'low'])
 
 
-def alert(num_std=2):
-    if datetime.now().weekday() in (5, 6):
-        return
-    print(f'{datetime.now()} alert 시작')
-    message = f"{datetime.now().date()}\n"
-    # window = buy_sell_bollinger_band(window=5, num_std=num_std)
-    # message += f"bollinger_band 5\nbuy : {[x.symbol.name for x in window['buy']]}\nsell : {[x.symbol.name for x in window['sell']]}\n\n"
-    # window = buy_sell_bollinger_band(window=20, num_std=num_std)
-    # message += f"bollinger_band 20\nbuy : {[x.symbol.name for x in window['buy']]}\nsell : {[x.symbol.name for x in window['sell']]}\n\n"
-    # window = buy_sell_bollinger_band(window=60, num_std=num_std)
-    # message += f"bollinger_band 60\nbuy : {[x.symbol.name for x in window['buy']]}\nsell : {[x.symbol.name for x in window['sell']]}\n\n"
-    window = initial_yield_growth_stock_investment()
-    message += f"trend_judgment\nbuy : {[x.symbol.name for x in window['buy']]}\nsell : {[x.symbol.name for x in window['sell']]}"
-    print(message)
-    # discord.send_message(message)
+# def alert(num_std=2):
+#     if datetime.now().weekday() in (5, 6):
+#         return
+#     print(f'{datetime.now()} alert 시작')
+#     message = f"{datetime.now().date()}\n"
+#     window = buy_sell_bollinger_band(window=5, num_std=num_std)
+#     message += f"bollinger_band 5\nbuy : {[x.symbol.name for x in window['buy']]}\nsell : {[x.symbol.name for x in window['sell']]}\n\n"
+#     window = buy_sell_bollinger_band(window=20, num_std=num_std)
+#     message += f"bollinger_band 20\nbuy : {[x.symbol.name for x in window['buy']]}\nsell : {[x.symbol.name for x in window['sell']]}\n\n"
+#     window = buy_sell_bollinger_band(window=60, num_std=num_std)
+#     message += f"bollinger_band 60\nbuy : {[x.symbol.name for x in window['buy']]}\nsell : {[x.symbol.name for x in window['sell']]}\n\n"
+#     window = initial_yield_growth_stock_investment()
+#     message += f"trend_judgment\nbuy : {[x.symbol.name for x in window['buy']]}\nsell : {[x.symbol.name for x in window['sell']]}"
+#     print(message)
+#     discord.send_message(message)
 
 
 def buy_sell_bollinger_band(window=20, num_std=2):
@@ -257,8 +257,8 @@ def initial_yield_growth_stock_investment():
 
 def stock_automated_trading_system():  # 파이썬 주식 자동매매 시스템 - 박준성
     decision = {'buy': set(), 'sell': set()}
-    # stocks = StockSubscription.objects.select_related("symbol").all()
-    stocks = StockSubscription.objects.filter(email='jmayermj@gmail.com').select_related("symbol").all()
+    stocks = StockSubscription.objects.select_related("symbol").all()
+    # stocks = StockSubscription.objects.filter(email='jmayermj@gmail.com').select_related("symbol").all()
     for stock in stocks:
         data = pd.DataFrame(StockPrice.objects.filter(date__range=[datetime.now() - timedelta(days=28), datetime.now()], symbol=stock.symbol).order_by('date').values())
         data['up'] = np.where(data['close'].diff(1) > 0, data['close'].diff(1), 0)
@@ -285,30 +285,31 @@ def stock_automated_trading_system():  # 파이썬 주식 자동매매 시스템
 
 def korea_investment_trading_initial_yield_growth_stock_investment():
     account = KoreaInvestment(app_key=setting_env.APP_KEY, app_secret=setting_env.APP_SECRET, account_number=setting_env.ACCOUNT_NUMBER, account_cord=setting_env.ACCOUNT_CORD)
-    decision = initial_yield_growth_stock_investment()  # decision = {'buy': set(), 'sell': set()}
+    decision = stock_automated_trading_system()  # decision = {'buy': set(), 'sell': set()}
     buy = set(x.symbol.symbol for x in decision['buy'])
     sell = set(x.symbol.symbol for x in decision['sell'])
     inquire_balance = account.get_account_info()
-    dnca_tot_amt = inquire_balance["dnca_tot_amt"] - inquire_balance["tot_evlu_amt"] * 0.10
+    dnca_tot_amt = inquire_balance["dnca_tot_amt"] - inquire_balance["tot_evlu_amt"] * 0.10  # 사용 가능한 금액 계산 (총 평가 금액의 10% 제외한 예수금)
     while sell or buy:
         for symbol in sell.copy():
             previous_stock = StockPrice.objects.filter(symbol=symbol).order_by('-date').first()
             inquire_stock = account.get_owned_stock_info(symbol)
-            if not inquire_stock or inquire_stock["evlu_pfls_rt"] <= 2.5 or inquire_stock["ord_psbl_qty"] == 0:
+            if (not inquire_stock) or inquire_stock["evlu_pfls_rt"] <= 2.5 or inquire_stock["ord_psbl_qty"] == 0:  # 보유하고 있거나 수익률이 2.5% 이하거나 주문 가능한 슈량이 없으면 다음 주식으로 넘어감
                 sell.discard(symbol)
                 continue
-            volume = math.ceil(inquire_balance["tot_evlu_amt"] * 0.05)
-            if volume > inquire_balance["ord_psbl_qty"]:
+            volume = math.ceil(inquire_balance["tot_evlu_amt"] * 0.05 / inquire_balance['evlu_amt'])  # 총 평가 금액의 5% 씩 판매
+            if volume > inquire_balance["ord_psbl_qty"]:  # 수문 가능 수량을 넘길 경우 주문 수량 수정
                 volume = inquire_balance["ord_psbl_qty"]
             if volume < 1 or account.buy(stock=symbol, price=previous_stock.close, volume=volume):
                 sell.discard(symbol)
         for symbol in buy.copy():
             previous_stock = StockPrice.objects.filter(symbol=symbol).order_by('-date').first()
-            volume = int(inquire_balance["tot_evlu_amt"] * 0.018 / previous_stock.close)
-            volume = min(1 if volume == 0 else volume, int(dnca_tot_amt / previous_stock.close))
+            volume = int(inquire_balance["tot_evlu_amt"] * 0.018 / previous_stock.close)  # 총 평가 금액의 1.8% 씩 구매
+            volume = 1 if volume == 0 else volume  # 구매 수량이 0일 경우 1로 수정
+            volume = min(volume, int(dnca_tot_amt / previous_stock.close))  # 구매 수량이 사용 가능한 금액을 초과 하는지 판단
             inquire_stock = account.get_owned_stock_info(symbol)
-            if volume > 0 and inquire_stock:
-                volume = min(volume, int((inquire_balance["tot_evlu_amt"] * 0.2 - inquire_stock["pchs_amt"]) / previous_stock.close))
+            if volume > 0 and inquire_stock:  # 구매 수량이 0보다 크고 보유 중인 주식일 경우
+                volume = min(volume, int((inquire_balance["tot_evlu_amt"] * 0.2 - inquire_stock["pchs_amt"]) / previous_stock.close))  # 주식 보유 비중이 20%를 넘지 않도록 구매 수량 수정
             if volume < 1 or account.buy(stock=symbol, price=previous_stock.close, volume=volume):
                 dnca_tot_amt -= previous_stock.close * volume
                 buy.discard(symbol)
@@ -318,7 +319,8 @@ def korea_investment_trading_initial_yield_growth_stock_investment():
         sleep(60)
     correctable_stock = account.get_cancellable_or_correctable_stock()
     for item in correctable_stock:
-        account.modify_stock_order(order_no=item['odno'], volume=item['psbl_qty'])
+        if item['sll_buy_dvsn_cd'] == '02':  # 매수 주문만 변경
+            account.modify_stock_order(order_no=item['odno'], volume=item['psbl_qty'])
 
 
 def start():
