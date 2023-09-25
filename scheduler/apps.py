@@ -8,5 +8,5 @@ class SchedulerConfig(AppConfig):
     def ready(self):
         if settings.SCHEDULER_ENABLED:
             from . import background_scheduler
-            background_scheduler.korea_investment_trading_initial_yield_growth_stock_investment()
-            # background_scheduler.start()
+            # background_scheduler.korea_investment_trading_initial_yield_growth_stock_investment()
+            background_scheduler.start()
