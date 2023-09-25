@@ -234,6 +234,21 @@ def buy_sell_trend_judgment():
             if data.iloc[-1]['close'] < data['close'].min() * 1.25:
                 continue
             decision['buy'].add(stock)
+
+        account = KoreaInvestment(app_key=setting_env.APP_KEY, app_secret=setting_env.APP_SECRET, account_number=setting_env.ACCOUNT_NUMBER, account_cord=setting_env.ACCOUNT_CORD)
+        stocks = account.get_owned_stock_info()
+        for stock in stocks:
+            data = pd.DataFrame(StockPrice.objects.filter(date__range=[datetime.now() - timedelta(days=28), datetime.now()], symbol=stock['pdno']).order_by('date').values())
+            sell_true = False
+            if data.empty:
+                continue
+            data['ma50'] = data['close'].rolling(window=50).mean()
+            if data.iloc[-1]['close'] < data.iloc[-1]['ma50']:
+                sell_true = True
+            if data.iloc[-1]['close'] > data['close'].min() * 1.25:
+                sell_true = True
+            if sell_true:
+                decision['sell'].add(StockSubscription.objects.filter(symbol=stock['pdno']).select_related("symbol").first())
     except:
         str(traceback.print_exc())
         # discord.error_message("stock_db\n" + str(traceback.print_exc()))
@@ -251,7 +266,7 @@ def korea_investment_trading():
         for symbol in sell.copy():
             previous_stock = StockPrice.objects.filter(symbol=symbol).order_by('-date').first()
             inquire_stock = account.get_owned_stock_info(symbol)
-            if not inquire_stock or -10 <= inquire_stock["evlu_pfls_rt"] <= 2.5 or inquire_stock["ord_psbl_qty"] == 0:
+            if not inquire_stock or inquire_stock["evlu_pfls_rt"] <= 2.5 or inquire_stock["ord_psbl_qty"] == 0:
                 sell.discard(symbol)
                 continue
             volume = math.ceil(inquire_balance["tot_evlu_amt"] * 0.05)
