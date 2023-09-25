@@ -219,30 +219,18 @@ def buy_sell_bollinger_band(window=20, num_std=2):
 def buy_sell_trend_judgment():
     decision = {'buy': set(), 'sell': set()}
     try:
-        stocks = StockSubscription.objects.select_related("symbol").all()
-        # stocks = StockSubscription.objects.filter(email='jmayermj@gmail.com')
+        # stocks = StockSubscription.objects.select_related("symbol").all()
+        stocks = StockSubscription.objects.filter(email='jmayermj@gmail.com').select_related("symbol").all()
         for stock in stocks:
-            # data = pd.DataFrame(StockPrice.objects.filter(date__range=[datetime.now() - timedelta(days=365), datetime.now()], symbol=stock.symbol).order_by('date').values())
-            # if data.empty:
-            #     continue
-            # data['ma200'] = data['close'].rolling(window=200).mean()
-            # data['ma150'] = data['close'].rolling(window=150).mean()
-            # data['ma50'] = data['close'].rolling(window=50).mean()
-            # if not (data.iloc[-1]['ma200'] < data.iloc[-1]['ma150'] < data.iloc[-1]['ma50'] < data.iloc[-1]['close']):
-            #     continue
-            # if data.iloc[-1]['close'] < data['close'].max() * 0.75:
-            #     continue
-            # if data.iloc[-1]['close'] < data['close'].min() * 1.25:
-            #     continue
-            # decision['buy'].add(stock)
-
-            data = pd.DataFrame(StockPrice.objects.filter(date__range=[datetime.now() - timedelta(days=28), datetime.now()], symbol=stock['pdno']).order_by('date').values())
+            data = pd.DataFrame(StockPrice.objects.filter(date__range=[datetime.now() - timedelta(days=28), datetime.now()], symbol=stock.symbol).order_by('date').values())
             data['up'] = np.where(data['close'].diff(1) > 0, data['close'].diff(1), 0)
             data['down'] = np.where(data['close'].diff(1) < 0, data['close'].diff(1) * -1, 0)
             data['all_down'] = data['down'].rolling(window=10).mean()
             data['all_up'] = data['up'].rolling(window=10).mean()
-            if data.iloc[-1]["all_up"] / (data.iloc[-1]["all_up"] + data.iloc[-1]["all_down"]) > 0.8:
-                decision['sell'].add(StockSubscription.objects.select_related("symbol").filter(symbol=stock['pdno']).first())
+            data['ma20'] = data['close'].rolling(window=20).mean()
+            data['ma60'] = data['close'].rolling(window=60).mean()
+            if data.iloc[-1]["ma60"] < data.iloc[-1]["ma20"] and data.iloc[-1]["all_up"] / (data.iloc[-1]["all_up"] + data.iloc[-1]["all_down"]) < 0.05:
+                decision['sell'].add(StockSubscription.objects.select_related("symbol").filter(symbol=stock.symbol).first())
 
         # TODO 판매 알고리즘 수정
         account = KoreaInvestment(app_key=setting_env.APP_KEY, app_secret=setting_env.APP_SECRET, account_number=setting_env.ACCOUNT_NUMBER, account_cord=setting_env.ACCOUNT_CORD)
@@ -253,7 +241,7 @@ def buy_sell_trend_judgment():
             data['down'] = np.where(data['close'].diff(1) < 0, data['close'].diff(1) * -1, 0)
             data['all_down'] = data['down'].rolling(window=10).mean()
             data['all_up'] = data['up'].rolling(window=10).mean()
-            if data.iloc[-1]["all_down"] / (data.iloc[-1]["all_up"] + data.iloc[-1]["all_down"]) > 0.8:
+            if data.iloc[-1]["all_up"] / (data.iloc[-1]["all_up"] + data.iloc[-1]["all_down"]) > 0.8:
                 decision['sell'].add(StockSubscription.objects.select_related("symbol").filter(symbol=stock['pdno']).first())
     except:
         str(traceback.print_exc())
@@ -269,10 +257,10 @@ def korea_investment_trading():
     inquire_balance = account.get_account_info()
     dnca_tot_amt = inquire_balance["dnca_tot_amt"] - inquire_balance["tot_evlu_amt"] * 0.10
     while sell or buy:
-        for symbol in sell:
+        for symbol in sell.copy():
             previous_stock = StockPrice.objects.filter(symbol=symbol).order_by('-date').first()
             inquire_stock = account.get_owned_stock_info(symbol)
-            if not inquire_stock or inquire_stock["evlu_pfls_rt"] <= 5 or inquire_stock["ord_psbl_qty"] == 0:
+            if not inquire_stock or inquire_stock["evlu_pfls_rt"] <= 2.5 or inquire_stock["ord_psbl_qty"] == 0:
                 sell.discard(symbol)
                 continue
             volume = math.ceil(inquire_balance["tot_evlu_amt"] * 0.05)
@@ -280,7 +268,7 @@ def korea_investment_trading():
                 volume = inquire_balance["ord_psbl_qty"]
             if volume < 1 or account.buy(stock=symbol, price=previous_stock.close, volume=volume):
                 sell.discard(symbol)
-        for symbol in buy:
+        for symbol in buy.copy():
             previous_stock = StockPrice.objects.filter(symbol=symbol).order_by('-date').first()
             volume = int(inquire_balance["tot_evlu_amt"] * 0.018 / previous_stock.close)
             volume = min(1 if volume == 0 else volume, int(dnca_tot_amt / previous_stock.close))
@@ -350,13 +338,13 @@ def start():
         replace_existing=True,
     )
 
-    scheduler.add_job(
-        alert,
-        trigger=CronTrigger(day_of_week="mon-fri", hour=20),
-        id="alert",
-        max_instances=1,
-        replace_existing=True,
-    )
+    # scheduler.add_job(
+    #     alert,
+    #     trigger=CronTrigger(day_of_week="mon-fri", hour=20),
+    #     id="alert",
+    #     max_instances=1,
+    #     replace_existing=True,
+    # )
 
     try:
         scheduler.start()  # 없으면 동작하지 않습니다.
