@@ -219,8 +219,8 @@ def buy_sell_bollinger_band(window=20, num_std=2):
 def buy_sell_trend_judgment():
     decision = {'buy': set(), 'sell': set()}
     try:
-        # stocks = StockSubscription.objects.select_related("symbol").all()
-        stocks = StockSubscription.objects.filter(email='jmayermj@gmail.com').select_related("symbol").all()
+        stocks = StockSubscription.objects.select_related("symbol").all()
+        # stocks = StockSubscription.objects.filter(email='jmayermj@gmail.com').select_related("symbol").all()
         for stock in stocks:
             data = pd.DataFrame(StockPrice.objects.filter(date__range=[datetime.now() - timedelta(days=28), datetime.now()], symbol=stock.symbol).order_by('date').values())
             data['up'] = np.where(data['close'].diff(1) > 0, data['close'].diff(1), 0)
@@ -229,8 +229,8 @@ def buy_sell_trend_judgment():
             data['all_up'] = data['up'].rolling(window=10).mean()
             data['ma20'] = data['close'].rolling(window=20).mean()
             data['ma60'] = data['close'].rolling(window=60).mean()
-            if data.iloc[-1]["ma60"] < data.iloc[-1]["ma20"] and data.iloc[-1]["all_up"] / (data.iloc[-1]["all_up"] + data.iloc[-1]["all_down"]) < 0.05:
-                decision['sell'].add(StockSubscription.objects.select_related("symbol").filter(symbol=stock.symbol).first())
+            if data.iloc[-1]["close"] < data.iloc[-3]["close"] * 0.98 and data.iloc[-1]["ma60"] < data.iloc[-1]["ma20"] and data.iloc[-1]["all_up"] / (data.iloc[-1]["all_up"] + data.iloc[-1]["all_down"]) < 0.05:
+                decision['sell'].add(stock)
 
         # TODO 판매 알고리즘 수정
         account = KoreaInvestment(app_key=setting_env.APP_KEY, app_secret=setting_env.APP_SECRET, account_number=setting_env.ACCOUNT_NUMBER, account_cord=setting_env.ACCOUNT_CORD)

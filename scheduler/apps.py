@@ -8,5 +8,5 @@ class SchedulerConfig(AppConfig):
     def ready(self):
         if settings.SCHEDULER_ENABLED:
             from . import background_scheduler
-            # background_scheduler.alert()
+            # print(background_scheduler.buy_sell_trend_judgment())
             background_scheduler.start()
