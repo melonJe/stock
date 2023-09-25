@@ -179,12 +179,12 @@ def alert(num_std=2):
         return
     print(f'{datetime.now()} alert 시작')
     message = f"{datetime.now().date()}\n"
-    window = buy_sell_bollinger_band(window=5, num_std=num_std)
-    message += f"bollinger_band 5\nbuy : {[x.symbol.name for x in window['buy']]}\nsell : {[x.symbol.name for x in window['sell']]}\n\n"
-    window = buy_sell_bollinger_band(window=20, num_std=num_std)
-    message += f"bollinger_band 20\nbuy : {[x.symbol.name for x in window['buy']]}\nsell : {[x.symbol.name for x in window['sell']]}\n\n"
-    window = buy_sell_bollinger_band(window=60, num_std=num_std)
-    message += f"bollinger_band 60\nbuy : {[x.symbol.name for x in window['buy']]}\nsell : {[x.symbol.name for x in window['sell']]}\n\n"
+    # window = buy_sell_bollinger_band(window=5, num_std=num_std)
+    # message += f"bollinger_band 5\nbuy : {[x.symbol.name for x in window['buy']]}\nsell : {[x.symbol.name for x in window['sell']]}\n\n"
+    # window = buy_sell_bollinger_band(window=20, num_std=num_std)
+    # message += f"bollinger_band 20\nbuy : {[x.symbol.name for x in window['buy']]}\nsell : {[x.symbol.name for x in window['sell']]}\n\n"
+    # window = buy_sell_bollinger_band(window=60, num_std=num_std)
+    # message += f"bollinger_band 60\nbuy : {[x.symbol.name for x in window['buy']]}\nsell : {[x.symbol.name for x in window['sell']]}\n\n"
     window = buy_sell_trend_judgment()
     message += f"trend_judgment\nbuy : {[x.symbol.name for x in window['buy']]}\nsell : {[x.symbol.name for x in window['sell']]}"
     print(message)
@@ -219,7 +219,8 @@ def buy_sell_bollinger_band(window=20, num_std=2):
 def buy_sell_trend_judgment():
     decision = {'buy': set(), 'sell': set()}
     try:
-        stocks = StockSubscription.objects.filter(email='jmayermj@gmail.com').select_related("symbol").all()
+        stocks = StockSubscription.objects.select_related("symbol").all()
+        # stocks = StockSubscription.objects.filter(email='jmayermj@gmail.com').select_related("symbol").all()
         for stock in stocks:
             data = pd.DataFrame(StockPrice.objects.filter(date__range=[datetime.now() - timedelta(days=365), datetime.now()], symbol=stock.symbol).order_by('date').values())
             if data.empty:
@@ -238,14 +239,14 @@ def buy_sell_trend_judgment():
         account = KoreaInvestment(app_key=setting_env.APP_KEY, app_secret=setting_env.APP_SECRET, account_number=setting_env.ACCOUNT_NUMBER, account_cord=setting_env.ACCOUNT_CORD)
         stocks = account.get_owned_stock_info()
         for stock in stocks:
-            data = pd.DataFrame(StockPrice.objects.filter(date__range=[datetime.now() - timedelta(days=28), datetime.now()], symbol=stock['pdno']).order_by('date').values())
+            data = pd.DataFrame(StockPrice.objects.filter(date__range=[datetime.now() - timedelta(days=365), datetime.now()], symbol=stock['pdno']).order_by('date').values())
             sell_true = False
             if data.empty:
                 continue
             data['ma50'] = data['close'].rolling(window=50).mean()
             if data.iloc[-1]['close'] < data.iloc[-1]['ma50']:
                 sell_true = True
-            if data.iloc[-1]['close'] > data['close'].min() * 1.25:
+            if data.iloc[-1]['close'] < data['close'].min() * 1.25:
                 sell_true = True
             if sell_true:
                 decision['sell'].add(StockSubscription.objects.filter(symbol=stock['pdno']).select_related("symbol").first())
