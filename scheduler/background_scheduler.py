@@ -11,8 +11,6 @@ from datetime import timedelta, datetime, time
 from django.conf import settings
 from stock.helper.korea_investment import KoreaInvestment
 from stock.models.stock import *
-from stock.helper import discord
-from stock.service import bollingerBands
 from bs4 import BeautifulSoup as bs
 from apscheduler.triggers.cron import CronTrigger
 from apscheduler.schedulers.background import BackgroundScheduler
@@ -21,9 +19,6 @@ from apscheduler.schedulers.background import BackgroundScheduler
 def update_subscription_defensive_investor():
     print(f'{datetime.now()} update_subscription_defensive_investor 시작')
     # 방어적 투자
-    now = datetime.now()
-    # if now.day != 1:
-    #     return
     data_to_insert = list()
     for stock in Stock.objects.values():
         value = 0
@@ -70,10 +65,6 @@ def update_subscription_defensive_investor():
 def update_subscription_aggressive_investor():
     print(f'{datetime.now()} update_subscription_aggressive_investor 시작')
     # 공격적 투자
-    now = datetime.now()
-    # if now.day != 1:
-    #     return
-    # stock = ['45014K']
     data_to_insert = list()
     for stock in Stock.objects.values():
         insert_true = 0  # 6 is true
@@ -105,9 +96,6 @@ def update_subscription_aggressive_investor():
 
 
 def add_stock():
-    now = datetime.now()
-    if now.day != 1:
-        return
     print(f'{datetime.now()} add_stock 시작')
     df_krx = FinanceDataReader.StockListing('KRX')
     data_to_insert = [{'symbol': Stock.objects.get(symbol=item['Code']), 'name': item['Name']} for item in df_krx.to_dict('records')]
@@ -136,8 +124,6 @@ def add_stock_price_all():
 
 def add_stock_price_1week():
     now = datetime.now()
-    # if now.weekday() not in (5, 6):
-    #     return
     print(f'{datetime.now()} add_stock_price_1week 시작')
     week_ago = (now - timedelta(days=7)).strftime('%Y-%m-%d')
     now = now.strftime('%Y-%m-%d')
@@ -156,8 +142,6 @@ def add_stock_price_1week():
 
 def add_stock_price_1day():
     now = datetime.now()
-    if now.weekday() in (5, 6):
-        return
     print(f'{datetime.now()} add_stock_price_1day 시작')
     now = now.strftime('%Y-%m-%d')
     data_to_insert = list()
@@ -223,7 +207,7 @@ def initial_yield_growth_stock_investment():
             data['down'] = np.where(data['close'].diff(1) < 0, data['close'].diff(1) * -1, 0)
             data['all_down'] = data['down'].rolling(window=window).mean()
             data['all_up'] = data['up'].rolling(window=window).mean()
-            if data.iloc[-1]["all_up"] / (data.iloc[-1]["all_up"] + data.iloc[-1]["all_down"]) <= 0.8:
+            if data.iloc[-1]["all_up"] / (data.iloc[-1]["all_up"] + data.iloc[-1]["all_down"]) < 0.4:
                 decision['buy'].add(stock)
 
         # 판매 주식 선택
