@@ -174,24 +174,7 @@ def add_stock_price_1day():
                                        update_fields=['open', 'high', 'close', 'low'])
 
 
-# def alert(num_std=2):
-#     if datetime.now().weekday() in (5, 6):
-#         return
-#     print(f'{datetime.now()} alert 시작')
-#     message = f"{datetime.now().date()}\n"
-#     window = buy_sell_bollinger_band(window=5, num_std=num_std)
-#     message += f"bollinger_band 5\nbuy : {[x.symbol.name for x in window['buy']]}\nsell : {[x.symbol.name for x in window['sell']]}\n\n"
-#     window = buy_sell_bollinger_band(window=20, num_std=num_std)
-#     message += f"bollinger_band 20\nbuy : {[x.symbol.name for x in window['buy']]}\nsell : {[x.symbol.name for x in window['sell']]}\n\n"
-#     window = buy_sell_bollinger_band(window=60, num_std=num_std)
-#     message += f"bollinger_band 60\nbuy : {[x.symbol.name for x in window['buy']]}\nsell : {[x.symbol.name for x in window['sell']]}\n\n"
-#     window = initial_yield_growth_stock_investment()
-#     message += f"trend_judgment\nbuy : {[x.symbol.name for x in window['buy']]}\nsell : {[x.symbol.name for x in window['sell']]}"
-#     print(message)
-#     discord.send_message(message)
-
-
-def buy_sell_bollinger_band(window=20, num_std=2):
+def bollinger_band():
     decision = {'buy': set(), 'sell': set()}
     try:
         # stock = StockSubscription.objects.all().distinct('symbol')
@@ -200,16 +183,18 @@ def buy_sell_bollinger_band(window=20, num_std=2):
             data = pd.DataFrame(StockPrice.objects.filter(date__range=[datetime.now() - timedelta(days=365), datetime.now()], symbol=stock.symbol).order_by('date').values())
             if data.empty:
                 continue
-            bollingerBands.bollinger_band(data, window=window, num_std=num_std)
-            # if data.iloc[-2]['open'] < data.iloc[-2]['close'] and data.iloc[-2]['open'] < data.iloc[-1]['open'] < data.iloc[-2]['close']:
-            #     continue
-            # if data.iloc[-2]['open'] > data.iloc[-2]['close'] and data.iloc[-2]['open'] > data.iloc[-1]['open'] > data.iloc[-2]['close']:
-            #     continue
-            if data.iloc[-1]['decision'] == 'buy':
-                decision['buy'].add(stock)
-            if data.iloc[-1]['decision'] == 'sell':
-                decision['sell'].add(stock)
-            # TODO: custom exception
+            data['ma20'] = data['close'].rolling(window=20).mean()
+            data['stddev'] = data['close'].rolling(window=20).std()
+            data['upper'] = data['ma20'] + (data['stddev'] * 2)
+            data['lower'] = data['ma20'] - (data['stddev'] * 2)
+            data['PB'] = (data['close'] - data['lower']) / (data['upper'] - data['lower'])
+            data['TP'] = (data['high'] + data['low'] + data['close']) / 3
+            data['PMF'] = np.where(data['close'].diff(1) > 0, data['TP'] * data['volume'], 0)  # TODO DB에 거래량 데이터 추가 필요
+            data['NMF'] = np.where(data['close'].diff(1) < 0, data['TP'] * data['volume'], 0)
+            data['MFR'] = data['PMF'].rolling(window=10).mean() / data['NMF'].rolling(window=10).mean()
+            data['MFI10'] = 100 - 100 / (1 + data['MFR'])
+            data['decision'] = np.where(data['PB'] > 0.8 and data['MFI10'] > 80, '매수', "")
+            data['decision'] = np.where(data['PB'] < 0.2 and data['MFI10'] < 20, '매도', "")
     except:
         str(traceback.print_exc())
         # discord.error_message("stock_db\n" + str(traceback.print_exc()))
@@ -379,14 +364,6 @@ def start():
         max_instances=1,
         replace_existing=True,
     )
-
-    # scheduler.add_job(
-    #     alert,
-    #     trigger=CronTrigger(day_of_week="mon-fri", hour=20),
-    #     id="alert",
-    #     max_instances=1,
-    #     replace_existing=True,
-    # )
 
     try:
         scheduler.start()  # 없으면 동작하지 않습니다.
