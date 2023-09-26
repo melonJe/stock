@@ -233,22 +233,24 @@ def initial_yield_growth_stock_investment():
                 continue
             if data.iloc[-1]['close'] < data['close'].min() * 1.25:
                 continue
-            decision['buy'].add(stock)
+            data['up'] = np.where(data['close'].diff(1) > 0, data['close'].diff(1), 0)
+            data['down'] = np.where(data['close'].diff(1) < 0, data['close'].diff(1) * -1, 0)
+            data['all_down'] = data['down'].rolling(window=14).mean()
+            data['all_up'] = data['up'].rolling(window=14).mean()
+            if data.iloc[-1]['close'] < data.iloc[-3]['close'] * 0.98 and data.iloc[-1]["all_up"] / (data.iloc[-1]["all_up"] + data.iloc[-1]["all_down"]) < 0.05:
+                decision['buy'].add(stock)
 
+        # 판매 주식 선택
         account = KoreaInvestment(app_key=setting_env.APP_KEY, app_secret=setting_env.APP_SECRET, account_number=setting_env.ACCOUNT_NUMBER, account_cord=setting_env.ACCOUNT_CORD)
         stocks = account.get_owned_stock_info()
         for stock in stocks:
-            data = pd.DataFrame(StockPrice.objects.filter(date__range=[datetime.now() - timedelta(days=365), datetime.now()], symbol=stock['pdno']).order_by('date').values())
-            sell_true = False
-            if data.empty:
-                continue
-            data['ma50'] = data['close'].rolling(window=50).mean()
-            if data.iloc[-1]['close'] < data.iloc[-1]['ma50']:
-                sell_true = True
-            if data.iloc[-1]['close'] < data['close'].max() * 0.75:
-                sell_true = True
-            if sell_true:
-                decision['sell'].add(StockSubscription.objects.filter(symbol=stock['pdno']).select_related("symbol").first())
+            data = pd.DataFrame(StockPrice.objects.filter(date__range=[datetime.now() - timedelta(days=28), datetime.now()], symbol=stock['pdno']).order_by('date').values())
+            data['up'] = np.where(data['close'].diff(1) > 0, data['close'].diff(1), 0)
+            data['down'] = np.where(data['close'].diff(1) < 0, data['close'].diff(1) * -1, 0)
+            data['all_down'] = data['down'].rolling(window=14).mean()
+            data['all_up'] = data['up'].rolling(window=14).mean()
+            if data.iloc[-1]["all_up"] / (data.iloc[-1]["all_up"] + data.iloc[-1]["all_down"]) > 0.8:
+                decision['sell'].add(StockSubscription.objects.select_related("symbol").filter(symbol=stock['pdno']).first())
     except:
         str(traceback.print_exc())
         # discord.error_message("stock_db\n" + str(traceback.print_exc()))
@@ -267,7 +269,7 @@ def stock_automated_trading_system():  # 파이썬 주식 자동매매 시스템
         data['all_up'] = data['up'].rolling(window=14).mean()
         data['ma20'] = data['close'].rolling(window=20).mean()
         data['ma60'] = data['close'].rolling(window=60).mean()
-        if data.iloc[-1]['close'] < data.iloc[-3]['close'] * 0.98 or data.iloc[-1]["ma60"] < data.iloc[-1]["ma20"] and data.iloc[-1]["all_up"] / (data.iloc[-1]["all_up"] + data.iloc[-1]["all_down"]) < 0.05:
+        if data.iloc[-1]['close'] < data.iloc[-3]['close'] * 0.98 and data.iloc[-1]["ma60"] < data.iloc[-1]["ma20"] and data.iloc[-1]["all_up"] / (data.iloc[-1]["all_up"] + data.iloc[-1]["all_down"]) < 0.05:
             decision['buy'].add(stock)
 
     account = KoreaInvestment(app_key=setting_env.APP_KEY, app_secret=setting_env.APP_SECRET, account_number=setting_env.ACCOUNT_NUMBER, account_cord=setting_env.ACCOUNT_CORD)
@@ -286,7 +288,7 @@ def stock_automated_trading_system():  # 파이썬 주식 자동매매 시스템
 
 def korea_investment_trading_initial_yield_growth_stock_investment():
     account = KoreaInvestment(app_key=setting_env.APP_KEY, app_secret=setting_env.APP_SECRET, account_number=setting_env.ACCOUNT_NUMBER, account_cord=setting_env.ACCOUNT_CORD)
-    decision = stock_automated_trading_system()  # decision = {'buy': set(), 'sell': set()}
+    decision = initial_yield_growth_stock_investment()  # decision = {'buy': set(), 'sell': set()}
     buy = set(x.symbol.symbol for x in decision['buy'])
     sell = set(x.symbol.symbol for x in decision['sell'])
     inquire_balance = account.get_account_info()
@@ -295,11 +297,11 @@ def korea_investment_trading_initial_yield_growth_stock_investment():
         for symbol in sell.copy():
             previous_stock = StockPrice.objects.filter(symbol=symbol).order_by('-date').first()
             inquire_stock = account.get_owned_stock_info(symbol)
-            if (not inquire_stock) or inquire_stock["evlu_pfls_rt"] <= 2.5 or inquire_stock["ord_psbl_qty"] == 0:  # 보유하고 있거나 수익률이 2.5% 이하거나 주문 가능한 슈량이 없으면 다음 주식으로 넘어감
+            if (not inquire_stock) or inquire_stock["evlu_pfls_rt"] <= 2.5 or inquire_stock["ord_psbl_qty"] == 0:  # 보유하고 있거나 수익률이 2.5% 이하거나 주문 가능한 수량이 없으면 다음 주식으로 넘어감
                 sell.discard(symbol)
                 continue
             volume = math.ceil(inquire_balance["tot_evlu_amt"] * 0.05 / inquire_balance['evlu_amt'])  # 총 평가 금액의 5% 씩 판매
-            if volume > inquire_balance["ord_psbl_qty"]:  # 수문 가능 수량을 넘길 경우 주문 수량 수정
+            if volume > inquire_balance["ord_psbl_qty"]:  # 주문 가능 수량을 넘길 경우 주문 수량 수정
                 volume = inquire_balance["ord_psbl_qty"]
             if volume < 1 or account.buy(stock=symbol, price=previous_stock.close, volume=volume):
                 sell.discard(symbol)
