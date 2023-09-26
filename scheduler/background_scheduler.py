@@ -203,6 +203,7 @@ def bollinger_band():
 
 def initial_yield_growth_stock_investment():
     decision = {'buy': set(), 'sell': set()}
+    window = 5
     try:
         stocks = StockSubscription.objects.select_related("symbol").all()
         for stock in stocks:
@@ -220,8 +221,8 @@ def initial_yield_growth_stock_investment():
                 continue
             data['up'] = np.where(data['close'].diff(1) > 0, data['close'].diff(1), 0)
             data['down'] = np.where(data['close'].diff(1) < 0, data['close'].diff(1) * -1, 0)
-            data['all_down'] = data['down'].rolling(window=14).mean()
-            data['all_up'] = data['up'].rolling(window=14).mean()
+            data['all_down'] = data['down'].rolling(window=window).mean()
+            data['all_up'] = data['up'].rolling(window=window).mean()
             if data.iloc[-1]['close'] < data.iloc[-3]['close'] * 0.98 and data.iloc[-1]["all_up"] / (data.iloc[-1]["all_up"] + data.iloc[-1]["all_down"]) < 0.05:
                 decision['buy'].add(stock)
 
@@ -232,8 +233,8 @@ def initial_yield_growth_stock_investment():
             data = pd.DataFrame(StockPrice.objects.filter(date__range=[datetime.now() - timedelta(days=28), datetime.now()], symbol=stock['pdno']).order_by('date').values())
             data['up'] = np.where(data['close'].diff(1) > 0, data['close'].diff(1), 0)
             data['down'] = np.where(data['close'].diff(1) < 0, data['close'].diff(1) * -1, 0)
-            data['all_down'] = data['down'].rolling(window=14).mean()
-            data['all_up'] = data['up'].rolling(window=14).mean()
+            data['all_down'] = data['down'].rolling(window=window).mean()
+            data['all_up'] = data['up'].rolling(window=window).mean()
             if data.iloc[-1]["all_up"] / (data.iloc[-1]["all_up"] + data.iloc[-1]["all_down"]) > 0.8:
                 decision['sell'].add(StockSubscription.objects.select_related("symbol").filter(symbol=stock['pdno']).first())
     except:
