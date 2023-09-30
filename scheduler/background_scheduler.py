@@ -9,11 +9,12 @@ import traceback
 from time import sleep
 from datetime import timedelta, datetime, time
 from django.conf import settings
-from stock.helper.korea_investment import KoreaInvestment
+from stock.service.korea_investment import KoreaInvestment
 from stock.models.stock import *
 from bs4 import BeautifulSoup as bs
 from apscheduler.triggers.cron import CronTrigger
 from apscheduler.schedulers.background import BackgroundScheduler
+from stock.service import discord
 
 
 def update_subscription_defensive_investor():
@@ -258,6 +259,8 @@ def stock_automated_trading_system():  # 파이썬 주식 자동매매 시스템
 
 def korea_investment_trading_initial_yield_growth_stock_investment():
     account = KoreaInvestment(app_key=setting_env.APP_KEY, app_secret=setting_env.APP_SECRET, account_number=setting_env.ACCOUNT_NUMBER, account_cord=setting_env.ACCOUNT_CORD)
+    if account.check_holiday():
+        return
     decision = initial_yield_growth_stock_investment()  # decision = {'buy': set(), 'sell': set()}
     buy = set(x.symbol.symbol for x in decision['buy'])
     sell = set(x.symbol.symbol for x in decision['sell'])
@@ -299,6 +302,20 @@ def korea_investment_trading_initial_yield_growth_stock_investment():
             account.modify_stock_order(order_no=item['odno'], volume=item['psbl_qty'])
 
 
+def notify_negative_profit_warning():
+    alert = set()
+    account = KoreaInvestment(app_key=setting_env.APP_KEY, app_secret=setting_env.APP_SECRET, account_number=setting_env.ACCOUNT_NUMBER, account_cord=setting_env.ACCOUNT_CORD)
+    if account.check_holiday():
+        return
+    while datetime.now().time() < time(15, 30, 0):
+        inquire_stock = account.get_owned_stock_info()
+        for item in inquire_stock:
+            if item["pdno"] not in alert and item["evlu_pfls_rt"] < -8:
+                discord.send_message(f"""{item["prdt_name"]} 수익률 {item["evlu_pfls_rt"]}""")
+                alert.add(item["pdno"])
+        sleep(10 * 60)
+
+
 def start():
     scheduler = BackgroundScheduler(misfire_grace_time=3600, coalesce=True, timezone=settings.TIME_ZONE)
 
@@ -338,6 +355,14 @@ def start():
         korea_investment_trading_initial_yield_growth_stock_investment,
         trigger=CronTrigger(day_of_week="mon-fri", hour=8, minute=45),
         id="korea_investment_trading_initial_yield_growth_stock_investment",
+        max_instances=1,
+        replace_existing=True,
+    )
+
+    scheduler.add_job(
+        notify_negative_profit_warning,
+        trigger=CronTrigger(day_of_week="mon-fri", hour=9, minute=00),
+        id="notify_negative_profit_warning",
         max_instances=1,
         replace_existing=True,
     )

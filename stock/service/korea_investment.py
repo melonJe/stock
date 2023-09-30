@@ -1,8 +1,8 @@
 import requests
 import setting_env
 import urllib.parse
-
-from stock.helper import discord
+from datetime import datetime
+from stock.service import discord
 
 
 def str_to_number(item: str):
@@ -17,37 +17,32 @@ def str_to_number(item: str):
 
 # TODO 예외 처리
 class KoreaInvestment:
-    __app_key: str = ''
-    __app_secret: str = ''
     __hash: str = ''
-    __access_token: str = ''
     __account_number: str = ''
     __account_cord: str = ''
     __headers: dict = {}  # TODO __headers 사용하기 ???
 
     def __init__(self, app_key: str, app_secret: str, account_number: str, account_cord: str):
-        self.__app_key = app_key
-        self.__app_secret = app_secret
+        self.__headers = {
+            "appkey": app_key,
+            "appsecret": app_secret
+        }
         self.__account_number = account_number
         self.__account_cord = account_cord
         data = {"grant_type": "client_credentials",
-                "appkey": self.__app_key,
-                "appsecret": self.__app_secret
+                "appkey": app_key,
+                "appsecret": app_secret
                 }
         response = requests.post(setting_env.DOMAIN + "/oauth2/tokenP", json=data)
         if response.status_code == 200:
             data = response.json()
-            self.__access_token = data["token_type"] + " " + data["access_token"]
+            self.__headers["authorization"] = data["token_type"] + " " + data["access_token"]
         else:
             discord.error_message(f"""stock_db\nHTTP 요청 실패. 상태 코드 : {response.status_code}\n{response.json()}""")
 
     def buy(self, stock: str, price: int, volume: int, ord_dvsn: str = "00"):
-        headers = {
-            "authorization": self.__access_token,
-            "appkey": self.__app_key,
-            "appsecret": self.__app_secret,
-            "tr_id": setting_env.TR_ID + "TTC0802U",
-        }
+        headers = self.__headers
+        headers["tr_id"] = setting_env.TR_ID + "TTC0802U"
         data = {
             "CANO": self.__account_number,
             "ACNT_PRDT_CD": self.__account_cord,
@@ -69,12 +64,8 @@ class KoreaInvestment:
             discord.error_message(f"""stock_db\nHTTP 요청 실패. 상태 코드 : {response.status_code}\n{response.json()}""")
 
     def sell(self, stock: str, price: int, volume: int, order_type: str = "00"):
-        headers = {
-            "authorization": self.__access_token,
-            "appkey": self.__app_key,
-            "appsecret": self.__app_secret,
-            "tr_id": setting_env.TR_ID + "TTC0801U",
-        }
+        headers = self.__headers
+        headers["tr_id"] = setting_env.TR_ID + "TTC0801U"
         data = {
             "CANO": self.__account_number,
             "ACNT_PRDT_CD": self.__account_cord,
@@ -96,12 +87,8 @@ class KoreaInvestment:
             discord.error_message(f"""stock_db\nHTTP 요청 실패. 상태 코드 : {response.status_code}\n{response.json()}""")
 
     def get_account_info(self):
-        headers = {
-            "authorization": self.__access_token,
-            "appkey": self.__app_key,
-            "appsecret": self.__app_secret,
-            "tr_id": setting_env.TR_ID + "TTC8434R",
-        }
+        headers = self.__headers
+        headers["tr_id"] = setting_env.TR_ID + "TTC8434R"
         data = {
             "CANO": self.__account_number,
             "ACNT_PRDT_CD": self.__account_cord,
@@ -125,12 +112,8 @@ class KoreaInvestment:
             discord.error_message(f"""stock_db\nHTTP 요청 실패. 상태 코드 : {response.status_code}\n{response.json()}""")
 
     def get_owned_stock_info(self, stock: str = None):
-        headers = {
-            "authorization": self.__access_token,
-            "appkey": self.__app_key,
-            "appsecret": self.__app_secret,
-            "tr_id": setting_env.TR_ID + "TTC8434R",
-        }
+        headers = self.__headers
+        headers["tr_id"] = setting_env.TR_ID + "TTC8434R"
         data = {
             "CANO": self.__account_number,
             "ACNT_PRDT_CD": self.__account_cord,
@@ -169,12 +152,8 @@ class KoreaInvestment:
     def get_cancellable_or_correctable_stock(self):
         if setting_env.SIMULATE:
             return None
-        headers = {
-            "authorization": self.__access_token,
-            "appkey": self.__app_key,
-            "appsecret": self.__app_secret,
-            "tr_id": "TTTC8036R",
-        }
+        headers = self.__headers
+        headers["tr_id"] = "TTTC8036R"
         data = {
             "CANO": self.__account_number,
             "ACNT_PRDT_CD": self.__account_cord,
@@ -190,12 +169,8 @@ class KoreaInvestment:
             discord.error_message(f"""stock_db\nHTTP 요청 실패. 상태 코드 : {response.status_code}\n{response.json()}""")
 
     def modify_stock_order(self, order_no: str, volume: str, price: str = '0', order_type: str = '03', order_code: str = '01', all_or_none: str = 'Y'):
-        headers = {
-            "authorization": self.__access_token,
-            "appkey": self.__app_key,
-            "appsecret": self.__app_secret,
-            "tr_id": setting_env.TR_ID + "TTC0803U",
-        }
+        headers = self.__headers
+        headers["tr_id"] = setting_env.TR_ID + "TTC0803U"
         data = {
             "CANO": self.__account_number,
             "ACNT_PRDT_CD": self.__account_cord,
@@ -213,5 +188,20 @@ class KoreaInvestment:
         else:
             discord.error_message(f"""stock_db\nHTTP 요청 실패. 상태 코드 : {response.status_code}\n{response.json()}""")
 
+    def check_holiday(self, day=datetime.now()):
+        headers = self.__headers
+        headers["tr_id"] = "CTCA0903R"
+        headers["custtype"] = "P"
+        data = {
+            "BASS_DT": day.strftime("%Y%m%d"),
+            "CTX_AREA_NK": "",
+            "CTX_AREA_FK": "",
+        }
+        response = requests.get("https://openapi.koreainvestment.com:9443/uapi/domestic-stock/v1/quotations/chk-holiday?" + urllib.parse.urlencode(data), headers=headers)
+        for item in response.json()["output"]:
+            if item['bass_dt'] == data["BASS_DT"]:
+                return item['opnd_yn'] == "N"
+
 # account = KoreaInvestment(app_key=setting_env.APP_KEY, app_secret=setting_env.APP_SECRET, account_number=setting_env.ACCOUNT_NUMBER, account_cord=setting_env.ACCOUNT_CORD)
 # print(account.get_owned_stock_info(stock="003030"))
+# print(account.check_holiday())
