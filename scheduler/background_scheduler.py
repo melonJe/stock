@@ -270,7 +270,7 @@ def korea_investment_trading_initial_yield_growth_stock_investment():
         for symbol in sell.copy():
             previous_stock = StockPrice.objects.filter(symbol=symbol).order_by('-date').first()
             inquire_stock = account.get_owned_stock_info(symbol)
-            if (not inquire_stock) or inquire_stock["evlu_pfls_rt"] <= 2.5 or inquire_stock["ord_psbl_qty"] == 0:  # 보유하고 있거나 수익률이 2.5% 이하거나 주문 가능한 수량이 없으면 다음 주식으로 넘어감
+            if (not inquire_stock) or inquire_stock["evlu_pfls_rt"] <= 2.5 or inquire_stock["ord_psbl_qty"] == 0:  # 가지고 있지 않거나 수익률이 2.5% 이하거나 주문 가능한 수량이 없으면 다음 주식으로 넘어감
                 sell.discard(symbol)
                 continue
             volume = math.ceil(inquire_balance["tot_evlu_amt"] * 0.05 / inquire_balance['evlu_amt'])  # 총 평가 금액의 5% 씩 판매
