@@ -1,6 +1,6 @@
+import random
 import FinanceDataReader
 import math
-
 import numpy as np
 import pandas as pd
 import requests
@@ -186,7 +186,7 @@ def bollinger_band():
     return decision
 
 
-def initial_yield_growth_stock_investment():
+def initial_yield_growth_stock_investment():  # 초수익 성장주 투자
     decision = {'buy': set(), 'sell': set()}
     window = 4
     try:
@@ -208,7 +208,7 @@ def initial_yield_growth_stock_investment():
             data['down'] = np.where(data['close'].diff(1) < 0, data['close'].diff(1) * -1, 0)
             data['all_down'] = data['down'].rolling(window=window).mean()
             data['all_up'] = data['up'].rolling(window=window).mean()
-            if data.iloc[-1]["all_up"] / (data.iloc[-1]["all_up"] + data.iloc[-1]["all_down"]) < 0.4:
+            if data.iloc[-1]["all_up"] / (data.iloc[-1]["all_up"] + data.iloc[-1]["all_down"]) < 0.25:
                 decision['buy'].add(stock)
 
         # 판매 주식 선택
@@ -220,7 +220,7 @@ def initial_yield_growth_stock_investment():
             data['down'] = np.where(data['close'].diff(1) < 0, data['close'].diff(1) * -1, 0)
             data['all_down'] = data['down'].rolling(window=window).mean()
             data['all_up'] = data['up'].rolling(window=window).mean()
-            if data.iloc[-1]["all_up"] / (data.iloc[-1]["all_up"] + data.iloc[-1]["all_down"]) > 0.8:
+            if data.iloc[-1]["all_up"] / (data.iloc[-1]["all_up"] + data.iloc[-1]["all_down"]) > 0.4:
                 decision['sell'].add(StockSubscription.objects.select_related("symbol").filter(symbol=stock['pdno']).first())
     except:
         str(traceback.print_exc())
@@ -379,3 +379,54 @@ def start():
         scheduler.start()  # 없으면 동작하지 않습니다.
     except KeyboardInterrupt:
         scheduler.shutdown()
+
+
+def test():
+    count = 0
+    conclusion = []
+    while count < 1:
+        account = 0
+        stock_price = 0
+        window = random.randint(3, 5)
+        buy = random.uniform(0.0, 1.0)
+        sell = random.uniform(0.0, 1.0)
+        if buy > sell:
+            sell, buy = buy, sell
+        stocks = StockSubscription.objects.select_related("symbol").all()
+        for stock in stocks:
+            number = 0
+            data = pd.DataFrame(StockPrice.objects.filter(date__range=[datetime.now() - timedelta(days=500), datetime.now()], symbol=stock.symbol).order_by('date').values())
+            if data.empty:
+                continue
+            data['ma200'] = data['close'].rolling(window=200).mean()
+            data['ma150'] = data['close'].rolling(window=150).mean()
+            data['ma50'] = data['close'].rolling(window=50).mean()
+            data['up'] = np.where(data['close'].diff(1) > 0, data['close'].diff(1), 0)
+            data['down'] = np.where(data['close'].diff(1) < 0, data['close'].diff(1) * -1, 0)
+            data['all_down'] = data['down'].rolling(window=window).mean()
+            data['all_up'] = data['up'].rolling(window=window).mean()
+            data['buy_sell'] = 0
+            data.loc[(data['ma200'] < data['ma150'])
+                     & (data['ma150'] < data['ma50'])
+                     & (data['ma50'] < data['close'])
+                     & (data['close'] > data['close'].max() * 0.75)
+                     & (data['close'] > data['close'].min() * 1.25)
+                     & (data["all_up"] / (data["all_up"] + data["all_down"]) < buy), 'buy_sell'] = 1
+            data.loc[data["all_up"] / (data["all_up"] + data["all_down"]) > sell, 'buy_sell'] = -1
+            price = -1
+            for index, item in data.iterrows():
+                if math.isnan(item['close']):
+                    continue
+                if number == 0 and item['buy_sell'] == 1:
+                    account -= item['close'] * 1.01
+                    price = item['close']
+                    number += 1
+                if number > 0 and price * 1.025 < item['close'] and item['buy_sell'] == -1:
+                    account += item['close'] * 0.99
+            if number > 0:
+                stock_price += data.iloc[-1]['close'] * number
+
+        conclusion.append({"window": window, "buy": buy, "sell": sell, "stock_price": stock_price, "total": account + stock_price})
+        count += 1
+    sorted_conclusion_reverse = [[item['window'], item['buy'], item['sell'], item['stock_price'], item['total']] for item in conclusion]
+    print(*sorted_conclusion_reverse, sep="\n")
