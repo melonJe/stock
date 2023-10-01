@@ -189,8 +189,8 @@ def bollinger_band():
 def initial_yield_growth_stock_investment():  # 초수익 성장주 투자
     decision = {'buy': set(), 'sell': set()}
     window = 14
-    buy = 0.2
-    sell = 0.2
+    buy = 0.3
+    sell = 0.4
     try:
         # stocks = StockSubscription.objects.select_related("symbol").all()
         stocks = StockSubscription.objects.filter(email='jmayermj@gmail.com').select_related("symbol").all()
