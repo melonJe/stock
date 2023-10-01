@@ -188,9 +188,12 @@ def bollinger_band():
 
 def initial_yield_growth_stock_investment():  # 초수익 성장주 투자
     decision = {'buy': set(), 'sell': set()}
-    window = 4
+    window = 11
+    buy = 0.2
+    sell = 0.6
     try:
-        stocks = StockSubscription.objects.select_related("symbol").all()
+        # stocks = StockSubscription.objects.select_related("symbol").all()
+        stocks = StockSubscription.objects.filter(email='jmayermj@gmail.com').select_related("symbol").all()
         for stock in stocks:
             data = pd.DataFrame(StockPrice.objects.filter(date__range=[datetime.now() - timedelta(days=365), datetime.now()], symbol=stock.symbol).order_by('date').values())
             if data.empty:
@@ -208,7 +211,7 @@ def initial_yield_growth_stock_investment():  # 초수익 성장주 투자
             data['down'] = np.where(data['close'].diff(1) < 0, data['close'].diff(1) * -1, 0)
             data['all_down'] = data['down'].rolling(window=window).mean()
             data['all_up'] = data['up'].rolling(window=window).mean()
-            if data.iloc[-1]["all_up"] / (data.iloc[-1]["all_up"] + data.iloc[-1]["all_down"]) < 0.25:
+            if data.iloc[-1]["all_up"] / (data.iloc[-1]["all_up"] + data.iloc[-1]["all_down"]) < buy:
                 decision['buy'].add(stock)
 
         # 판매 주식 선택
@@ -220,7 +223,7 @@ def initial_yield_growth_stock_investment():  # 초수익 성장주 투자
             data['down'] = np.where(data['close'].diff(1) < 0, data['close'].diff(1) * -1, 0)
             data['all_down'] = data['down'].rolling(window=window).mean()
             data['all_up'] = data['up'].rolling(window=window).mean()
-            if data.iloc[-1]["all_up"] / (data.iloc[-1]["all_up"] + data.iloc[-1]["all_down"]) > 0.4:
+            if data.iloc[-1]["all_up"] / (data.iloc[-1]["all_up"] + data.iloc[-1]["all_down"]) > sell:
                 decision['sell'].add(StockSubscription.objects.select_related("symbol").filter(symbol=stock['pdno']).first())
     except:
         str(traceback.print_exc())
@@ -230,8 +233,8 @@ def initial_yield_growth_stock_investment():  # 초수익 성장주 투자
 
 def stock_automated_trading_system():  # 파이썬 주식 자동매매 시스템 - 박준성
     decision = {'buy': set(), 'sell': set()}
-    stocks = StockSubscription.objects.select_related("symbol").all()
-    # stocks = StockSubscription.objects.filter(email='jmayermj@gmail.com').select_related("symbol").all()
+    # stocks = StockSubscription.objects.select_related("symbol").all()
+    stocks = StockSubscription.objects.filter(email='jmayermj@gmail.com').select_related("symbol").all()
     for stock in stocks:
         data = pd.DataFrame(StockPrice.objects.filter(date__range=[datetime.now() - timedelta(days=28), datetime.now()], symbol=stock.symbol).order_by('date').values())
         data['up'] = np.where(data['close'].diff(1) > 0, data['close'].diff(1), 0)
@@ -273,7 +276,7 @@ def korea_investment_trading_initial_yield_growth_stock_investment():
             if (not inquire_stock) or inquire_stock["evlu_pfls_rt"] <= 2.5 or inquire_stock["ord_psbl_qty"] == 0:  # 가지고 있지 않거나 수익률이 2.5% 이하거나 주문 가능한 수량이 없으면 다음 주식으로 넘어감
                 sell.discard(symbol)
                 continue
-            volume = math.ceil(inquire_balance["tot_evlu_amt"] * 0.05 / inquire_balance['evlu_amt'])  # 총 평가 금액의 5% 씩 판매
+            volume = math.ceil(inquire_balance["tot_evlu_amt"] * 0.018 * 2 / inquire_balance['evlu_amt'])  # 구매 속도의 2배 속도로 판매
             if volume > inquire_balance["ord_psbl_qty"]:  # 주문 가능 수량을 넘길 경우 주문 수량 수정
                 volume = inquire_balance["ord_psbl_qty"]
             if volume < 1 or account.buy(stock=symbol, price=previous_stock.close, volume=volume):
@@ -382,51 +385,58 @@ def start():
 
 
 def test():
+    pd.set_option('display.max_rows', None)
     count = 0
     conclusion = []
-    while count < 1:
-        account = 0
-        stock_price = 0
-        window = random.randint(3, 5)
-        buy = random.uniform(0.0, 1.0)
-        sell = random.uniform(0.0, 1.0)
-        if buy > sell:
-            sell, buy = buy, sell
-        stocks = StockSubscription.objects.select_related("symbol").all()
-        for stock in stocks:
-            number = 0
-            data = pd.DataFrame(StockPrice.objects.filter(date__range=[datetime.now() - timedelta(days=500), datetime.now()], symbol=stock.symbol).order_by('date').values())
-            if data.empty:
-                continue
-            data['ma200'] = data['close'].rolling(window=200).mean()
-            data['ma150'] = data['close'].rolling(window=150).mean()
-            data['ma50'] = data['close'].rolling(window=50).mean()
-            data['up'] = np.where(data['close'].diff(1) > 0, data['close'].diff(1), 0)
-            data['down'] = np.where(data['close'].diff(1) < 0, data['close'].diff(1) * -1, 0)
-            data['all_down'] = data['down'].rolling(window=window).mean()
-            data['all_up'] = data['up'].rolling(window=window).mean()
-            data['buy_sell'] = 0
-            data.loc[(data['ma200'] < data['ma150'])
-                     & (data['ma150'] < data['ma50'])
-                     & (data['ma50'] < data['close'])
-                     & (data['close'] > data['close'].max() * 0.75)
-                     & (data['close'] > data['close'].min() * 1.25)
-                     & (data["all_up"] / (data["all_up"] + data["all_down"]) < buy), 'buy_sell'] = 1
-            data.loc[data["all_up"] / (data["all_up"] + data["all_down"]) > sell, 'buy_sell'] = -1
-            price = -1
-            for index, item in data.iterrows():
-                if math.isnan(item['close']):
+    for window in range(2, 21):
+        for buy in np.arange(0.1, 1, 0.1):
+            for sell in np.arange(0.1, 1, 0.1):
+                account = 0
+                total_stock_price = 0
+                if buy > sell:
                     continue
-                if number == 0 and item['buy_sell'] == 1:
-                    account -= item['close'] * 1.01
-                    price = item['close']
-                    number += 1
-                if number > 0 and price * 1.025 < item['close'] and item['buy_sell'] == -1:
-                    account += item['close'] * 0.99
-            if number > 0:
-                stock_price += data.iloc[-1]['close'] * number
-
-        conclusion.append({"window": window, "buy": buy, "sell": sell, "stock_price": stock_price, "total": account + stock_price})
-        count += 1
-    sorted_conclusion_reverse = [[item['window'], item['buy'], item['sell'], item['stock_price'], item['total']] for item in conclusion]
-    print(*sorted_conclusion_reverse, sep="\n")
+                # stocks = StockSubscription.objects.select_related("symbol").all()
+                stocks = StockSubscription.objects.filter(email='jmayermj@gmail.com').select_related("symbol").all()
+                for stock in stocks:
+                    stock_price = 0
+                    number = 0
+                    data = pd.DataFrame(StockPrice.objects.filter(date__range=[datetime.now() - timedelta(days=500), datetime.now()], symbol=stock.symbol).order_by('date').values())
+                    if data.empty:
+                        continue
+                    data['ma200'] = data['close'].rolling(window=200).mean()
+                    data['ma150'] = data['close'].rolling(window=150).mean()
+                    data['ma50'] = data['close'].rolling(window=50).mean()
+                    data['up'] = np.where(data['close'].diff(1) > 0, data['close'].diff(1), 0)
+                    data['down'] = np.where(data['close'].diff(1) < 0, data['close'].diff(1) * -1, 0)
+                    data['all_down'] = data['down'].rolling(window=window).mean()
+                    data['all_up'] = data['up'].rolling(window=window).mean()
+                    data['buy_sell'] = 0
+                    data.loc[(data['ma200'] < data['ma150'])
+                             & (data['ma150'] < data['ma50'])
+                             & (data['ma50'] < data['close'])
+                             & (data['close'] > data['close'].max() * 0.75)
+                             & (data['close'] > data['close'].min() * 1.25)
+                             & (data["all_up"] / (data["all_up"] + data["all_down"]) < buy), 'buy_sell'] = 1
+                    data.loc[data["all_up"] / (data["all_up"] + data["all_down"]) > sell, 'buy_sell'] = -1
+                    data = data[-366:]
+                    for index, item in data.iterrows():
+                        # if math.isnan(item['close']):
+                        #     continue
+                        # if number > 0 and stock_price / number * 0.92 > item['close']:
+                        #     account += item['close'] * 0.992 * number
+                        #     stock_price -= item['close'] * number
+                        #     number -= number
+                        if item['buy_sell'] == 1:
+                            quantity = int(100000 / item['close'])
+                            account -= item['close'] * 1.005 * quantity
+                            stock_price += item['close'] * quantity
+                            number += quantity
+                        if item['buy_sell'] == -1 and number > 0 and stock_price / number * 1.025 < item['close']:
+                            quantity = int(200000 / item['close'])
+                            if quantity > number:
+                                quantity = number
+                            account += item['close'] * 0.992 * quantity
+                            stock_price -= stock_price / number * quantity
+                            number -= quantity
+                    total_stock_price += data.iloc[-1]['close'] * number
+                print(f"{window}, {buy:.2f}, {sell:.2f}, {total_stock_price:>20.2f}, {account + total_stock_price:>20.2f}")
