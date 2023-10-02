@@ -188,12 +188,12 @@ def bollinger_band():
 
 def initial_yield_growth_stock_investment():  # 초수익 성장주 투자
     decision = {'buy': set(), 'sell': set()}
-    window = 7  # 4
-    buy = 0.7  # 0.8 or 0.7
-    sell = 0.7  # 0.8or 0.7
+    window = 14
+    buy = 0.5
+    sell = 0.8
     try:
-        # stocks = StockSubscription.objects.select_related("symbol").all()
-        stocks = StockSubscription.objects.filter(email='jmayermj@gmail.com').select_related("symbol").all()
+        stocks = StockSubscription.objects.select_related("symbol").all()
+        # stocks = StockSubscription.objects.filter(email='jmayermj@gmail.com').select_related("symbol").all()
         for stock in stocks:
             data = pd.DataFrame(StockPrice.objects.filter(date__range=[datetime.now() - timedelta(days=365), datetime.now()], symbol=stock.symbol).order_by('date').values())
             if data.empty:
@@ -388,43 +388,43 @@ def test():
     pd.set_option('display.max_rows', None)
     count = 0
     conclusion = []
-    # stocks = StockSubscription.objects.select_related("symbol").all()
-    stocks = StockSubscription.objects.filter(email='jmayermj@gmail.com').select_related("symbol").all()
-    for window in range(2, 21):
+    stocks = StockSubscription.objects.select_related("symbol").all()
+    # stocks = StockSubscription.objects.filter(email='jmayermj@gmail.com').select_related("symbol").all()
+    list_stock_dataframe = []
+    for stock in stocks:
+        data = pd.DataFrame(StockPrice.objects.filter(date__range=[datetime.now() - timedelta(days=500), datetime.now()], symbol=stock.symbol).order_by('date').values())
+        if data.empty:
+            continue
+        data['ma200'] = data['close'].rolling(window=200).mean()
+        data['ma150'] = data['close'].rolling(window=150).mean()
+        data['ma50'] = data['close'].rolling(window=50).mean()
+        data['up'] = np.where(data['close'].diff(1) > 0, data['close'].diff(1), 0)
+        data['down'] = np.where(data['close'].diff(1) < 0, data['close'].diff(1) * -1, 0)
+        list_stock_dataframe.append(data)
+    for window in range(10, 21):
         for buy in np.arange(0.1, 1.0, 0.1):
             for sell in np.arange(0.1, 1.0, 0.1):
                 if buy > sell:
                     continue
-                list_stock_dataframe = []
-                stock_price = {}
-                number = {}
-                for stock in stocks:
-                    data = pd.DataFrame(StockPrice.objects.filter(date__range=[datetime.now() - timedelta(days=500), datetime.now()], symbol=stock.symbol).order_by('date').values())
-                    stock_price[data.iloc[-1]['symbol_id']] = 0
-                    number[data.iloc[-1]['symbol_id']] = 0
-                    if data.empty:
-                        continue
-                    data['ma200'] = data['close'].rolling(window=200).mean()
-                    data['ma150'] = data['close'].rolling(window=150).mean()
-                    data['ma50'] = data['close'].rolling(window=50).mean()
-                    data['up'] = np.where(data['close'].diff(1) > 0, data['close'].diff(1), 0)
-                    data['down'] = np.where(data['close'].diff(1) < 0, data['close'].diff(1) * -1, 0)
-                    data['all_down'] = data['down'].rolling(window=window).mean()
-                    data['all_up'] = data['up'].rolling(window=window).mean()
-                    data['buy_sell'] = 0
-                    data.loc[(data['ma200'] < data['ma150'])
-                             & (data['ma150'] < data['ma50'])
-                             & (data['ma50'] < data['close'])
-                             & (data['close'] > data['close'].max() * 0.75)
-                             & (data['close'] > data['close'].min() * 1.25)
-                             & (data["all_up"] / (data["all_up"] + data["all_down"]) < buy), 'buy_sell'] = 1
-                    data.loc[data["all_up"] / (data["all_up"] + data["all_down"]) > sell, 'buy_sell'] = -1
-                    data = data[-260:]
-                    list_stock_dataframe.append(data)
+                stock_price = {item.iloc[-1]['symbol_id']: 0 for item in list_stock_dataframe}
+                number = {item.iloc[-1]['symbol_id']: 0 for item in list_stock_dataframe}
                 account = 35000000
-                total_stock_price = 0
+                temp_list_stock_dataframe = []
+                for stock_dataframe in list_stock_dataframe:
+                    stock_dataframe['all_down'] = stock_dataframe['down'].rolling(window=window).mean()
+                    stock_dataframe['all_up'] = stock_dataframe['up'].rolling(window=window).mean()
+                    stock_dataframe['buy_sell'] = 0
+                    stock_dataframe.loc[(stock_dataframe['ma200'] < stock_dataframe['ma150'])
+                                        & (stock_dataframe['ma150'] < stock_dataframe['ma50'])
+                                        & (stock_dataframe['ma50'] < stock_dataframe['close'])
+                                        & (stock_dataframe['close'] > stock_dataframe['close'].max() * 0.75)
+                                        & (stock_dataframe['close'] > stock_dataframe['close'].min() * 1.25)
+                                        & (stock_dataframe["all_up"] / (stock_dataframe["all_up"] + stock_dataframe["all_down"]) < buy)
+                    , 'buy_sell'] = 1
+                    stock_dataframe.loc[stock_dataframe["all_up"] / (stock_dataframe["all_up"] + stock_dataframe["all_down"]) > sell, 'buy_sell'] = -1
+                    temp_list_stock_dataframe.append(stock_dataframe[-260:])
                 for x in range(260):
-                    for stock_dataframe in list_stock_dataframe:
+                    for stock_dataframe in temp_list_stock_dataframe:
                         # if math.isnan(item['close']):
                         #     continue
                         # if number > 0 and stock_price / number * 0.92 > item['close']:
@@ -440,8 +440,12 @@ def test():
                                 quantity = min(quantity, int(((account + total_stock_price) * 0.2 - stock_price[stock_dataframe.iloc[x]['symbol_id']]) / stock_dataframe.iloc[x]['close']))
                             account -= stock_dataframe.iloc[x]['close'] * 1.005 * quantity
                             stock_price[stock_dataframe.iloc[x]['symbol_id']] += stock_dataframe.iloc[x]['close'] * quantity
-                            total_stock_price = sum(stock_price.values())
                             number[stock_dataframe.iloc[x]['symbol_id']] += quantity
+
+                        # if number[stock_dataframe.iloc[x]['symbol_id']] > 0 and stock_dataframe.iloc[x]['close'] < stock_price[stock_dataframe.iloc[x]['symbol_id']] / number[stock_dataframe.iloc[x]['symbol_id']] * 0.92:
+                        #     account += stock_dataframe.iloc[x]['close'] * 0.992 * number[stock_dataframe.iloc[x]['symbol_id']]
+                        #     stock_price[stock_dataframe.iloc[x]['symbol_id']] -= stock_price[stock_dataframe.iloc[x]['symbol_id']] / number[stock_dataframe.iloc[x]['symbol_id']] * number[stock_dataframe.iloc[x]['symbol_id']]
+                        #     number[stock_dataframe.iloc[x]['symbol_id']] -= number[stock_dataframe.iloc[x]['symbol_id']]
 
                         if (stock_dataframe.iloc[x]['buy_sell'] == -1
                             and number[stock_dataframe.iloc[x]['symbol_id']] > 0
@@ -453,6 +457,10 @@ def test():
                                 quantity = number[stock_dataframe.iloc[x]['symbol_id']]
                             account += stock_dataframe.iloc[x]['close'] * 0.992 * quantity
                             stock_price[stock_dataframe.iloc[x]['symbol_id']] -= stock_price[stock_dataframe.iloc[x]['symbol_id']] / number[stock_dataframe.iloc[x]['symbol_id']] * quantity
-                            total_stock_price = sum(stock_price.values())
                             number[stock_dataframe.iloc[x]['symbol_id']] -= quantity
-                print(f"{window}, {buy:.2f}, {sell:.2f}, {total_stock_price:>20.2f}, {account + total_stock_price:>20.2f}")
+                price = 0
+                for stock_dataframe in list_stock_dataframe:
+                    if number[stock_dataframe.iloc[-1]['symbol_id']] == 0:
+                        continue
+                    price += stock_dataframe.iloc[-1]['close'] * number[stock_dataframe.iloc[-1]['symbol_id']]
+                print(f"{window}, {buy:.2f}, {sell:.2f}, {price:>20.2f}, {account + price:>20.2f}")
