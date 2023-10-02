@@ -204,7 +204,12 @@ def initial_yield_growth_stock_investment():  # 초수익 성장주 투자
                 continue
             if data.iloc[-1]['close'] < data['close'].min() * 1.25:
                 continue
-            decision['buy'].add(stock)
+            data['up'] = np.where(data['close'].diff(1) > 0, data['close'].diff(1), 0)
+            data['down'] = np.where(data['close'].diff(1) < 0, data['close'].diff(1) * -1, 0)
+            data['all_down'] = data['down'].rolling(window=14).mean()
+            data['all_up'] = data['up'].rolling(window=14).mean()
+            if data.iloc[-1]["all_up"] / (data.iloc[-1]["all_up"] + data.iloc[-1]["all_down"]) < 0.5:
+                decision['buy'].add(stock)
 
         # TODO 판매 알고리즘 공부 및 수정 필요
         # account = KoreaInvestment(app_key=setting_env.APP_KEY, app_secret=setting_env.APP_SECRET, account_number=setting_env.ACCOUNT_NUMBER, account_cord=setting_env.ACCOUNT_CORD)
