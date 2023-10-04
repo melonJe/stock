@@ -255,11 +255,16 @@ def korea_investment_trading_initial_yield_growth_stock_investment():
     account = KoreaInvestment(app_key=setting_env.APP_KEY, app_secret=setting_env.APP_SECRET, account_number=setting_env.ACCOUNT_NUMBER, account_cord=setting_env.ACCOUNT_CORD)
     if account.check_holiday():
         return
+    print("한국투자증권 매매 프로그램 시작")
     decision = initial_yield_growth_stock_investment()  # decision = {'buy': set(), 'sell': set()}
     buy = set(x.symbol.symbol for x in decision['buy'])
     sell = set(x.symbol.symbol for x in decision['sell'])
+    print(f"buy: {buy}")
+    print(f"sell: {sell}")
     inquire_balance = account.get_account_info()
+    print(inquire_balance)
     dnca_tot_amt = inquire_balance["dnca_tot_amt"] - inquire_balance["tot_evlu_amt"] * 0.10  # 사용 가능한 금액 계산 (총 평가 금액의 10% 제외한 예수금)
+    print(f"사용 가능한 금액: dnca_tot_amt")
     while datetime.now().time() < time(15, 0, 0) and (sell or buy):
         for symbol in sell.copy():
             previous_stock = StockPrice.objects.filter(symbol=symbol).order_by('-date').first()
@@ -271,6 +276,7 @@ def korea_investment_trading_initial_yield_growth_stock_investment():
             if volume > inquire_balance["ord_psbl_qty"]:  # 주문 가능 수량을 넘길 경우 주문 수량 수정
                 volume = inquire_balance["ord_psbl_qty"]
             if volume < 1 or account.buy(stock=symbol, price=previous_stock.close, volume=volume):
+                print(f"{symbol} 종목 매도 수량: {volume}")
                 sell.discard(symbol)
                 sleep(1)
         for symbol in buy.copy():
@@ -283,6 +289,7 @@ def korea_investment_trading_initial_yield_growth_stock_investment():
                 volume = min(volume, int((inquire_balance["tot_evlu_amt"] * 0.2 - inquire_stock["pchs_amt"]) / previous_stock.close))  # 주식 보유 비중이 20%를 넘지 않도록 구매 수량 수정
             if volume < 1 or account.buy(stock=symbol, price=previous_stock.close, volume=volume):
                 dnca_tot_amt -= previous_stock.close * volume
+                print(f"{symbol} 종목 매수 수량: {volume}")
                 buy.discard(symbol)
                 sleep(1)
         sleep(60)
