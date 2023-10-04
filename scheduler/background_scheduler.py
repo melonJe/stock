@@ -162,8 +162,8 @@ def add_stock_price_1day():
 def bollinger_band():
     decision = {'buy': set(), 'sell': set()}
     try:
-        # stock = StockSubscription.objects.all().distinct('symbol')
-        stocks = StockSubscription.objects.filter(email='cabs0814@naver.com').select_related("symbol").all()
+        stocks = StockSubscription.objects.all().distinct('symbol')
+        # stocks = StockSubscription.objects.filter(email='cabs0814@naver.com').select_related("symbol").all()
         for stock in stocks:
             data = pd.DataFrame(StockPrice.objects.filter(date__range=[datetime.now() - timedelta(days=365), datetime.now()], symbol=stock.symbol).order_by('date').values())
             if data.empty:
@@ -397,21 +397,19 @@ def test():
         data['ma200'] = data['close'].rolling(window=200).mean()
         data['ma150'] = data['close'].rolling(window=150).mean()
         data['ma50'] = data['close'].rolling(window=50).mean()
-        data['up'] = np.where(data['close'].diff(1) > 0, data['close'].diff(1), 0)
-        data['down'] = np.where(data['close'].diff(1) < 0, data['close'].diff(1) * -1, 0)
         list_stock_dataframe.append(data)
     stock_price = {item.iloc[-1]['symbol_id']: 0 for item in list_stock_dataframe}
     number = {item.iloc[-1]['symbol_id']: 0 for item in list_stock_dataframe}
     account = 35000000
     temp_list_stock_dataframe = []
     for stock_dataframe in list_stock_dataframe:
-        stock_dataframe['buy_sell'] = 0
+        stock_dataframe['buy_sell'] = -1
         stock_dataframe.loc[(stock_dataframe['ma200'] < stock_dataframe['ma150'])
                             & (stock_dataframe['ma150'] < stock_dataframe['ma50'])
                             & (stock_dataframe['ma50'] < stock_dataframe['close'])
                             & (stock_dataframe['close'] > stock_dataframe['close'].max() * 0.75)
                             & (stock_dataframe['close'] > stock_dataframe['close'].min() * 1.25), 'buy_sell'] = 1
-        stock_dataframe.loc[(stock_dataframe['ma150'] > stock_dataframe['ma50']), 'buy_sell'] = -1
+        # stock_dataframe.loc[(stock_dataframe['ma150'] > stock_dataframe['ma50']), 'buy_sell'] = -1
         temp_list_stock_dataframe.append(stock_dataframe[-260:])
     for x in range(260):
         for stock_dataframe in temp_list_stock_dataframe:
