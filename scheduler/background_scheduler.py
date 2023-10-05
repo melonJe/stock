@@ -204,18 +204,28 @@ def initial_yield_growth_stock_investment():  # 초수익 성장주 투자
                 continue
             if data.iloc[-1]['close'] < data['close'].min() * 1.25:
                 continue
-            data['up'] = np.where(data['close'].diff(1) > 0, data['close'].diff(1), 0)
-            data['down'] = np.where(data['close'].diff(1) < 0, data['close'].diff(1) * -1, 0)
-            data['all_down'] = data['down'].rolling(window=14).mean()
-            data['all_up'] = data['up'].rolling(window=14).mean()
-            if data.iloc[-1]["all_up"] / (data.iloc[-1]["all_up"] + data.iloc[-1]["all_down"]) < 0.5:
-                decision['buy'].add(stock)
+            decision['buy'].add(stock)
 
         # TODO 판매 알고리즘 공부 및 수정 필요
-        # account = KoreaInvestment(app_key=setting_env.APP_KEY, app_secret=setting_env.APP_SECRET, account_number=setting_env.ACCOUNT_NUMBER, account_cord=setting_env.ACCOUNT_CORD)
-        # stocks = account.get_owned_stock_info()
-        # for stock in stocks:
-        #     pass
+        account = KoreaInvestment(app_key=setting_env.APP_KEY, app_secret=setting_env.APP_SECRET, account_number=setting_env.ACCOUNT_NUMBER, account_cord=setting_env.ACCOUNT_CORD)
+        stocks = account.get_owned_stock_info()
+        for stock in stocks:
+            data = pd.DataFrame(StockPrice.objects.filter(date__range=[datetime.now() - timedelta(days=365), datetime.now()], symbol=stock['pdno']).order_by('date').values())
+            if data.empty:
+                continue
+            data['ma200'] = data['close'].rolling(window=200).mean()
+            data['ma150'] = data['close'].rolling(window=150).mean()
+            data['ma50'] = data['close'].rolling(window=50).mean()
+            # TODO 조건문 다듬기
+            if not (data.iloc[-1]['ma200'] < data.iloc[-1]['ma150'] < data.iloc[-1]['ma50'] < data.iloc[-1]['close']):
+                decision['sell'].add(StockSubscription.objects.select_related("symbol").filter(symbol=stock['pdno']).first())
+                continue
+            if data.iloc[-1]['close'] < data['close'].max() * 0.75:
+                decision['sell'].add(StockSubscription.objects.select_related("symbol").filter(symbol=stock['pdno']).first())
+                continue
+            if data.iloc[-1]['close'] < data['close'].min() * 1.25:
+                decision['sell'].add(StockSubscription.objects.select_related("symbol").filter(symbol=stock['pdno']).first())
+                continue
     except:
         str(traceback.print_exc())
         # discord.error_message("stock_db\n" + str(traceback.print_exc()))
@@ -411,6 +421,7 @@ def test():
                             & (stock_dataframe['close'] > stock_dataframe['close'].min() * 1.25), 'buy_sell'] = 1
         # stock_dataframe.loc[(stock_dataframe['ma150'] > stock_dataframe['ma50']), 'buy_sell'] = -1
         temp_list_stock_dataframe.append(stock_dataframe[-260:])
+    temp_list_stock_dataframe = [x for x in temp_list_stock_dataframe if len(x) == 260]
     for x in range(260):
         for stock_dataframe in temp_list_stock_dataframe:
             # if math.isnan(item['close']):
@@ -430,10 +441,10 @@ def test():
                 stock_price[stock_dataframe.iloc[x]['symbol_id']] += stock_dataframe.iloc[x]['close'] * quantity
                 number[stock_dataframe.iloc[x]['symbol_id']] += quantity
 
-            if number[stock_dataframe.iloc[x]['symbol_id']] > 0 and stock_dataframe.iloc[x]['close'] < stock_price[stock_dataframe.iloc[x]['symbol_id']] / number[stock_dataframe.iloc[x]['symbol_id']] * 0.92:
-                account += stock_dataframe.iloc[x]['close'] * 0.995 * number[stock_dataframe.iloc[x]['symbol_id']]
-                stock_price[stock_dataframe.iloc[x]['symbol_id']] -= stock_price[stock_dataframe.iloc[x]['symbol_id']] / number[stock_dataframe.iloc[x]['symbol_id']] * number[stock_dataframe.iloc[x]['symbol_id']]
-                number[stock_dataframe.iloc[x]['symbol_id']] -= number[stock_dataframe.iloc[x]['symbol_id']]
+            # if number[stock_dataframe.iloc[x]['symbol_id']] > 0 and stock_dataframe.iloc[x]['close'] < stock_price[stock_dataframe.iloc[x]['symbol_id']] / number[stock_dataframe.iloc[x]['symbol_id']] * 0.90:
+            #     account += stock_dataframe.iloc[x]['close'] * 0.995 * number[stock_dataframe.iloc[x]['symbol_id']]
+            #     stock_price[stock_dataframe.iloc[x]['symbol_id']] -= stock_price[stock_dataframe.iloc[x]['symbol_id']] / number[stock_dataframe.iloc[x]['symbol_id']] * number[stock_dataframe.iloc[x]['symbol_id']]
+            #     number[stock_dataframe.iloc[x]['symbol_id']] -= number[stock_dataframe.iloc[x]['symbol_id']]
 
             if (stock_dataframe.iloc[x]['buy_sell'] == -1 and number[stock_dataframe.iloc[x]['symbol_id']] > 0 and stock_price[stock_dataframe.iloc[x]['symbol_id']] / number[stock_dataframe.iloc[x]['symbol_id']] * 1.025 <
                     stock_dataframe.iloc[x]['close']):
