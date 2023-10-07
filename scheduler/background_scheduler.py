@@ -277,7 +277,7 @@ def korea_investment_trading_initial_yield_growth_stock_investment():
             if (not inquire_stock) or inquire_stock["evlu_pfls_rt"] <= 2.5 or inquire_stock["ord_psbl_qty"] == 0:  # 가지고 있지 않거나 수익률이 2.5% 이하거나 주문 가능한 수량이 없으면 다음 주식으로 넘어감
                 sell.discard(symbol)
                 continue
-            volume = math.ceil(inquire_balance["tot_evlu_amt"] * 0.018 / inquire_balance['evlu_amt'])  # 총 평가 금액의 1.8% 씩 판매
+            volume = math.ceil(inquire_balance["tot_evlu_amt"] * 0.02 / inquire_balance['evlu_amt'])  # 총 평가 금액의 2% 씩 판매
             if volume > inquire_balance["ord_psbl_qty"]:  # 주문 가능 수량을 넘길 경우 주문 수량 수정
                 volume = inquire_balance["ord_psbl_qty"]
             if volume < 1 or account.buy(stock=symbol, price=previous_stock.close, volume=volume):
@@ -286,12 +286,12 @@ def korea_investment_trading_initial_yield_growth_stock_investment():
                 sleep(1)
         for symbol in buy.copy():
             previous_stock = StockPrice.objects.filter(symbol=symbol).order_by('-date').first()
-            volume = int(inquire_balance["tot_evlu_amt"] * 0.018 / previous_stock.close)  # 총 평가 금액의 1.8% 씩 구매
+            volume = int(inquire_balance["tot_evlu_amt"] * 0.02 / previous_stock.close)  # 총 평가 금액의 2% 씩 구매
             volume = 1 if volume == 0 else volume  # 구매 수량이 0일 경우 1로 수정
-            volume = min(volume, int(dnca_tot_amt / previous_stock.close))  # 구매 수량이 사용 가능한 금액을 초과 하는지 판단
+            volume = min(volume, int(dnca_tot_amt / previous_stock.close), 100)  # 구매 수량이 사용 가능한 금액을 초과 하는지, 100주를 넘는지 판단
             inquire_stock = account.get_owned_stock_info(symbol)
             if volume > 0 and inquire_stock:  # 구매 수량이 0보다 크고 보유 중인 주식일 경우
-                volume = min(volume, int((inquire_balance["tot_evlu_amt"] * 0.2 - inquire_stock["pchs_amt"]) / previous_stock.close))  # 주식 보유 비중이 20%를 넘지 않도록 구매 수량 수정
+                volume = min(volume, int((inquire_balance["tot_evlu_amt"] * 0.2 - inquire_stock["pchs_amt"]) / previous_stock.close), 1000 - inquire_stock["hldg_qty"])  # 주식 보유 비중이 20%를, 보유수량이 1000주를 넘지 않도록 구매 수량 수정
             if volume < 1 or account.buy(stock=symbol, price=previous_stock.close, volume=volume):
                 dnca_tot_amt -= previous_stock.close * volume
                 print(f"{symbol} 종목 매수 수량: {volume}")
@@ -427,7 +427,7 @@ def test():
             #     number -= number
             if stock_dataframe.iloc[x]['buy_sell'] == 1:
                 total_stock_price = sum(stock_price.values())
-                quantity = int((account + total_stock_price) * 0.018 / stock_dataframe.iloc[x]['close'])
+                quantity = int((account + total_stock_price) * 0.02 / stock_dataframe.iloc[x]['close'])
                 quantity = 1 if quantity == 0 else quantity
                 quantity = min(quantity, int(account / stock_dataframe.iloc[x]['close']))
                 if number[stock_dataframe.iloc[x]['symbol_id']] > 0 and quantity > 0:
@@ -443,12 +443,16 @@ def test():
 
             if (stock_dataframe.iloc[x]['buy_sell'] == -1 and number[stock_dataframe.iloc[x]['symbol_id']] > 0 and stock_price[stock_dataframe.iloc[x]['symbol_id']] / number[stock_dataframe.iloc[x]['symbol_id']] * 1.025 <
                     stock_dataframe.iloc[x]['close']):
-                quantity = int((account + stock_price[stock_dataframe.iloc[x]['symbol_id']]) * 0.018 / stock_dataframe.iloc[x]['close'])
+                # print(stock_dataframe.iloc[x]['symbol_id'], stock_dataframe.iloc[x]['close'] / (stock_price[stock_dataframe.iloc[-1]['symbol_id']] / number[stock_dataframe.iloc[-1]['symbol_id']]) * 100)
+                quantity = int((account + stock_price[stock_dataframe.iloc[x]['symbol_id']]) * 0.02 / stock_dataframe.iloc[x]['close'])
                 if quantity > number[stock_dataframe.iloc[x]['symbol_id']]:
                     quantity = number[stock_dataframe.iloc[x]['symbol_id']]
                 account += stock_dataframe.iloc[x]['close'] * 0.995 * quantity
                 stock_price[stock_dataframe.iloc[x]['symbol_id']] -= stock_price[stock_dataframe.iloc[x]['symbol_id']] / number[stock_dataframe.iloc[x]['symbol_id']] * quantity
                 number[stock_dataframe.iloc[x]['symbol_id']] -= quantity
+    # for stock_dataframe in temp_list_stock_dataframe:
+    #     if number[stock_dataframe.iloc[-1]['symbol_id']] != 0:
+    #         print(stock_dataframe.iloc[-1]['close'] / (number[stock_dataframe.iloc[-1]['symbol_id']] > 0 and stock_price[stock_dataframe.iloc[-1]['symbol_id']] / number[stock_dataframe.iloc[-1]['symbol_id']]))
     price = 0
     for stock_dataframe in list_stock_dataframe:
         if number[stock_dataframe.iloc[-1]['symbol_id']] == 0:
