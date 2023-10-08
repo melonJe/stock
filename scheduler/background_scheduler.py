@@ -21,18 +21,19 @@ def update_subscription_defensive_investor():
     print(f'{datetime.now()} update_subscription_defensive_investor 시작')
     # 방어적 투자
     data_to_insert = list()
-    for stock in Stock.objects.values():
+    user = User.objects.get(email='cabs0814@naver.com')
+    for stock in Stock.objects.all():
         value = 0
         try:
-            if requests.get(f"""https://navercomp.wisereport.co.kr/company/chart/c1030001.aspx?cmp_cd={stock["symbol"]}&frq=Y&rpt=ISM&finGubun=MAIN&chartType=svg""",
+            if requests.get(f"""https://navercomp.wisereport.co.kr/company/chart/c1030001.aspx?cmp_cd={stock.symbol}&frq=Y&rpt=ISM&finGubun=MAIN&chartType=svg""",
                             headers={'Accept': 'application/json'}).json()['chartData1']['series'][0]['data'][-2] < 10000:
                 continue
-            page = requests.get(f"""https://comp.fnguide.com/SVO2/ASP/SVD_FinanceRatio.asp?pGB=1&gicode=A{stock["symbol"]}&cID=&MenuYn=Y&ReportGB=&NewMenuID=104&stkGb=701""").text
+            page = requests.get(f"""https://comp.fnguide.com/SVO2/ASP/SVD_FinanceRatio.asp?pGB=1&gicode=A{stock.symbol}&cID=&MenuYn=Y&ReportGB=&NewMenuID=104&stkGb=701""").text
             soup = bs(page, "html.parser")
             current_ratio = float(soup.select('tr#p_grid1_1 > td.cle')[0].text)
             if current_ratio < 200:
                 continue
-            page = requests.get(f"""https://navercomp.wisereport.co.kr/v2/company/c1010001.aspx?cmp_cd={stock["symbol"]}""").text
+            page = requests.get(f"""https://navercomp.wisereport.co.kr/v2/company/c1010001.aspx?cmp_cd={stock.symbol}""").text
             soup = bs(page, "html.parser")
             elements = soup.select('td.cmp-table-cell > dl > dt.line-left')
             per = -1
@@ -55,7 +56,7 @@ def update_subscription_defensive_investor():
             continue
         if per * pbr > 22.5:
             continue
-        data_to_insert.append({'email': 'cabs0814@naver.com', 'symbol': stock["symbol"]})
+        data_to_insert.append({'email': user, 'symbol': stock})
 
     StockSubscription.objects.filter(email='cabs0814@naver.com').delete()
     if data_to_insert:
@@ -67,18 +68,18 @@ def update_subscription_aggressive_investor():
     print(f'{datetime.now()} update_subscription_aggressive_investor 시작')
     # 공격적 투자
     data_to_insert = list()
-    for stock in Stock.objects.values():
+    user = User.objects.get(email='jmayermj@gmail.com')
+    for stock in Stock.objects.all():
         insert_true = 0  # 6 is true
         try:
-            page = requests.get(f"""https://comp.fnguide.com/SVO2/ASP/SVD_FinanceRatio.asp?pGB=1&gicode=A{stock["symbol"]}&cID=&MenuYn=Y&ReportGB=&NewMenuID=104&stkGb=701""").text
+            page = requests.get(f"""https://comp.fnguide.com/SVO2/ASP/SVD_FinanceRatio.asp?pGB=1&gicode=A{stock.symbol}&cID=&MenuYn=Y&ReportGB=&NewMenuID=104&stkGb=701""").text
             soup = bs(page, "html.parser")
             tr_tag = soup.select('tr')
             if not tr_tag:
                 continue
             for item in tr_tag:
                 check = item.select('th > div > div > dl > dt')
-                if isinstance(check, list) and check and check[0].text in [
-                    '매출액증가율', '영업이익증가율', 'EPS증가율']:
+                if isinstance(check, list) and check and check[0].text in ['매출액증가율', '영업이익증가율', 'EPS증가율']:
                     rate = [float(x.text.replace(',', '')) for x in item.select('td.r')[:-1]]
                     if len(rate) < 1 or all([x > 0 for x in rate]):
                         insert_true += 1
@@ -87,8 +88,9 @@ def update_subscription_aggressive_investor():
                     #     insert_true = False
         except:
             continue
-        if insert_true == 6:
-            data_to_insert.append({'email': 'jmayermj@gmail.com', 'symbol': stock["symbol"]})
+        if insert_true >= 6:
+            print(stock.name)
+            data_to_insert.append({'email': user, 'symbol': stock})
 
     StockSubscription.objects.filter(email='jmayermj@gmail.com').delete()
     if data_to_insert:
@@ -99,22 +101,31 @@ def update_subscription_aggressive_investor():
 def add_stock():
     print(f'{datetime.now()} add_stock 시작')
     df_krx = FinanceDataReader.StockListing('KRX')
-    data_to_insert = [{'symbol': Stock.objects.get(symbol=item['Code']), 'name': item['Name']} for item in df_krx.to_dict('records')]
+    data_to_insert = [{'symbol': item['Code'], 'name': item['Name']} for item in df_krx.to_dict('records')]
     if data_to_insert:
-        data_to_insert = [StockSubscription(**vals) for vals in data_to_insert]
+        data_to_insert = [Stock(**vals) for vals in data_to_insert]
         Stock.objects.bulk_create(data_to_insert,
                                   ignore_conflicts=True,
-                                  unique_fields=['symbol', 'date'])
+                                  unique_fields=['symbol'])
     # discord.send_message(f'add_stock   {now}')
+    start_date = (datetime.now() - timedelta(days=45)).strftime("%Y-%m-%d")
+    for stock in Stock.objects.all():
+        df_krx = FinanceDataReader.DataReader(stock.symbol, start_date)
+        data_to_insert = [{'symbol': stock, 'date': idx, 'open': item['Open'], 'high': item['High'], 'close': item['Close'], 'low': item['Low']} for idx, item in df_krx.iterrows()]
+        if data_to_insert:
+            data_to_insert = [StockPrice(**vals) for vals in data_to_insert]
+            StockPrice.objects.bulk_create(data_to_insert,
+                                           update_conflicts=True,
+                                           unique_fields=['symbol', 'date'],
+                                           update_fields=['open', 'high', 'close', 'low'])
 
 
 def add_stock_price_all():
     print(f'{datetime.now()} add_stock_price_all 시작')
     one_year_ago = datetime.now().year - 1
-    for stock in Stock.objects.values():
-        df_krx = FinanceDataReader.DataReader(stock["symbol"], str(one_year_ago))
-        stock_instance = Stock.objects.get(symbol=stock['symbol'])
-        data_to_insert = [{'symbol': stock_instance, 'date': idx, 'open': item['Open'], 'high': item['High'], 'close': item['Close'], 'low': item['Low']} for idx, item in df_krx.iterrows()]
+    for stock in Stock.objects.all():
+        df_krx = FinanceDataReader.DataReader(stock.symbol, str(one_year_ago))
+        data_to_insert = [{'symbol': stock, 'date': idx, 'open': item['Open'], 'high': item['High'], 'close': item['Close'], 'low': item['Low']} for idx, item in df_krx.iterrows()]
         if data_to_insert:
             data_to_insert = [StockPrice(**vals) for vals in data_to_insert]
             StockPrice.objects.bulk_create(data_to_insert,
@@ -128,10 +139,9 @@ def add_stock_price_1week():
     print(f'{datetime.now()} add_stock_price_1week 시작')
     week_ago = (now - timedelta(days=7)).strftime('%Y-%m-%d')
     now = now.strftime('%Y-%m-%d')
-    for stock in Stock.objects.values():
-        df_krx = FinanceDataReader.DataReader(stock["symbol"], week_ago, now)
-        stock_instance = Stock.objects.get(symbol=stock['symbol'])
-        data_to_insert = [{'symbol': stock_instance, 'date': idx, 'open': item['Open'], 'high': item['High'], 'close': item['Close'], 'low': item['Low']} for idx, item in df_krx.iterrows()]
+    for stock in Stock.objects.all():
+        df_krx = FinanceDataReader.DataReader(stock.symbol, week_ago, now)
+        data_to_insert = [{'symbol': stock, 'date': idx, 'open': item['Open'], 'high': item['High'], 'close': item['Close'], 'low': item['Low']} for idx, item in df_krx.iterrows()]
         if data_to_insert:
             data_to_insert = [StockPrice(**vals) for vals in data_to_insert]
             StockPrice.objects.bulk_create(data_to_insert,
@@ -146,11 +156,10 @@ def add_stock_price_1day():
     print(f'{datetime.now()} add_stock_price_1day 시작')
     now = now.strftime('%Y-%m-%d')
     data_to_insert = list()
-    for stock in Stock.objects.values():
-        df_krx = FinanceDataReader.DataReader(stock["symbol"], now, now)
-        stock_instance = Stock.objects.get(symbol=stock['symbol'])
+    for stock in Stock.objects.all():
+        df_krx = FinanceDataReader.DataReader(stock.symbol, now, now)
         for idx, item in df_krx.iterrows():
-            data_to_insert.append({'symbol': stock_instance, 'date': idx, 'open': item['Open'], 'high': item['High'], 'close': item['Close'], 'low': item['Low']})
+            data_to_insert.append({'symbol': stock, 'date': idx, 'open': item['Open'], 'high': item['High'], 'close': item['Close'], 'low': item['Low']})
     if data_to_insert:
         data_to_insert = [StockPrice(**vals) for vals in data_to_insert]
         StockPrice.objects.bulk_create(data_to_insert,
@@ -189,8 +198,8 @@ def bollinger_band():
 def initial_yield_growth_stock_investment():  # 초수익 성장주 투자
     decision = {'buy': set(), 'sell': set()}
     try:
-        stocks = StockSubscription.objects.select_related("symbol").all()
-        # stocks = StockSubscription.objects.filter(email='jmayermj@gmail.com').select_related("symbol").all()
+        # stocks = StockSubscription.objects.select_related("symbol").all()
+        stocks = StockSubscription.objects.filter(email='jmayermj@gmail.com').select_related("symbol").all()
         for stock in stocks:
             data = pd.DataFrame(StockPrice.objects.filter(date__range=[datetime.now() - timedelta(days=365), datetime.now()], symbol=stock.symbol).order_by('date').values())
             if data.empty:
@@ -325,21 +334,21 @@ def notify_negative_profit_warning():
 def start():
     scheduler = BackgroundScheduler(misfire_grace_time=3600, coalesce=True, timezone=settings.TIME_ZONE)
 
-    # scheduler.add_job(
-    #     update_subscription_defensive_investor,
-    #     trigger=CronTrigger(day=1, hour=1),
-    #     id="update_subscription_defensive_investor",
-    #     max_instances=1,
-    #     replace_existing=True,
-    # )
-    #
-    # scheduler.add_job(
-    #     update_subscription_aggressive_investor,
-    #     trigger=CronTrigger(day=1, hour=1),
-    #     id="update_subscription_aggressive_investor",
-    #     max_instances=1,
-    #     replace_existing=True,
-    # )
+    scheduler.add_job(
+        update_subscription_defensive_investor,
+        trigger=CronTrigger(day=1, hour=4),
+        id="update_subscription_defensive_investor",
+        max_instances=1,
+        replace_existing=True,
+    )
+
+    scheduler.add_job(
+        update_subscription_aggressive_investor,
+        trigger=CronTrigger(day=1, hour=2),
+        id="update_subscription_aggressive_investor",
+        max_instances=1,
+        replace_existing=True,
+    )
 
     scheduler.add_job(
         add_stock,
@@ -391,9 +400,9 @@ def test():
     pd.set_option('display.max_rows', None)
     count = 0
     conclusion = []
-    stocks = StockSubscription.objects.select_related("symbol").all()
+    # stocks = StockSubscription.objects.select_related("symbol").all()
     # stocks = StockSubscription.objects.filter(email='cabs0814@naver.com').select_related("symbol").all()
-    # stocks = StockSubscription.objects.filter(email='jmayermj@gmail.com').select_related("symbol").all()
+    stocks = StockSubscription.objects.filter(email='jmayermj@gmail.com').select_related("symbol").all()
     list_stock_dataframe = []
     for stock in stocks:
         data = pd.DataFrame(StockPrice.objects.filter(date__range=[datetime.now() - timedelta(days=500), datetime.now()], symbol=stock.symbol).order_by('date').values())
@@ -436,20 +445,24 @@ def test():
                 stock_price[stock_dataframe.iloc[x]['symbol_id']] += stock_dataframe.iloc[x]['close'] * quantity
                 number[stock_dataframe.iloc[x]['symbol_id']] += quantity
 
-            # if number[stock_dataframe.iloc[x]['symbol_id']] > 0 and stock_dataframe.iloc[x]['close'] < stock_price[stock_dataframe.iloc[x]['symbol_id']] / number[stock_dataframe.iloc[x]['symbol_id']] * 0.90:
+            # if number[stock_dataframe.iloc[x]['symbol_id']] > 0 and stock_dataframe.iloc[x]['close'] < stock_price[stock_dataframe.iloc[x]['symbol_id']] / number[stock_dataframe.iloc[x]['symbol_id']] * 0.95:
             #     account += stock_dataframe.iloc[x]['close'] * 0.995 * number[stock_dataframe.iloc[x]['symbol_id']]
             #     stock_price[stock_dataframe.iloc[x]['symbol_id']] -= stock_price[stock_dataframe.iloc[x]['symbol_id']] / number[stock_dataframe.iloc[x]['symbol_id']] * number[stock_dataframe.iloc[x]['symbol_id']]
             #     number[stock_dataframe.iloc[x]['symbol_id']] -= number[stock_dataframe.iloc[x]['symbol_id']]
 
-            if (stock_dataframe.iloc[x]['buy_sell'] == -1 and number[stock_dataframe.iloc[x]['symbol_id']] > 0 and stock_price[stock_dataframe.iloc[x]['symbol_id']] / number[stock_dataframe.iloc[x]['symbol_id']] * 1.025 <
-                    stock_dataframe.iloc[x]['close']):
-                # print(stock_dataframe.iloc[x]['symbol_id'], stock_dataframe.iloc[x]['close'] / (stock_price[stock_dataframe.iloc[-1]['symbol_id']] / number[stock_dataframe.iloc[-1]['symbol_id']]) * 100)
-                quantity = int((account + stock_price[stock_dataframe.iloc[x]['symbol_id']]) * 0.02 / stock_dataframe.iloc[x]['close'])
-                if quantity > number[stock_dataframe.iloc[x]['symbol_id']]:
-                    quantity = number[stock_dataframe.iloc[x]['symbol_id']]
-                account += stock_dataframe.iloc[x]['close'] * 0.995 * quantity
-                stock_price[stock_dataframe.iloc[x]['symbol_id']] -= stock_price[stock_dataframe.iloc[x]['symbol_id']] / number[stock_dataframe.iloc[x]['symbol_id']] * quantity
-                number[stock_dataframe.iloc[x]['symbol_id']] -= quantity
+            if stock_dataframe.iloc[x]['buy_sell'] == -1:
+                if number[stock_dataframe.iloc[x]['symbol_id']] > 0 and stock_price[stock_dataframe.iloc[x]['symbol_id']] / number[stock_dataframe.iloc[x]['symbol_id']] * 1.025 < stock_dataframe.iloc[x]['close']:
+                    # print(stock_dataframe.iloc[x]['symbol_id'], stock_dataframe.iloc[x]['close'] / (stock_price[stock_dataframe.iloc[-1]['symbol_id']] / number[stock_dataframe.iloc[-1]['symbol_id']]) * 100)
+                    quantity = int((account + stock_price[stock_dataframe.iloc[x]['symbol_id']]) * 0.02 / stock_dataframe.iloc[x]['close'])
+                    if quantity > number[stock_dataframe.iloc[x]['symbol_id']]:
+                        quantity = number[stock_dataframe.iloc[x]['symbol_id']]
+                    account += stock_dataframe.iloc[x]['close'] * 0.995 * quantity
+                    stock_price[stock_dataframe.iloc[x]['symbol_id']] -= stock_price[stock_dataframe.iloc[x]['symbol_id']] / number[stock_dataframe.iloc[x]['symbol_id']] * quantity
+                    number[stock_dataframe.iloc[x]['symbol_id']] -= quantity
+                else:
+                    pass
+                    # if number[stock_dataframe.iloc[-1]['symbol_id']] > 0:
+                    #     print(stock_dataframe.iloc[x]['symbol_id'], stock_dataframe.iloc[x]['close'] / (stock_price[stock_dataframe.iloc[-1]['symbol_id']] / number[stock_dataframe.iloc[-1]['symbol_id']]) * 100)
     # for stock_dataframe in temp_list_stock_dataframe:
     #     if number[stock_dataframe.iloc[-1]['symbol_id']] != 0:
     #         print(stock_dataframe.iloc[-1]['close'] / (number[stock_dataframe.iloc[-1]['symbol_id']] > 0 and stock_price[stock_dataframe.iloc[-1]['symbol_id']] / number[stock_dataframe.iloc[-1]['symbol_id']]))
