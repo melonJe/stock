@@ -8,7 +8,6 @@ class SchedulerConfig(AppConfig):
     def ready(self):
         if settings.SCHEDULER_ENABLED:
             from . import background_scheduler
-            # item = background_scheduler.initial_yield_growth_stock_investment()
-            # print([x.symbol.name for x in item['buy']])
-            # print([x.symbol.name for x in item['sell']])
+            # print(background_scheduler.initial_yield_growth_stock_investment())
+            # background_scheduler.update_subscription_aggressive_investor()
             background_scheduler.start()
