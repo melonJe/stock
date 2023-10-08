@@ -79,7 +79,7 @@ def update_subscription_aggressive_investor():
             for item in tr_tag:
                 check = item.select('th > div > div > dl > dt')
                 if isinstance(check, list) and check and check[0].text in ['매출액증가율', '영업이익증가율']:  # , 'EPS증가율'
-                    rate = [float(x.text.replace(',', '')) for x in item.select('td.r')]
+                    rate = [float(x.text.replace(',', '')) for x in item.select('td.r')][-4:]
                     if len(rate) < 1 or any([x < 0 for x in rate]):
                         break
                     # insert_true += 1
