@@ -11,7 +11,7 @@ class SchedulerConfig(AppConfig):
     def ready(self):
         if settings.SCHEDULER_ENABLED:
             from . import background_scheduler
-            # print(background_scheduler.initial_yield_growth_stock_investment(KoreaInvestment(app_key=setting_env.APP_KEY, app_secret=setting_env.APP_SECRET, account_number=setting_env.ACCOUNT_NUMBER, account_cord=setting_env.ACCOUNT_CORD)))
+            # print(background_scheduler.bollinger_band(KoreaInvestment(app_key=setting_env.APP_KEY, app_secret=setting_env.APP_SECRET, account_number=setting_env.ACCOUNT_NUMBER, account_cord=setting_env.ACCOUNT_CORD)))
             # background_scheduler.update_subscription_aggressive_investor()
             # background_scheduler.add_stock_price_all()
             background_scheduler.start()

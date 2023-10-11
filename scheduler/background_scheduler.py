@@ -188,12 +188,12 @@ def bollinger_band(account: KoreaInvestment):
             data['MFI10'] = 100 - 100 / (1 + data['MFR'])
             # data['decision'] = np.where(data['PB'] > 0.8 and data['MFI10'] > 80, '매수', "")
             # data['decision'] = np.where(data['PB'] < 0.2 and data['MFI10'] < 20, '매도', "")
-            if data.iloc[-1]['PB'] > 0.8 and data.iloc['MFI10'] > 80:
+            if data.iloc[-1]['PB'] > 0.8 and data.iloc[-1]['MFI10'] > 80:
                 decision['buy'] = stock.symbol.symbol
 
         stocks = account.get_owned_stock_info()
         for stock in stocks:
-            data = pd.DataFrame(StockPrice.objects.filter(date__range=[datetime.now() - timedelta(days=365), datetime.now()], symbol=stock.symbol).order_by('date').values())
+            data = pd.DataFrame(StockPrice.objects.filter(date__range=[datetime.now() - timedelta(days=365), datetime.now()], symbol=stock['pdno']).order_by('date').values())
             if data.empty:
                 continue
             data['ma20'] = data['close'].rolling(window=20).mean()
@@ -208,7 +208,7 @@ def bollinger_band(account: KoreaInvestment):
             data['MFI10'] = 100 - 100 / (1 + data['MFR'])
             # data['decision'] = np.where(data['PB'] > 0.8 and data['MFI10'] > 80, '매수', "")
             # data['decision'] = np.where(data['PB'] < 0.2 and data['MFI10'] < 20, '매도', "")
-            if data.iloc[-1]['PB'] < 0.2 and data.iloc['MFI10'] < 20:
+            if data.iloc[-1]['PB'] < 0.2 and data.iloc[-1]['MFI10'] < 20:
                 decision['sell'].add(stock['pdno'])
     except:
         str(traceback.print_exc())
@@ -350,7 +350,7 @@ def negative_profit_warning():
         return
     inquire_balance = account.get_account_info()
     sell = bollinger_band(account)["sell"]
-    stocks = [stock.symbol for stock in StockSubscription.objects.filter(email='jmayermj@gmail.com').select_related("symbol").all()]
+    stocks = [stock.symbol for stock in StockSubscription.objects.select_related("symbol").all()]
     sell.update(set(owned_stock['pdno'] for owned_stock in account.get_owned_stock_info() if owned_stock['pdno'] not in stocks))
 
     while datetime.now().time() < time(15, 30, 0):
