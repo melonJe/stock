@@ -110,7 +110,7 @@ def add_stock():
     start_date = (datetime.now() - timedelta(days=45)).strftime("%Y-%m-%d")
     for stock in Stock.objects.all():
         df_krx = FinanceDataReader.DataReader(stock.symbol, start_date)
-        data_to_insert = [{'symbol': stock, 'date': idx, 'open': item['Open'], 'high': item['High'], 'close': item['Close'], 'low': item['Low']} for idx, item in df_krx.iterrows()]
+        data_to_insert = [{'symbol': stock, 'date': idx, 'open': item['Open'], 'high': item['High'], 'close': item['Close'], 'low': item['Low'], 'volume': item['Volume']} for idx, item in df_krx.iterrows()]
         if data_to_insert:
             data_to_insert = [StockPrice(**vals) for vals in data_to_insert]
             StockPrice.objects.bulk_create(data_to_insert,
@@ -121,10 +121,10 @@ def add_stock():
 
 def add_stock_price_all():
     print(f'{datetime.now()} add_stock_price_all 시작')
-    one_year_ago = datetime.now().year - 1
+    one_year_ago = datetime.now().year - 5
     for stock in Stock.objects.all():
         df_krx = FinanceDataReader.DataReader(stock.symbol, str(one_year_ago))
-        data_to_insert = [{'symbol': stock, 'date': idx, 'open': item['Open'], 'high': item['High'], 'close': item['Close'], 'low': item['Low']} for idx, item in df_krx.iterrows()]
+        data_to_insert = [{'symbol': stock, 'date': idx, 'open': item['Open'], 'high': item['High'], 'close': item['Close'], 'low': item['Low'], 'volume': item['Volume']} for idx, item in df_krx.iterrows()]
         if data_to_insert:
             data_to_insert = [StockPrice(**vals) for vals in data_to_insert]
             StockPrice.objects.bulk_create(data_to_insert,
@@ -140,7 +140,7 @@ def add_stock_price_1week():
     now = now.strftime('%Y-%m-%d')
     for stock in Stock.objects.all():
         df_krx = FinanceDataReader.DataReader(stock.symbol, week_ago, now)
-        data_to_insert = [{'symbol': stock, 'date': idx, 'open': item['Open'], 'high': item['High'], 'close': item['Close'], 'low': item['Low']} for idx, item in df_krx.iterrows()]
+        data_to_insert = [{'symbol': stock, 'date': idx, 'open': item['Open'], 'high': item['High'], 'close': item['Close'], 'low': item['Low'], 'volume': item['Volume']} for idx, item in df_krx.iterrows()]
         if data_to_insert:
             data_to_insert = [StockPrice(**vals) for vals in data_to_insert]
             StockPrice.objects.bulk_create(data_to_insert,
@@ -158,7 +158,7 @@ def add_stock_price_1day():
     for stock in Stock.objects.all():
         df_krx = FinanceDataReader.DataReader(stock.symbol, now, now)
         for idx, item in df_krx.iterrows():
-            data_to_insert.append({'symbol': stock, 'date': idx, 'open': item['Open'], 'high': item['High'], 'close': item['Close'], 'low': item['Low']})
+            data_to_insert.append({'symbol': stock, 'date': idx, 'open': item['Open'], 'high': item['High'], 'close': item['Close'], 'low': item['Low'], 'volume': item['Volume']})
     if data_to_insert:
         data_to_insert = [StockPrice(**vals) for vals in data_to_insert]
         StockPrice.objects.bulk_create(data_to_insert,
@@ -167,7 +167,7 @@ def add_stock_price_1day():
                                        update_fields=['open', 'high', 'close', 'low'])
 
 
-def bollinger_band():
+def bollinger_band(account: KoreaInvestment):
     decision = {'buy': set(), 'sell': set()}
     try:
         stocks = StockSubscription.objects.all().distinct('symbol')
@@ -182,12 +182,34 @@ def bollinger_band():
             data['lower'] = data['ma20'] - (data['stddev'] * 2)
             data['PB'] = (data['close'] - data['lower']) / (data['upper'] - data['lower'])
             data['TP'] = (data['high'] + data['low'] + data['close']) / 3
-            data['PMF'] = np.where(data['close'].diff(1) > 0, data['TP'] * data['volume'], 0)  # TODO DB에 거래량 데이터 추가 필요
+            data['PMF'] = np.where(data['close'].diff(1) > 0, data['TP'] * data['volume'], 0)
             data['NMF'] = np.where(data['close'].diff(1) < 0, data['TP'] * data['volume'], 0)
             data['MFR'] = data['PMF'].rolling(window=10).mean() / data['NMF'].rolling(window=10).mean()
             data['MFI10'] = 100 - 100 / (1 + data['MFR'])
-            data['decision'] = np.where(data['PB'] > 0.8 and data['MFI10'] > 80, '매수', "")
-            data['decision'] = np.where(data['PB'] < 0.2 and data['MFI10'] < 20, '매도', "")
+            # data['decision'] = np.where(data['PB'] > 0.8 and data['MFI10'] > 80, '매수', "")
+            # data['decision'] = np.where(data['PB'] < 0.2 and data['MFI10'] < 20, '매도', "")
+            if data.iloc[-1]['PB'] > 0.8 and data.iloc['MFI10'] > 80:
+                decision['buy'] = stock.symbol.symbol
+
+        stocks = account.get_owned_stock_info()
+        for stock in stocks:
+            data = pd.DataFrame(StockPrice.objects.filter(date__range=[datetime.now() - timedelta(days=365), datetime.now()], symbol=stock.symbol).order_by('date').values())
+            if data.empty:
+                continue
+            data['ma20'] = data['close'].rolling(window=20).mean()
+            data['stddev'] = data['close'].rolling(window=20).std()
+            data['upper'] = data['ma20'] + (data['stddev'] * 2)
+            data['lower'] = data['ma20'] - (data['stddev'] * 2)
+            data['PB'] = (data['close'] - data['lower']) / (data['upper'] - data['lower'])
+            data['TP'] = (data['high'] + data['low'] + data['close']) / 3
+            data['PMF'] = np.where(data['close'].diff(1) > 0, data['TP'] * data['volume'], 0)
+            data['NMF'] = np.where(data['close'].diff(1) < 0, data['TP'] * data['volume'], 0)
+            data['MFR'] = data['PMF'].rolling(window=10).mean() / data['NMF'].rolling(window=10).mean()
+            data['MFI10'] = 100 - 100 / (1 + data['MFR'])
+            # data['decision'] = np.where(data['PB'] > 0.8 and data['MFI10'] > 80, '매수', "")
+            # data['decision'] = np.where(data['PB'] < 0.2 and data['MFI10'] < 20, '매도', "")
+            if data.iloc[-1]['PB'] < 0.2 and data.iloc['MFI10'] < 20:
+                decision['sell'].add(stock['pdno'])
     except:
         str(traceback.print_exc())
         # discord.error_message("stock_db\n" + str(traceback.print_exc()))
@@ -290,11 +312,11 @@ def find_unsubscribed_stocks(account: KoreaInvestment):
     pass
 
 
-def korea_investment_trading_initial_yield_growth_stock_investment():
+def korea_investment_trading():
     account = KoreaInvestment(app_key=setting_env.APP_KEY, app_secret=setting_env.APP_SECRET, account_number=setting_env.ACCOUNT_NUMBER, account_cord=setting_env.ACCOUNT_CORD)
     if account.check_holiday():
         return
-    buy = initial_yield_growth_stock_investment(account)['buy']  # decision = {'buy': set(), 'sell': set()}
+    buy = bollinger_band(account)['buy']  # decision = {'buy': set(), 'sell': set()}
     inquire_balance = account.get_account_info()
     dnca_tot_amt = inquire_balance["dnca_tot_amt"]  # 사용 가능한 금액 계산 (예수금총금액)
     while datetime.now().time() < time(9, 0, 0) and buy:
@@ -327,7 +349,7 @@ def negative_profit_warning():
     if account.check_holiday():
         return
     inquire_balance = account.get_account_info()
-    sell = initial_yield_growth_stock_investment(account)["sell"]
+    sell = bollinger_band(account)["sell"]
     stocks = [stock.symbol for stock in StockSubscription.objects.filter(email='jmayermj@gmail.com').select_related("symbol").all()]
     sell.update(set(owned_stock['pdno'] for owned_stock in account.get_owned_stock_info() if owned_stock['pdno'] not in stocks))
 
@@ -396,9 +418,9 @@ def start():
     )
 
     scheduler.add_job(
-        korea_investment_trading_initial_yield_growth_stock_investment,
+        korea_investment_trading,
         trigger=CronTrigger(day_of_week="mon-fri", hour=8, minute=45),
-        id="korea_investment_trading_initial_yield_growth_stock_investment",
+        id="korea_investment_trading",
         max_instances=1,
         replace_existing=True,
     )

@@ -41,6 +41,7 @@ class StockPrice(models.Model):
     high = models.IntegerField()
     close = models.IntegerField()
     low = models.IntegerField()
+    volume = models.IntegerField()
 
 
 class StockSubscription(models.Model):
