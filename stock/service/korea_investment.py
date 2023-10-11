@@ -159,12 +159,12 @@ class KoreaInvestment:
             "ACNT_PRDT_CD": self.__account_cord,
             "CTX_AREA_FK100": "",
             "CTX_AREA_NK100": "",
-            "INQR_DVSN_1": "2",
+            "INQR_DVSN_1": "0",
             "INQR_DVSN_2": "0"
         }
         response = requests.get(setting_env.DOMAIN + "/uapi/domestic-stock/v1/trading/inquire-psbl-rvsecncl?" + urllib.parse.urlencode(data), headers=headers)
         if response.status_code == 200:
-            return response.json()["output1"]
+            return response.json()["output"]
         else:
             discord.error_message(f"""stock_db\nHTTP 요청 실패. 상태 코드 : {response.status_code}\n{response.json()}""")
 
@@ -204,4 +204,4 @@ class KoreaInvestment:
 
 # account = KoreaInvestment(app_key=setting_env.APP_KEY, app_secret=setting_env.APP_SECRET, account_number=setting_env.ACCOUNT_NUMBER, account_cord=setting_env.ACCOUNT_CORD)
 # print(account.get_owned_stock_info(stock="003030"))
-# print(account.check_holiday())
+# print(account.get_cancellable_or_correctable_stock())

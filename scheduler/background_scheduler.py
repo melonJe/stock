@@ -195,7 +195,7 @@ def bollinger_band():
     return decision
 
 
-def initial_yield_growth_stock_investment():  # 초수익 성장주 투자
+def initial_yield_growth_stock_investment(account: KoreaInvestment):  # 초수익 성장주 투자
     decision = {'buy': set(), 'sell': set()}
     try:
         # stocks = StockSubscription.objects.select_related("symbol").all()
@@ -208,7 +208,7 @@ def initial_yield_growth_stock_investment():  # 초수익 성장주 투자
             data['ma150'] = data['close'].rolling(window=150).mean()
             data['ma50'] = data['close'].rolling(window=50).mean()
             data['ma20'] = data['close'].rolling(window=20).mean()
-            if data.iloc[-1]['ma20'] < data['ma20'].max():
+            if data.iloc[-1]['ma20'] < data['ma20'].max() * 0.99:
                 continue
             if not (data.iloc[-1]['ma200'] < data.iloc[-1]['ma150'] < data.iloc[-1]['ma50'] < data.iloc[-1]['close']):
                 continue
@@ -219,7 +219,6 @@ def initial_yield_growth_stock_investment():  # 초수익 성장주 투자
             decision['buy'].add(stock.symbol.symbol)
 
         # TODO 판매 알고리즘 공부 및 수정 필요
-        account = KoreaInvestment(app_key=setting_env.APP_KEY, app_secret=setting_env.APP_SECRET, account_number=setting_env.ACCOUNT_NUMBER, account_cord=setting_env.ACCOUNT_CORD)
         stocks = account.get_owned_stock_info()
         for stock in stocks:
             data = pd.DataFrame(StockPrice.objects.filter(date__range=[datetime.now() - timedelta(days=365), datetime.now()], symbol=stock['pdno']).order_by('date').values())
@@ -230,7 +229,7 @@ def initial_yield_growth_stock_investment():  # 초수익 성장주 투자
             data['ma50'] = data['close'].rolling(window=50).mean()
             data['ma20'] = data['close'].rolling(window=20).mean()
             # TODO 조건문 다듬기
-            if data.iloc[-1]['ma20'] < data['ma20'].max():
+            if data.iloc[-1]['ma20'] < data['ma20'].max() * 0.99:
                 decision['sell'].add(stock['pdno'])
                 continue
             if not (data.iloc[-1]['ma200'] < data.iloc[-1]['ma150'] < data.iloc[-1]['ma50'] < data.iloc[-1]['close']):
@@ -248,7 +247,7 @@ def initial_yield_growth_stock_investment():  # 초수익 성장주 투자
     return decision
 
 
-def stock_automated_trading_system():  # 파이썬 주식 자동매매 시스템 - 박준성
+def stock_automated_trading_system(account: KoreaInvestment):  # 파이썬 주식 자동매매 시스템 - 박준성
     decision = {'buy': set(), 'sell': set()}
     # stocks = StockSubscription.objects.select_related("symbol").all()
     stocks = StockSubscription.objects.filter(email='jmayermj@gmail.com').select_related("symbol").all()
@@ -263,7 +262,6 @@ def stock_automated_trading_system():  # 파이썬 주식 자동매매 시스템
         if data.iloc[-1]['close'] < data.iloc[-3]['close'] * 0.98 and data.iloc[-1]["ma60"] < data.iloc[-1]["ma20"] and data.iloc[-1]["all_up"] / (data.iloc[-1]["all_up"] + data.iloc[-1]["all_down"]) < 0.05:
             decision['buy'].add(stock.symbol.symbol)
 
-    account = KoreaInvestment(app_key=setting_env.APP_KEY, app_secret=setting_env.APP_SECRET, account_number=setting_env.ACCOUNT_NUMBER, account_cord=setting_env.ACCOUNT_CORD)
     stocks = account.get_owned_stock_info()
     for stock in stocks:
         data = pd.DataFrame(StockPrice.objects.filter(date__range=[datetime.now() - timedelta(days=28), datetime.now()], symbol=stock['pdno']).order_by('date').values())
@@ -285,23 +283,11 @@ def korea_investment_trading_initial_yield_growth_stock_investment():
     account = KoreaInvestment(app_key=setting_env.APP_KEY, app_secret=setting_env.APP_SECRET, account_number=setting_env.ACCOUNT_NUMBER, account_cord=setting_env.ACCOUNT_CORD)
     if account.check_holiday():
         return
-    decision = initial_yield_growth_stock_investment()  # decision = {'buy': set(), 'sell': set()}
+    buy = initial_yield_growth_stock_investment(account)['buy']  # decision = {'buy': set(), 'sell': set()}
     inquire_balance = account.get_account_info()
     dnca_tot_amt = inquire_balance["dnca_tot_amt"]  # 사용 가능한 금액 계산 (예수금총금액)
-    while datetime.now().time() < time(15, 0, 0) and (decision['sell'] or decision['buy']):
-        for symbol in decision['sell'].copy():
-            previous_stock = StockPrice.objects.filter(symbol=symbol).order_by('-date').first()
-            inquire_stock = account.get_owned_stock_info(symbol)
-            if (not inquire_stock) or inquire_stock["evlu_pfls_rt"] <= 2.5 or inquire_stock["ord_psbl_qty"] == 0:  # 가지고 있지 않거나 수익률이 2.5% 이하거나 주문 가능한 수량이 없으면 다음 주식으로 넘어감
-                decision['sell'].discard(symbol)
-                continue
-            volume = math.ceil(inquire_balance["tot_evlu_amt"] * 0.02 / inquire_stock['evlu_amt'])  # 총 평가 금액의 2% 씩 판매
-            if volume > inquire_stock["ord_psbl_qty"]:  # 주문 가능 수량을 넘길 경우 주문 수량 수정
-                volume = inquire_stock["ord_psbl_qty"]
-            if volume < 1 or account.sell(stock=symbol, price=previous_stock.close, volume=volume):
-                decision['sell'].discard(symbol)
-            sleep(1)
-        for symbol in decision['buy'].copy():
+    while datetime.now().time() < time(9, 0, 0) and buy:
+        for symbol in buy.copy():
             previous_stock = StockPrice.objects.filter(symbol=symbol).order_by('-date').first()
             volume = int(inquire_balance["tot_evlu_amt"] * 0.02 / previous_stock.close)  # 총 평가 금액의 2% 씩 구매
             volume = 1 if volume == 0 else volume  # 구매 수량이 0일 경우 1로 수정
@@ -311,7 +297,7 @@ def korea_investment_trading_initial_yield_growth_stock_investment():
                 volume = min(volume, int((inquire_balance["tot_evlu_amt"] * 0.2 - inquire_stock["pchs_amt"]) / previous_stock.close), 1000 - inquire_stock["hldg_qty"])  # 주식 보유 비중이 20%를, 보유수량이 1000주를 넘지 않도록 구매 수량 수정
             if volume < 1 or account.buy(stock=symbol, price=previous_stock.close, volume=volume):
                 dnca_tot_amt -= previous_stock.close * volume
-                decision['buy'].discard(symbol)
+                buy.discard(symbol)
             sleep(1)
         sleep(60)
     if setting_env.SIMULATE:
@@ -324,17 +310,41 @@ def korea_investment_trading_initial_yield_growth_stock_investment():
             account.modify_stock_order(order_no=item['odno'], volume=item['psbl_qty'])
 
 
-def notify_negative_profit_warning():
-    alert = set()
+def negative_profit_warning():
+    alert = {}
     account = KoreaInvestment(app_key=setting_env.APP_KEY, app_secret=setting_env.APP_SECRET, account_number=setting_env.ACCOUNT_NUMBER, account_cord=setting_env.ACCOUNT_CORD)
     if account.check_holiday():
         return
+    inquire_balance = account.get_account_info()
+    sell = initial_yield_growth_stock_investment(account)["sell"]
+    stocks = [stock.symbol for stock in StockSubscription.objects.filter(email='jmayermj@gmail.com').select_related("symbol").all()]
+    sell.update(set(owned_stock['pdno'] for owned_stock in account.get_owned_stock_info() if owned_stock['pdno'] not in stocks))
+
     while datetime.now().time() < time(15, 30, 0):
         inquire_stock = account.get_owned_stock_info()
+        # 알림 loop
         for item in inquire_stock:
-            if item["pdno"] not in alert and item["evlu_pfls_rt"] < -4:
+            if item["evlu_pfls_rt"] > -4:
+                continue
+            if item["pdno"] not in alert.keys():
                 discord.send_message(f"""{item["prdt_name"]} 수익률 {item["evlu_pfls_rt"]}""")
-                alert.add(item["pdno"])
+            elif alert[item["pdno"]] < item["evlu_pfls_rt"]:
+                discord.send_message(f"""{item["prdt_name"]} 수익률 {item["evlu_pfls_rt"]}""")
+            alert[item["pdno"]] = math.floor(item["evlu_pfls_rt"])
+
+        # 판매 loop
+        for symbol in sell.copy():
+            owned_stock = account.get_owned_stock_info(symbol)
+            if (not owned_stock) or owned_stock["ord_psbl_qty"] == 0:  # 가지고 있지 않거나 주문 가능한 수량이 없으면 다음 주식으로 넘어감
+                sell.discard(symbol)
+                continue
+            if owned_stock["evlu_pfls_rt"] <= 1:  # 수익률이 1% 이하면 다음 주식으로 넘어감
+                continue
+            volume = math.ceil(inquire_balance["tot_evlu_amt"] * 0.02 / owned_stock['evlu_amt'])  # 총 평가 금액의 2% 씩 판매
+            if volume > owned_stock["ord_psbl_qty"]:  # 주문 가능 수량을 넘길 경우 주문 수량 수정
+                volume = owned_stock["ord_psbl_qty"]
+            if volume < 1 or account.sell(stock=symbol, price=owned_stock["prpr"], volume=volume):
+                sell.discard(symbol)
         sleep(10 * 60)
 
 
@@ -382,9 +392,9 @@ def start():
     )
 
     scheduler.add_job(
-        notify_negative_profit_warning,
+        negative_profit_warning,
         trigger=CronTrigger(day_of_week="mon-fri", hour=9, minute=00),
-        id="notify_negative_profit_warning",
+        id="negative_profit_warning",
         max_instances=1,
         replace_existing=True,
     )
