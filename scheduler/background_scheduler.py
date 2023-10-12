@@ -1,4 +1,3 @@
-import random
 import FinanceDataReader
 import math
 import numpy as np
@@ -11,7 +10,7 @@ from datetime import timedelta, datetime, time
 from django.conf import settings
 from stock.service.korea_investment import KoreaInvestment
 from stock.models.stock import *
-from bs4 import BeautifulSoup as bs
+from bs4 import BeautifulSoup
 from apscheduler.triggers.cron import CronTrigger
 from apscheduler.schedulers.background import BackgroundScheduler
 from stock.service import discord
@@ -23,18 +22,17 @@ def update_subscription_defensive_investor():
     data_to_insert = list()
     user = User.objects.get(email='cabs0814@naver.com')
     for stock in Stock.objects.all():
-        value = 0
         try:
             if requests.get(f"""https://navercomp.wisereport.co.kr/company/chart/c1030001.aspx?cmp_cd={stock.symbol}&frq=Y&rpt=ISM&finGubun=MAIN&chartType=svg""",
                             headers={'Accept': 'application/json'}).json()['chartData1']['series'][0]['data'][-2] < 7500:
                 continue
             page = requests.get(f"""https://comp.fnguide.com/SVO2/ASP/SVD_FinanceRatio.asp?pGB=1&gicode=A{stock.symbol}&cID=&MenuYn=Y&ReportGB=&NewMenuID=104&stkGb=701""").text
-            soup = bs(page, "html.parser")
+            soup = BeautifulSoup(page, "html.parser")
             current_ratio = float(soup.select('tr#p_grid1_1 > td.cle')[0].text)
             if current_ratio < 200:
                 continue
             page = requests.get(f"""https://navercomp.wisereport.co.kr/v2/company/c1010001.aspx?cmp_cd={stock.symbol}""").text
-            soup = bs(page, "html.parser")
+            soup = BeautifulSoup(page, "html.parser")
             elements = soup.select('td.cmp-table-cell > dl > dt.line-left')
             per = -1
             pbr = -1
@@ -73,7 +71,7 @@ def update_subscription_aggressive_investor():
         insert_true = 0
         try:
             page = requests.get(f"""https://comp.fnguide.com/SVO2/ASP/SVD_FinanceRatio.asp?pGB=1&gicode=A{stock.symbol}&cID=&MenuYn=Y&ReportGB=&NewMenuID=104&stkGb=701""").text
-            tr_tag = bs(page, "html.parser").select('div.um_table')[0].select('tr')
+            tr_tag = BeautifulSoup(page, "html.parser").select('div.um_table')[0].select('tr')
             # tr_tag = bs(page, "html.parser").select('tr')
             for item in tr_tag:
                 check = item.select('th > div > div > dl > dt')
@@ -308,10 +306,6 @@ def stock_automated_trading_system(account: KoreaInvestment):  # 파이썬 주�
     return decision
 
 
-def find_unsubscribed_stocks(account: KoreaInvestment):
-    pass
-
-
 def korea_investment_trading():
     account = KoreaInvestment(app_key=setting_env.APP_KEY, app_secret=setting_env.APP_SECRET, account_number=setting_env.ACCOUNT_NUMBER, account_cord=setting_env.ACCOUNT_CORD)
     if account.check_holiday():
@@ -368,6 +362,7 @@ def negative_profit_warning():
                     if volume > owned_stock["ord_psbl_qty"]:  # 주문 가능 수량을 넘길 경우 주문 수량 수정
                         volume = owned_stock["ord_psbl_qty"]
                     discord.send_message(f"""{item["prdt_name"]} 수익률 {item["evlu_pfls_rt"]}% {volume} 판매 권유""")
+                    StockSubscription.objects.filter(symbol=item["pdno"]).delete()
                 else:
                     discord.send_message(f"""{item["prdt_name"]} 수익률 {item["evlu_pfls_rt"]}%""")
             alert[item["pdno"]] = math.floor(item["evlu_pfls_rt"])
@@ -456,8 +451,6 @@ def start():
 
 def test():
     pd.set_option('display.max_rows', None)
-    count = 0
-    conclusion = []
     # stocks = Stock.objects.all()
     stocks = StockSubscription.objects.select_related("symbol").all()
     # stocks = StockSubscription.objects.filter(email='cabs0814@naver.com').select_related("symbol").all()
