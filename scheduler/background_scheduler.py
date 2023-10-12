@@ -460,6 +460,9 @@ def test():
         data = pd.DataFrame(StockPrice.objects.filter(date__range=[datetime.now() - timedelta(days=500), datetime.now()], symbol=stock.symbol).order_by('date').values())
         if data.empty:
             continue
+        data['ma200'] = data['close'].rolling(window=200).mean()  # 추가한 코드
+        data['ma150'] = data['close'].rolling(window=150).mean()  # 추가한 코드
+        data['ma50'] = data['close'].rolling(window=50).mean()  # 추가한 코드
         data['ma20'] = data['close'].rolling(window=20).mean()
         data['stddev'] = data['close'].rolling(window=20).std()
         data['upper'] = data['ma20'] + (data['stddev'] * 2)
@@ -477,8 +480,8 @@ def test():
     temp_list_stock_dataframe = []
     for stock_dataframe in list_stock_dataframe:
         stock_dataframe['buy_sell'] = 0
-        stock_dataframe.loc[(stock_dataframe['PB'] > 0.8) & (stock_dataframe['MFI10'] > 80), 'buy_sell'] = -1
-        stock_dataframe.loc[(stock_dataframe['PB'] < 0.2) & (stock_dataframe['MFI10'] < 20), 'buy_sell'] = 1
+        stock_dataframe.loc[(stock_dataframe['ma200'] < stock_dataframe['ma150']) & (stock_dataframe['ma150'] < stock_dataframe['ma50']) & (stock_dataframe['PB'] > 0.8) & (stock_dataframe['MFI10'] > 80), 'buy_sell'] = -1
+        stock_dataframe.loc[((stock_dataframe['ma200'] > stock_dataframe['ma150']) | (stock_dataframe['ma150'] > stock_dataframe['ma50'])) | (stock_dataframe['PB'] < 0.2) & (stock_dataframe['MFI10'] < 20), 'buy_sell'] = 1
         temp_list_stock_dataframe.append(stock_dataframe[-260:])
     temp_list_stock_dataframe = [x for x in temp_list_stock_dataframe if len(x) == 260]
     for x in range(260):
