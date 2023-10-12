@@ -360,9 +360,16 @@ def negative_profit_warning():
             if item["evlu_pfls_rt"] > -4:
                 continue
             if item["pdno"] not in alert.keys():
-                discord.send_message(f"""{item["prdt_name"]} 수익률 {item["evlu_pfls_rt"]}""")
+                discord.send_message(f"""{item["prdt_name"]} 수익률 {item["evlu_pfls_rt"]}%""")
             elif item["evlu_pfls_rt"] < alert[item["pdno"]]:
-                discord.send_message(f"""{item["prdt_name"]} 수익률 {item["evlu_pfls_rt"]}""")
+                if item["evlu_pfls_rt"] < -15:
+                    owned_stock = account.get_owned_stock_info(item["pdno"])
+                    volume = math.ceil(inquire_balance["tot_evlu_amt"] * 0.02 / owned_stock['evlu_amt'])  # 총 평가 금액의 2% 씩 판매
+                    if volume > owned_stock["ord_psbl_qty"]:  # 주문 가능 수량을 넘길 경우 주문 수량 수정
+                        volume = owned_stock["ord_psbl_qty"]
+                    discord.send_message(f"""{item["prdt_name"]} 수익률 {item["evlu_pfls_rt"]}% {volume} 판매 권유""")
+                else:
+                    discord.send_message(f"""{item["prdt_name"]} 수익률 {item["evlu_pfls_rt"]}%""")
             alert[item["pdno"]] = math.floor(item["evlu_pfls_rt"])
 
         # 판매 loop
@@ -481,7 +488,9 @@ def test():
     for stock_dataframe in list_stock_dataframe:
         stock_dataframe['buy_sell'] = 0
         stock_dataframe.loc[(stock_dataframe['ma200'] < stock_dataframe['ma150']) & (stock_dataframe['ma150'] < stock_dataframe['ma50']) & (stock_dataframe['PB'] > 0.8) & (stock_dataframe['MFI10'] > 80), 'buy_sell'] = -1
+        # stock_dataframe.loc[(stock_dataframe['PB'] > 0.8) & (stock_dataframe['MFI10'] > 80), 'buy_sell'] = -1
         stock_dataframe.loc[((stock_dataframe['ma200'] > stock_dataframe['ma150']) | (stock_dataframe['ma150'] > stock_dataframe['ma50'])) | (stock_dataframe['PB'] < 0.2) & (stock_dataframe['MFI10'] < 20), 'buy_sell'] = 1
+        # stock_dataframe.loc[(stock_dataframe['PB'] < 0.2) & (stock_dataframe['MFI10'] < 20), 'buy_sell'] = 1
         temp_list_stock_dataframe.append(stock_dataframe[-260:])
     temp_list_stock_dataframe = [x for x in temp_list_stock_dataframe if len(x) == 260]
     for x in range(260):
@@ -503,10 +512,17 @@ def test():
                 stock_price[stock_dataframe.iloc[x]['symbol_id']] += stock_dataframe.iloc[x]['close'] * quantity
                 number[stock_dataframe.iloc[x]['symbol_id']] += quantity
 
-            # if number[stock_dataframe.iloc[x]['symbol_id']] > 0 and stock_dataframe.iloc[x]['close'] < stock_price[stock_dataframe.iloc[x]['symbol_id']] / number[stock_dataframe.iloc[x]['symbol_id']] * 0.90:
-            #     account += stock_dataframe.iloc[x]['close'] * 0.997 * number[stock_dataframe.iloc[x]['symbol_id']]
-            #     stock_price[stock_dataframe.iloc[x]['symbol_id']] -= stock_price[stock_dataframe.iloc[x]['symbol_id']] / number[stock_dataframe.iloc[x]['symbol_id']] * number[stock_dataframe.iloc[x]['symbol_id']]
-            #     number[stock_dataframe.iloc[x]['symbol_id']] -= number[stock_dataframe.iloc[x]['symbol_id']]
+            if number[stock_dataframe.iloc[x]['symbol_id']] > 0 and stock_dataframe.iloc[x]['close'] < stock_price[stock_dataframe.iloc[x]['symbol_id']] / number[stock_dataframe.iloc[x]['symbol_id']] * 0.85:
+                # account += stock_dataframe.iloc[x]['close'] * 0.997 * number[stock_dataframe.iloc[x]['symbol_id']]
+                # stock_price[stock_dataframe.iloc[x]['symbol_id']] -= stock_price[stock_dataframe.iloc[x]['symbol_id']] / number[stock_dataframe.iloc[x]['symbol_id']] * number[stock_dataframe.iloc[x]['symbol_id']]
+                # number[stock_dataframe.iloc[x]['symbol_id']] -= number[stock_dataframe.iloc[x]['symbol_id']]
+
+                quantity = int((account + stock_price[stock_dataframe.iloc[x]['symbol_id']]) * 0.02 / stock_dataframe.iloc[x]['close'])
+                if quantity > number[stock_dataframe.iloc[x]['symbol_id']]:
+                    quantity = number[stock_dataframe.iloc[x]['symbol_id']]
+                account += stock_dataframe.iloc[x]['close'] * 0.997 * quantity
+                stock_price[stock_dataframe.iloc[x]['symbol_id']] -= stock_price[stock_dataframe.iloc[x]['symbol_id']] / number[stock_dataframe.iloc[x]['symbol_id']] * quantity
+                number[stock_dataframe.iloc[x]['symbol_id']] -= quantity
 
             if stock_dataframe.iloc[x]['buy_sell'] == -1:
                 if number[stock_dataframe.iloc[x]['symbol_id']] > 0 and stock_price[stock_dataframe.iloc[x]['symbol_id']] / number[stock_dataframe.iloc[x]['symbol_id']] * 1.01 < stock_dataframe.iloc[x]['close']:
@@ -522,10 +538,10 @@ def test():
             if number[stock_dataframe.iloc[-1]['symbol_id']] > 0:
                 pass
                 # print(stock_dataframe.iloc[x]['symbol_id'], stock_dataframe.iloc[x]['close'] / (stock_price[stock_dataframe.iloc[-1]['symbol_id']] / number[stock_dataframe.iloc[-1]['symbol_id']]) * 100)
-    for stock_dataframe in temp_list_stock_dataframe:
-        if number[stock_dataframe.iloc[-1]['symbol_id']] != 0:
-            print(stock_dataframe.iloc[-1]['symbol_id'],
-                  stock_dataframe.iloc[-1]['close'] / (number[stock_dataframe.iloc[-1]['symbol_id']] > 0 and stock_price[stock_dataframe.iloc[-1]['symbol_id']] / number[stock_dataframe.iloc[-1]['symbol_id']]))
+    # for stock_dataframe in temp_list_stock_dataframe:
+    #     if number[stock_dataframe.iloc[-1]['symbol_id']] != 0:
+    #         print(stock_dataframe.iloc[-1]['symbol_id'],
+    #               stock_dataframe.iloc[-1]['close'] / (number[stock_dataframe.iloc[-1]['symbol_id']] > 0 and stock_price[stock_dataframe.iloc[-1]['symbol_id']] / number[stock_dataframe.iloc[-1]['symbol_id']]))
     price = 0
     for stock_dataframe in list_stock_dataframe:
         if number[stock_dataframe.iloc[-1]['symbol_id']] == 0:
