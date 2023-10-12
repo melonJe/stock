@@ -26,7 +26,7 @@ def update_subscription_defensive_investor():
         value = 0
         try:
             if requests.get(f"""https://navercomp.wisereport.co.kr/company/chart/c1030001.aspx?cmp_cd={stock.symbol}&frq=Y&rpt=ISM&finGubun=MAIN&chartType=svg""",
-                            headers={'Accept': 'application/json'}).json()['chartData1']['series'][0]['data'][-2] < 10000:
+                            headers={'Accept': 'application/json'}).json()['chartData1']['series'][0]['data'][-2] < 7500:
                 continue
             page = requests.get(f"""https://comp.fnguide.com/SVO2/ASP/SVD_FinanceRatio.asp?pGB=1&gicode=A{stock.symbol}&cID=&MenuYn=Y&ReportGB=&NewMenuID=104&stkGb=701""").text
             soup = bs(page, "html.parser")
@@ -176,6 +176,9 @@ def bollinger_band(account: KoreaInvestment):
             data = pd.DataFrame(StockPrice.objects.filter(date__range=[datetime.now() - timedelta(days=365), datetime.now()], symbol=stock.symbol).order_by('date').values())
             if data.empty:
                 continue
+            data['ma200'] = data['close'].rolling(window=200).mean()  # 추가한 코드
+            data['ma150'] = data['close'].rolling(window=150).mean()  # 추가한 코드
+            data['ma50'] = data['close'].rolling(window=50).mean()  # 추가한 코드
             data['ma20'] = data['close'].rolling(window=20).mean()
             data['stddev'] = data['close'].rolling(window=20).std()
             data['upper'] = data['ma20'] + (data['stddev'] * 2)
@@ -188,14 +191,21 @@ def bollinger_band(account: KoreaInvestment):
             data['MFI10'] = 100 - 100 / (1 + data['MFR'])
             # data['decision'] = np.where(data['PB'] < 0.2 and data['MFI10'] < 20, '매수')
             # data['decision'] = np.where(data['PB'] > 0.8 and data['MFI10'] > 80, '매도')
+
+            if not (data.iloc[-1]['ma200'] < data.iloc[-1]['ma150'] < data.iloc[-1]['ma50']):  # 추가한 코드
+                continue  # 추가한 코드
+
             if data.iloc[-1]['PB'] < 0.2 and data.iloc[-1]['MFI10'] < 20:
-                decision['buy'] = stock.symbol.symbol
+                decision['buy'].add(stock.symbol.symbol)
 
         stocks = account.get_owned_stock_info()
         for stock in stocks:
             data = pd.DataFrame(StockPrice.objects.filter(date__range=[datetime.now() - timedelta(days=365), datetime.now()], symbol=stock['pdno']).order_by('date').values())
             if data.empty:
                 continue
+            data['ma200'] = data['close'].rolling(window=200).mean()  # 추가한 코드
+            data['ma150'] = data['close'].rolling(window=150).mean()  # 추가한 코드
+            data['ma50'] = data['close'].rolling(window=50).mean()  # 추가한 코드
             data['ma20'] = data['close'].rolling(window=20).mean()
             data['stddev'] = data['close'].rolling(window=20).std()
             data['upper'] = data['ma20'] + (data['stddev'] * 2)
@@ -206,8 +216,9 @@ def bollinger_band(account: KoreaInvestment):
             data['NMF'] = np.where(data['close'].diff(1) < 0, data['TP'] * data['volume'], 0)
             data['MFR'] = data['PMF'].rolling(window=10).mean() / data['NMF'].rolling(window=10).mean()
             data['MFI10'] = 100 - 100 / (1 + data['MFR'])
-            # data['decision'] = np.where(data['PB'] < 0.2 and data['MFI10'] < 20, '매수')
-            # data['decision'] = np.where(data['PB'] > 0.8 and data['MFI10'] > 80, '매도')
+            if not (data.iloc[-1]['ma200'] < data.iloc[-1]['ma150'] < data.iloc[-1]['ma50']):  # 추가한 코드
+                decision['sell'].add(stock['pdno'])  # 추가한 코드
+                continue  # 추가한 코드
             if data.iloc[-1]['PB'] > 0.8 and data.iloc[-1]['MFI10'] > 80:
                 decision['sell'].add(stock['pdno'])
     except:
