@@ -368,19 +368,17 @@ def negative_profit_warning():
         for item in inquire_stock:
             if item["evlu_pfls_rt"] > -12:
                 continue
-            if item["pdno"] not in alert.keys():
-                discord.send_message(f"""{item["prdt_name"]} 수익률 {item["evlu_pfls_rt"]}%""")
-            elif item["evlu_pfls_rt"] < alert[item["pdno"]]:
-                if item["evlu_pfls_rt"] < -15:
-                    owned_stock = account.get_owned_stock_info(item["pdno"])
-                    volume = math.ceil(inquire_balance["tot_evlu_amt"] * 0.5 / owned_stock['evlu_amt'])  # 총 평가 금액의 2% 씩 판매
-                    if volume > owned_stock["ord_psbl_qty"]:  # 주문 가능 수량을 넘길 경우 주문 수량 수정
-                        volume = owned_stock["ord_psbl_qty"]
-                    discord.send_message(f"""{item["prdt_name"]} 수익률 {item["evlu_pfls_rt"]}% {volume} 판매 권유""")
-                    StockSubscription.objects.filter(symbol=item["pdno"]).delete()
-                else:
+            elif item["evlu_pfls_rt"] > -15:
+                if item["pdno"] not in alert.keys() or item["evlu_pfls_rt"] < alert[item["pdno"]]:
                     discord.send_message(f"""{item["prdt_name"]} 수익률 {item["evlu_pfls_rt"]}%""")
-            alert[item["pdno"]] = math.floor(item["evlu_pfls_rt"])
+                    alert[item["pdno"]] = math.floor(item["evlu_pfls_rt"])
+            else:
+                owned_stock = account.get_owned_stock_info(item["pdno"])
+                volume = math.ceil(inquire_balance["tot_evlu_amt"] * 0.5 / owned_stock['evlu_amt'])  # 총 평가 금액의 2% 씩 판매
+                if volume > owned_stock["ord_psbl_qty"]:  # 주문 가능 수량을 넘길 경우 주문 수량 수정
+                    volume = owned_stock["ord_psbl_qty"]
+                discord.send_message(f"""{item["prdt_name"]} 수익률 {item["evlu_pfls_rt"]}% {volume} 판매 권유""")
+                StockSubscription.objects.filter(symbol=item["pdno"]).delete()
 
         sleep(10 * 60)
 
