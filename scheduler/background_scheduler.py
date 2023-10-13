@@ -306,14 +306,14 @@ def stock_automated_trading_system(account: KoreaInvestment):  # 파이썬 주�
     return decision
 
 
-def korea_investment_trading():
+def korea_investment_sell_trading():
     account = KoreaInvestment(app_key=setting_env.APP_KEY, app_secret=setting_env.APP_SECRET, account_number=setting_env.ACCOUNT_NUMBER, account_cord=setting_env.ACCOUNT_CORD)
     if account.check_holiday():
         return
     buy = bollinger_band(account)['buy']  # decision = {'buy': set(), 'sell': set()}
     inquire_balance = account.get_account_info()
     dnca_tot_amt = inquire_balance["dnca_tot_amt"]  # 사용 가능한 금액 계산 (예수금총금액)
-    while time(8, 40, 0) < datetime.now().time() < time(9, 0, 0) and buy:
+    while time(9, 0, 0) <= datetime.now().time() < time(10, 0, 0) and buy:
         for symbol in buy.copy():
             previous_stock = StockPrice.objects.filter(symbol=symbol).order_by('-date').first()
             volume = int(inquire_balance["tot_evlu_amt"] * 0.02 / previous_stock.close)  # 총 평가 금액의 2% 씩 구매
@@ -329,8 +329,8 @@ def korea_investment_trading():
         sleep(60)
     if setting_env.SIMULATE:
         return
-    while datetime.now().time() < time(10, 30, 0):
-        sleep(60)
+    while datetime.now().time() < time(11, 0, 0):
+        sleep(5 * 60)
     correctable_stock = account.get_cancellable_or_correctable_stock()
     for item in correctable_stock:
         if item['sll_buy_dvsn_cd'] == '02':  # 매수 주문만 변경
@@ -347,25 +347,8 @@ def negative_profit_warning():
     stocks = [stock.symbol for stock in StockSubscription.objects.select_related("symbol").all()]
     sell.extend(list(owned_stock['pdno'] for owned_stock in account.get_owned_stock_info() if owned_stock['pdno'] not in stocks))
 
-    while time(9, 0, 0) < datetime.now().time() < time(15, 30, 0):
+    while time(9, 0, 0) <= datetime.now().time() < time(15, 30, 0):
         inquire_stock = account.get_owned_stock_info()
-        # 알림 loop
-        for item in inquire_stock:
-            if item["evlu_pfls_rt"] > -4:
-                continue
-            if item["pdno"] not in alert.keys():
-                discord.send_message(f"""{item["prdt_name"]} 수익률 {item["evlu_pfls_rt"]}%""")
-            elif item["evlu_pfls_rt"] < alert[item["pdno"]]:
-                if item["evlu_pfls_rt"] < -15:
-                    owned_stock = account.get_owned_stock_info(item["pdno"])
-                    volume = math.ceil(inquire_balance["tot_evlu_amt"] * 0.02 / owned_stock['evlu_amt'])  # 총 평가 금액의 2% 씩 판매
-                    if volume > owned_stock["ord_psbl_qty"]:  # 주문 가능 수량을 넘길 경우 주문 수량 수정
-                        volume = owned_stock["ord_psbl_qty"]
-                    discord.send_message(f"""{item["prdt_name"]} 수익률 {item["evlu_pfls_rt"]}% {volume} 판매 권유""")
-                    StockSubscription.objects.filter(symbol=item["pdno"]).delete()
-                else:
-                    discord.send_message(f"""{item["prdt_name"]} 수익률 {item["evlu_pfls_rt"]}%""")
-            alert[item["pdno"]] = math.floor(item["evlu_pfls_rt"])
 
         # 판매 loop
         for symbol in sell.copy():
@@ -380,6 +363,24 @@ def negative_profit_warning():
                 volume = owned_stock["ord_psbl_qty"]
             if volume < 1 or account.sell(stock=symbol, price=owned_stock["prpr"], volume=volume):
                 sell.remove(symbol)
+
+        # 알림 loop
+        for item in inquire_stock:
+            if item["evlu_pfls_rt"] > -12:
+                continue
+            if item["pdno"] not in alert.keys():
+                discord.send_message(f"""{item["prdt_name"]} 수익률 {item["evlu_pfls_rt"]}%""")
+            elif item["evlu_pfls_rt"] < alert[item["pdno"]]:
+                if item["evlu_pfls_rt"] < -15:
+                    owned_stock = account.get_owned_stock_info(item["pdno"])
+                    volume = math.ceil(inquire_balance["tot_evlu_amt"] * 0.02 / owned_stock['evlu_amt'])  # 총 평가 금액의 2% 씩 판매
+                    if volume > owned_stock["ord_psbl_qty"]:  # 주문 가능 수량을 넘길 경우 주문 수량 수정
+                        volume = owned_stock["ord_psbl_qty"]
+                    discord.send_message(f"""{item["prdt_name"]} 수익률 {item["evlu_pfls_rt"]}% {volume} 판매 권유""")
+                    StockSubscription.objects.filter(symbol=item["pdno"]).delete()
+                else:
+                    discord.send_message(f"""{item["prdt_name"]} 수익률 {item["evlu_pfls_rt"]}%""")
+            alert[item["pdno"]] = math.floor(item["evlu_pfls_rt"])
 
         sleep(10 * 60)
 
@@ -420,16 +421,16 @@ def start():
     )
 
     scheduler.add_job(
-        korea_investment_trading,
-        trigger=CronTrigger(day_of_week="mon-fri", hour=8, minute=45),
-        id="korea_investment_trading",
+        korea_investment_sell_trading,
+        trigger=CronTrigger(day_of_week="mon-fri", hour=9, minute=0),
+        id="korea_investment_sell_trading",
         max_instances=1,
         replace_existing=True,
     )
 
     scheduler.add_job(
         negative_profit_warning,
-        trigger=CronTrigger(day_of_week="mon-fri", hour=9, minute=5),
+        trigger=CronTrigger(day_of_week="mon-fri", hour=9, minute=0),
         id="negative_profit_warning",
         max_instances=1,
         replace_existing=True,
