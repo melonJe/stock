@@ -316,7 +316,7 @@ def korea_investment_sell_trading():
     while time(9, 0, 0) <= datetime.now().time() < time(10, 0, 0) and buy:
         for symbol in buy.copy():
             previous_stock = StockPrice.objects.filter(symbol=symbol).order_by('-date').first()
-            volume = int(inquire_balance["tot_evlu_amt"] * 0.02 / previous_stock.close)  # 총 평가 금액의 2% 씩 구매
+            volume = int(inquire_balance["tot_evlu_amt"] * 0.05 / previous_stock.close)  # 총 평가 금액의 5% 씩 구매
             volume = 1 if volume == 0 else volume  # 구매 수량이 0일 경우 1로 수정
             volume = min(volume, int(dnca_tot_amt / previous_stock.close), 100)  # 구매 수량이 사용 가능한 금액을 초과 하는지, 100주를 넘는지 판단
             inquire_stock = account.get_owned_stock_info(symbol)
@@ -358,7 +358,7 @@ def negative_profit_warning():
                 continue
             if owned_stock["evlu_pfls_rt"] <= 1:  # 수익률이 1% 이하면 다음 주식으로 넘어감
                 continue
-            volume = math.ceil(inquire_balance["tot_evlu_amt"] * 0.02 / owned_stock['evlu_amt'])  # 총 평가 금액의 2% 씩 판매
+            volume = math.ceil(inquire_balance["tot_evlu_amt"] * 0.05 / owned_stock['evlu_amt'])  # 총 평가 금액의 5% 씩 판매
             if volume > owned_stock["ord_psbl_qty"]:  # 주문 가능 수량을 넘길 경우 주문 수량 수정
                 volume = owned_stock["ord_psbl_qty"]
             if volume < 1 or account.sell(stock=symbol, price=owned_stock["prpr"], volume=volume):
@@ -373,7 +373,7 @@ def negative_profit_warning():
             elif item["evlu_pfls_rt"] < alert[item["pdno"]]:
                 if item["evlu_pfls_rt"] < -15:
                     owned_stock = account.get_owned_stock_info(item["pdno"])
-                    volume = math.ceil(inquire_balance["tot_evlu_amt"] * 0.02 / owned_stock['evlu_amt'])  # 총 평가 금액의 2% 씩 판매
+                    volume = math.ceil(inquire_balance["tot_evlu_amt"] * 0.5 / owned_stock['evlu_amt'])  # 총 평가 금액의 2% 씩 판매
                     if volume > owned_stock["ord_psbl_qty"]:  # 주문 가능 수량을 넘길 경우 주문 수량 수정
                         volume = owned_stock["ord_psbl_qty"]
                     discord.send_message(f"""{item["prdt_name"]} 수익률 {item["evlu_pfls_rt"]}% {volume} 판매 권유""")
