@@ -306,21 +306,28 @@ def stock_automated_trading_system(account: KoreaInvestment):  # 파이썬 주�
 
 
 def korea_investment_sell_trading():
+    print('korea_investment_sell_trading')
     account = KoreaInvestment(app_key=setting_env.APP_KEY, app_secret=setting_env.APP_SECRET, account_number=setting_env.ACCOUNT_NUMBER, account_cord=setting_env.ACCOUNT_CORD)
     if account.check_holiday():
+        print(f'{datetime.now()} 휴장일')
         return
     buy = bollinger_band(account)['buy']  # decision = {'buy': set(), 'sell': set()}
     inquire_balance = account.get_account_info()
     dnca_tot_amt = inquire_balance["dnca_tot_amt"]  # 사용 가능한 금액 계산 (예수금총금액)
-    while time(9, 0, 0) <= datetime.now().time() < time(10, 0, 0) and buy:
+    print(f'사용 가능한 금액 {dnca_tot_amt}원')
+    while datetime.now().time() < time(10, 0, 0) and buy:
         for symbol in buy.copy():
+            print(f'{symbol} 주식')
             previous_stock = StockPrice.objects.filter(symbol=symbol).order_by('-date').first()
             volume = int(inquire_balance["tot_evlu_amt"] * 0.05 / previous_stock.close)  # 총 평가 금액의 5% 씩 구매
+            print(f'총 평가금액의 5% {volume}')
             volume = 1 if volume == 0 else volume  # 구매 수량이 0일 경우 1로 수정
             volume = min(volume, int(dnca_tot_amt / previous_stock.close), 100)  # 구매 수량이 사용 가능한 금액을 초과 하는지, 100주를 넘는지 판단
+            print(f'구매 수량이 사용 가능한 금액을 초과 하는지, 100주를 넘는지 판단 {volume}')
             inquire_stock = account.get_owned_stock_info(symbol)
             if volume > 0 and inquire_stock:  # 구매 수량이 0보다 크고 보유 중인 주식일 경우
                 volume = min(volume, int((inquire_balance["tot_evlu_amt"] * 0.2 - inquire_stock["pchs_amt"]) / previous_stock.close), 1000 - inquire_stock["hldg_qty"])  # 주식 보유 비중이 20%를, 보유수량이 1000주를 넘지 않도록 구매 수량 수정
+                print(f'주식 보유 비중이 20%를, 보유수량이 1000주를 넘지 않도록 구매 수량 수정 {volume}')
             if volume < 1 or account.buy(stock=symbol, price=previous_stock.close, volume=volume):
                 dnca_tot_amt -= previous_stock.close * volume
                 buy.discard(symbol)
@@ -346,7 +353,7 @@ def negative_profit_warning():
     stocks = [stock.symbol for stock in StockSubscription.objects.select_related("symbol").all()]
     sell.extend(list(owned_stock['pdno'] for owned_stock in account.get_owned_stock_info() if owned_stock['pdno'] not in stocks))
 
-    while time(9, 0, 0) <= datetime.now().time() < time(15, 30, 0):
+    while datetime.now().time() < time(15, 30, 0):
         inquire_stock = account.get_owned_stock_info()
 
         # 판매 loop
