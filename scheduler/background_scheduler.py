@@ -426,7 +426,7 @@ def start():
 
     scheduler.add_job(
         korea_investment_sell_trading,
-        trigger=CronTrigger(day_of_week="mon-fri", hour=9, minute=0),
+        trigger=CronTrigger(day_of_week="mon-fri", hour=9, minute=0, second=15),
         id="korea_investment_sell_trading",
         max_instances=1,
         replace_existing=True,
@@ -434,7 +434,7 @@ def start():
 
     scheduler.add_job(
         negative_profit_warning,
-        trigger=CronTrigger(day_of_week="mon-fri", hour=9, minute=0),
+        trigger=CronTrigger(day_of_week="mon-fri", hour=9, minute=0, second=15),
         id="negative_profit_warning",
         max_instances=1,
         replace_existing=True,
