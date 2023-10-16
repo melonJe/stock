@@ -326,8 +326,8 @@ def korea_investment_sell_trading():
             print(f'구매 수량이 사용 가능한 금액을 초과 하는지, 100주를 넘는지 판단 {volume}')
             inquire_stock = account.get_owned_stock_info(symbol)
             if volume > 0 and inquire_stock:  # 구매 수량이 0보다 크고 보유 중인 주식일 경우
-                volume = min(volume, int((inquire_balance["tot_evlu_amt"] * 0.2 - inquire_stock["pchs_amt"]) / previous_stock.close), 1000 - inquire_stock["hldg_qty"])  # 주식 보유 비중이 20%를, 보유수량이 1000주를 넘지 않도록 구매 수량 수정
-                print(f'주식 보유 비중이 20%를, 보유수량이 1000주를 넘지 않도록 구매 수량 수정 {volume}')
+                volume = min(volume, int((inquire_balance["tot_evlu_amt"] * 0.15 - inquire_stock["pchs_amt"]) / previous_stock.close), 1000 - inquire_stock["hldg_qty"])  # 주식 보유 비중이 15%를, 보유수량이 1000주를 넘지 않도록 구매 수량 수정
+                print(f'주식 보유 비중이 15%를, 보유수량이 1000주를 넘지 않도록 구매 수량 수정 {volume}')
             if volume < 1 or account.buy(stock=symbol, price=previous_stock.close, volume=volume):
                 dnca_tot_amt -= previous_stock.close * volume
                 buy.discard(symbol)
