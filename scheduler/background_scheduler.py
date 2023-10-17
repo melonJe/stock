@@ -319,7 +319,7 @@ def korea_investment_buy_trading():
         for symbol in buy.copy():
             print(f'{symbol} 주식')
             previous_stock = StockPrice.objects.filter(symbol=symbol).order_by('-date').first()
-            volume = int(inquire_balance["tot_evlu_amt"] * 0.05 / previous_stock.close)  # 총 평가 금액의 5% 씩 구매
+            volume = int(inquire_balance["tot_evlu_amt"] * 0.03 / previous_stock.close)  # 총 평가 금액의 3% 씩 구매
             print(f'총 평가금액의 5% {volume}')
             volume = 1 if volume == 0 else volume  # 구매 수량이 0일 경우 1로 수정
             volume = min(volume, int(dnca_tot_amt / previous_stock.close), 100)  # 구매 수량이 사용 가능한 금액을 초과 하는지, 100주를 넘는지 판단
@@ -364,7 +364,7 @@ def negative_profit_warning():
             continue
         if previous_stock.close <= owned_stock["pchs_avg_pric"] * 1.01:  # 수익률이 1% 이하면 다음 주식으로 넘어감
             continue
-        volume = math.ceil(inquire_balance["tot_evlu_amt"] * 0.05 / owned_stock['evlu_amt'])  # 총 평가 금액의 5% 씩 판매
+        volume = math.ceil(inquire_balance["tot_evlu_amt"] * 0.03 / owned_stock['evlu_amt'])  # 총 평가 금액의 3% 씩 판매
         if volume > owned_stock["ord_psbl_qty"]:  # 주문 가능 수량을 넘길 경우 주문 수량 수정
             volume = owned_stock["ord_psbl_qty"]
         if volume < 1 or account.sell(stock=symbol, price=previous_stock.close, volume=volume):
@@ -384,7 +384,7 @@ def negative_profit_warning():
                 continue
             if owned_stock["evlu_pfls_rt"] <= 1:  # 수익률이 1% 이하면 다음 주식으로 넘어감
                 continue
-            volume = math.ceil(inquire_balance["tot_evlu_amt"] * 0.05 / owned_stock['evlu_amt'])  # 총 평가 금액의 5% 씩 판매
+            volume = math.ceil(inquire_balance["tot_evlu_amt"] * 0.03 / owned_stock['evlu_amt'])  # 총 평가 금액의 3% 씩 판매
             if volume > owned_stock["ord_psbl_qty"]:  # 주문 가능 수량을 넘길 경우 주문 수량 수정
                 volume = owned_stock["ord_psbl_qty"]
             if volume < 1 or account.sell(stock=symbol, price=owned_stock["prpr"], volume=volume):
