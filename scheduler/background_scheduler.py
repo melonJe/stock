@@ -305,7 +305,7 @@ def stock_automated_trading_system(account: KoreaInvestment):  # 파이썬 주�
     return decision
 
 
-def korea_investment_sell_trading():
+def korea_investment_buy_trading():
     print('korea_investment_sell_trading')
     account = KoreaInvestment(app_key=setting_env.APP_KEY, app_secret=setting_env.APP_SECRET, account_number=setting_env.ACCOUNT_NUMBER, account_cord=setting_env.ACCOUNT_CORD)
     if account.check_holiday():
@@ -349,9 +349,28 @@ def negative_profit_warning():
     if account.check_holiday():
         return
     inquire_balance = account.get_account_info()
+    print(inquire_balance)
     sell = list(bollinger_band(account)["sell"])
-    stocks = [stock.symbol for stock in StockSubscription.objects.select_related("symbol").all()]
+    stocks = [stock.symbol.symbol for stock in StockSubscription.objects.select_related("symbol").all()]
     sell.extend(list(owned_stock['pdno'] for owned_stock in account.get_owned_stock_info() if owned_stock['pdno'] not in stocks))
+
+    # 전일 종가 판매
+    for symbol in sell.copy():
+        previous_stock = StockPrice.objects.filter(symbol=symbol).order_by('-date').first()
+        owned_stock = account.get_owned_stock_info(symbol)
+        print(owned_stock)
+        if (not owned_stock) or owned_stock["ord_psbl_qty"] == 0:  # 가지고 있지 않거나 주문 가능한 수량이 없으면 다음 주식으로 넘어감
+            sell.remove(symbol)
+            continue
+        if previous_stock.close <= owned_stock["pchs_avg_pric"] * 1.01:  # 수익률이 1% 이하면 다음 주식으로 넘어감
+            continue
+        volume = math.ceil(inquire_balance["tot_evlu_amt"] * 0.05 / owned_stock['evlu_amt'])  # 총 평가 금액의 5% 씩 판매
+        if volume > owned_stock["ord_psbl_qty"]:  # 주문 가능 수량을 넘길 경우 주문 수량 수정
+            volume = owned_stock["ord_psbl_qty"]
+        if volume < 1 or account.sell(stock=symbol, price=previous_stock.close, volume=volume):
+            print(symbol, previous_stock.close, volume)
+            sell.remove(symbol)
+        sleep(1)
 
     while datetime.now().time() < time(15, 30, 0):
         inquire_stock = account.get_owned_stock_info()
@@ -359,6 +378,7 @@ def negative_profit_warning():
         # 판매 loop
         for symbol in sell.copy():
             owned_stock = account.get_owned_stock_info(symbol)
+            print(owned_stock)
             if (not owned_stock) or owned_stock["ord_psbl_qty"] == 0:  # 가지고 있지 않거나 주문 가능한 수량이 없으면 다음 주식으로 넘어감
                 sell.remove(symbol)
                 continue
@@ -368,8 +388,9 @@ def negative_profit_warning():
             if volume > owned_stock["ord_psbl_qty"]:  # 주문 가능 수량을 넘길 경우 주문 수량 수정
                 volume = owned_stock["ord_psbl_qty"]
             if volume < 1 or account.sell(stock=symbol, price=owned_stock["prpr"], volume=volume):
+                print(symbol, owned_stock["prpr"], volume)
                 sell.remove(symbol)
-
+            sleep(1)
         # 알림 loop
         for item in inquire_stock:
             if item["evlu_pfls_rt"] > -12:
@@ -425,9 +446,9 @@ def start():
     )
 
     scheduler.add_job(
-        korea_investment_sell_trading,
+        korea_investment_buy_trading,
         trigger=CronTrigger(day_of_week="mon-fri", hour=9, minute=0, second=15),
-        id="korea_investment_sell_trading",
+        id="korea_investment_buy_trading",
         max_instances=1,
         replace_existing=True,
     )
