@@ -1,3 +1,4 @@
+import threading
 import FinanceDataReader
 import math
 import numpy as np
@@ -305,53 +306,14 @@ def stock_automated_trading_system(account: KoreaInvestment):  # 파이썬 주�
     return decision
 
 
-def korea_investment_buy_trading():
-    print('korea_investment_sell_trading')
-    account = KoreaInvestment(app_key=setting_env.APP_KEY, app_secret=setting_env.APP_SECRET, account_number=setting_env.ACCOUNT_NUMBER, account_cord=setting_env.ACCOUNT_CORD)
-    if account.check_holiday():
-        print(f'{datetime.now()} 휴장일')
-        return
-    buy = bollinger_band(account)['buy']  # decision = {'buy': set(), 'sell': set()}
-    inquire_balance = account.get_account_info()
-    dnca_tot_amt = inquire_balance["dnca_tot_amt"]  # 사용 가능한 금액 계산 (예수금총금액)
-    print(f'사용 가능한 금액 {dnca_tot_amt}원')
-    while datetime.now().time() < time(10, 0, 0) and buy:
-        for symbol in buy.copy():
-            print(f'{symbol} 주식')
-            previous_stock = StockPrice.objects.filter(symbol=symbol).order_by('-date').first()
-            volume = int(inquire_balance["tot_evlu_amt"] * 0.03 / previous_stock.close)  # 총 평가 금액의 3% 씩 구매
-            print(f'총 평가금액의 3% {volume}')
-            volume = 1 if volume == 0 else volume  # 구매 수량이 0일 경우 1로 수정
-            volume = min(volume, int(dnca_tot_amt / previous_stock.close), 100)  # 구매 수량이 사용 가능한 금액을 초과 하는지, 100주를 넘는지 판단
-            print(f'구매 수량이 사용 가능한 금액을 초과 하는지, 100주를 넘는지 판단 {volume}')
-            inquire_stock = account.get_owned_stock_info(symbol)
-            if volume > 0 and inquire_stock:  # 구매 수량이 0보다 크고 보유 중인 주식일 경우
-                volume = min(volume, int((inquire_balance["tot_evlu_amt"] * 0.15 - inquire_stock["pchs_amt"]) / previous_stock.close), 1000 - inquire_stock["hldg_qty"])  # 주식 보유 비중이 15%를, 보유수량이 1000주를 넘지 않도록 구매 수량 수정
-                print(f'주식 보유 비중이 15%를, 보유수량이 1000주를 넘지 않도록 구매 수량 수정 {volume}')
-            if volume < 1 or account.buy(stock=symbol, price=previous_stock.close, volume=volume):
-                dnca_tot_amt -= previous_stock.close * volume
-                buy.discard(symbol)
-            sleep(1)
-        sleep(60)
-    if setting_env.SIMULATE:
-        return
-    while datetime.now().time() < time(11, 0, 0):
-        sleep(5 * 60)
-    correctable_stock = account.get_cancellable_or_correctable_stock()
-    for item in correctable_stock:
-        if item['sll_buy_dvsn_cd'] == '02':  # 매수 주문만 변경
-            account.modify_stock_order(order_no=item['odno'], volume=item['psbl_qty'])
-
-
-def negative_profit_warning():
+def korea_investment_trading_sell(account: KoreaInvestment):
     alert = {}
-    account = KoreaInvestment(app_key=setting_env.APP_KEY, app_secret=setting_env.APP_SECRET, account_number=setting_env.ACCOUNT_NUMBER, account_cord=setting_env.ACCOUNT_CORD)
     if account.check_holiday():
         return
     inquire_balance = account.get_account_info()
     print(inquire_balance)
     sell = list(bollinger_band(account)["sell"])
-    stocks = [stock.symbol.symbol for stock in StockSubscription.objects.select_related("symbol").all()]
+    stocks = set([stock.symbol.symbol for stock in StockSubscription.objects.select_related("symbol").all()])
     sell.extend(list(owned_stock['pdno'] for owned_stock in account.get_owned_stock_info() if owned_stock['pdno'] not in stocks))
 
     # 전일 종가 판매
@@ -391,6 +353,7 @@ def negative_profit_warning():
                 print(symbol, owned_stock["prpr"], volume)
                 sell.remove(symbol)
             sleep(1)
+
         # 알림 loop
         for item in inquire_stock:
             if item["evlu_pfls_rt"] > -12:
@@ -406,8 +369,51 @@ def negative_profit_warning():
                     volume = owned_stock["ord_psbl_qty"]
                 discord.send_message(f"""{item["prdt_name"]} 수익률 {item["evlu_pfls_rt"]}% {volume} 판매 권유""")
                 StockSubscription.objects.filter(symbol=item["pdno"]).delete()
-
         sleep(10 * 60)
+
+
+def korea_investment_trading_buy(account: KoreaInvestment):
+    if account.check_holiday():
+        print(f'{datetime.now()} 휴장일')
+        return
+    buy = bollinger_band(account)['buy']  # decision = {'buy': set(), 'sell': set()}
+    inquire_balance = account.get_account_info()
+    dnca_tot_amt = inquire_balance["dnca_tot_amt"]  # 사용 가능한 금액 계산 (예수금총금액)
+    print(f'사용 가능한 금액 {dnca_tot_amt}원')
+    while datetime.now().time() < time(10, 0, 0) and buy:
+        for symbol in buy.copy():
+            print(f'{symbol} 주식')
+            previous_stock = StockPrice.objects.filter(symbol=symbol).order_by('-date').first()
+            volume = int(inquire_balance["tot_evlu_amt"] * 0.03 / previous_stock.close)  # 총 평가 금액의 3% 씩 구매
+            print(f'총 평가금액의 3% {volume}')
+            volume = 1 if volume == 0 else volume  # 구매 수량이 0일 경우 1로 수정
+            volume = min(volume, int(dnca_tot_amt / previous_stock.close), 100)  # 구매 수량이 사용 가능한 금액을 초과 하는지, 100주를 넘는지 판단
+            print(f'구매 수량이 사용 가능한 금액을 초과 하는지, 100주를 넘는지 판단 {volume}')
+            inquire_stock = account.get_owned_stock_info(symbol)
+            if volume > 0 and inquire_stock:  # 구매 수량이 0보다 크고 보유 중인 주식일 경우
+                volume = min(volume, int((inquire_balance["tot_evlu_amt"] * 0.15 - inquire_stock["pchs_amt"]) / previous_stock.close), 1000 - inquire_stock["hldg_qty"])  # 주식 보유 비중이 15%를, 보유수량이 1000주를 넘지 않도록 구매 수량 수정
+                print(f'주식 보유 비중이 15%를, 보유수량이 1000주를 넘지 않도록 구매 수량 수정 {volume}')
+            if volume < 1 or account.buy(stock=symbol, price=previous_stock.close, volume=volume):
+                dnca_tot_amt -= previous_stock.close * volume
+                buy.discard(symbol)
+            sleep(1)
+        sleep(60)
+    if setting_env.SIMULATE:
+        return
+    while datetime.now().time() < time(11, 0, 0):
+        sleep(5 * 60)
+    correctable_stock = account.get_cancellable_or_correctable_stock()
+    for item in correctable_stock:
+        if item['sll_buy_dvsn_cd'] == '02':  # 매수 주문만 변경
+            account.modify_stock_order(order_no=item['odno'], volume=item['psbl_qty'])
+
+
+def korea_investment_trading():
+    account = KoreaInvestment(app_key=setting_env.APP_KEY, app_secret=setting_env.APP_SECRET, account_number=setting_env.ACCOUNT_NUMBER, account_cord=setting_env.ACCOUNT_CORD)
+    sell = threading.Thread(target=korea_investment_trading_sell, args=(account,))
+    buy = threading.Thread(target=korea_investment_trading_buy, args=(account,))
+    sell.start()
+    buy.start()
 
 
 def start():
@@ -446,17 +452,9 @@ def start():
     )
 
     scheduler.add_job(
-        korea_investment_buy_trading,
+        korea_investment_trading,
         trigger=CronTrigger(day_of_week="mon-fri", hour=9, minute=0, second=15),
-        id="korea_investment_buy_trading",
-        max_instances=1,
-        replace_existing=True,
-    )
-
-    scheduler.add_job(
-        negative_profit_warning,
-        trigger=CronTrigger(day_of_week="mon-fri", hour=9, minute=0, second=15),
-        id="negative_profit_warning",
+        id="korea_investment_trading",
         max_instances=1,
         replace_existing=True,
     )
@@ -473,97 +471,3 @@ def start():
         scheduler.start()  # 없으면 동작하지 않습니다.
     except KeyboardInterrupt:
         scheduler.shutdown()
-
-
-def test():
-    pd.set_option('display.max_rows', None)
-    # stocks = Stock.objects.all()
-    stocks = StockSubscription.objects.select_related("symbol").all()
-    # stocks = StockSubscription.objects.filter(email='cabs0814@naver.com').select_related("symbol").all()
-    # stocks = StockSubscription.objects.filter(email='jmayermj@gmail.com').select_related("symbol").all()
-    list_stock_dataframe = []
-    for stock in stocks:
-        data = pd.DataFrame(StockPrice.objects.filter(date__range=[datetime.now() - timedelta(days=500), datetime.now()], symbol=stock.symbol).order_by('date').values())
-        if data.empty:
-            continue
-        data['ma200'] = data['close'].rolling(window=200).mean()  # 추가한 코드
-        data['ma150'] = data['close'].rolling(window=150).mean()  # 추가한 코드
-        data['ma50'] = data['close'].rolling(window=50).mean()  # 추가한 코드
-        data['ma20'] = data['close'].rolling(window=20).mean()
-        data['stddev'] = data['close'].rolling(window=20).std()
-        data['upper'] = data['ma20'] + (data['stddev'] * 2)
-        data['lower'] = data['ma20'] - (data['stddev'] * 2)
-        data['PB'] = (data['close'] - data['lower']) / (data['upper'] - data['lower'])
-        data['TP'] = (data['high'] + data['low'] + data['close']) / 3
-        data['PMF'] = np.where(data['close'].diff(1) > 0, data['TP'] * data['volume'], 0)
-        data['NMF'] = np.where(data['close'].diff(1) < 0, data['TP'] * data['volume'], 0)
-        data['MFR'] = data['PMF'].rolling(window=10).mean() / data['NMF'].rolling(window=10).mean()
-        data['MFI10'] = 100 - 100 / (1 + data['MFR'])
-        list_stock_dataframe.append(data)
-    stock_price = {item.iloc[-1]['symbol_id']: 0 for item in list_stock_dataframe}
-    number = {item.iloc[-1]['symbol_id']: 0 for item in list_stock_dataframe}
-    account = 40000000
-    temp_list_stock_dataframe = []
-    for stock_dataframe in list_stock_dataframe:
-        stock_dataframe['buy_sell'] = 0
-        stock_dataframe.loc[(stock_dataframe['ma200'] < stock_dataframe['ma150']) & (stock_dataframe['ma150'] < stock_dataframe['ma50']) & (stock_dataframe['PB'] > 0.8) & (stock_dataframe['MFI10'] > 80), 'buy_sell'] = -1
-        # stock_dataframe.loc[(stock_dataframe['PB'] > 0.8) & (stock_dataframe['MFI10'] > 80), 'buy_sell'] = -1
-        stock_dataframe.loc[((stock_dataframe['ma200'] > stock_dataframe['ma150']) | (stock_dataframe['ma150'] > stock_dataframe['ma50'])) | (stock_dataframe['PB'] < 0.2) & (stock_dataframe['MFI10'] < 20), 'buy_sell'] = 1
-        # stock_dataframe.loc[(stock_dataframe['PB'] < 0.2) & (stock_dataframe['MFI10'] < 20), 'buy_sell'] = 1
-        temp_list_stock_dataframe.append(stock_dataframe[-260:])
-    temp_list_stock_dataframe = [x for x in temp_list_stock_dataframe if len(x) == 260]
-    for x in range(260):
-        for stock_dataframe in temp_list_stock_dataframe:
-            # if math.isnan(item['close']):
-            #     continue
-            # if number > 0 and stock_price / number * 0.92 > item['close']:
-            #     account += item['close'] * 0.992 * number
-            #     stock_price -= item['close'] * number
-            #     number -= number
-            if stock_dataframe.iloc[x]['buy_sell'] == 1:
-                total_stock_price = sum(stock_price.values())
-                quantity = int((account + total_stock_price) * 0.02 / stock_dataframe.iloc[x]['close'])
-                quantity = 1 if quantity == 0 else quantity
-                quantity = min(quantity, int(account / stock_dataframe.iloc[x]['close']))
-                if number[stock_dataframe.iloc[x]['symbol_id']] > 0 and quantity > 0:
-                    quantity = min(quantity, int(((account + total_stock_price) * 0.2 - stock_price[stock_dataframe.iloc[x]['symbol_id']]) / stock_dataframe.iloc[x]['close']))
-                account -= stock_dataframe.iloc[x]['close'] * 1.003 * quantity
-                stock_price[stock_dataframe.iloc[x]['symbol_id']] += stock_dataframe.iloc[x]['close'] * quantity
-                number[stock_dataframe.iloc[x]['symbol_id']] += quantity
-
-            if number[stock_dataframe.iloc[x]['symbol_id']] > 0 and stock_dataframe.iloc[x]['close'] < stock_price[stock_dataframe.iloc[x]['symbol_id']] / number[stock_dataframe.iloc[x]['symbol_id']] * 0.85:
-                # account += stock_dataframe.iloc[x]['close'] * 0.997 * number[stock_dataframe.iloc[x]['symbol_id']]
-                # stock_price[stock_dataframe.iloc[x]['symbol_id']] -= stock_price[stock_dataframe.iloc[x]['symbol_id']] / number[stock_dataframe.iloc[x]['symbol_id']] * number[stock_dataframe.iloc[x]['symbol_id']]
-                # number[stock_dataframe.iloc[x]['symbol_id']] -= number[stock_dataframe.iloc[x]['symbol_id']]
-
-                quantity = int((account + stock_price[stock_dataframe.iloc[x]['symbol_id']]) * 0.02 / stock_dataframe.iloc[x]['close'])
-                if quantity > number[stock_dataframe.iloc[x]['symbol_id']]:
-                    quantity = number[stock_dataframe.iloc[x]['symbol_id']]
-                account += stock_dataframe.iloc[x]['close'] * 0.997 * quantity
-                stock_price[stock_dataframe.iloc[x]['symbol_id']] -= stock_price[stock_dataframe.iloc[x]['symbol_id']] / number[stock_dataframe.iloc[x]['symbol_id']] * quantity
-                number[stock_dataframe.iloc[x]['symbol_id']] -= quantity
-
-            if stock_dataframe.iloc[x]['buy_sell'] == -1:
-                if number[stock_dataframe.iloc[x]['symbol_id']] > 0 and stock_price[stock_dataframe.iloc[x]['symbol_id']] / number[stock_dataframe.iloc[x]['symbol_id']] * 1.01 < stock_dataframe.iloc[x]['close']:
-                    # print(stock_dataframe.iloc[x]['symbol_id'], stock_dataframe.iloc[x]['close'] / (stock_price[stock_dataframe.iloc[-1]['symbol_id']] / number[stock_dataframe.iloc[-1]['symbol_id']]) * 100)
-                    quantity = int((account + stock_price[stock_dataframe.iloc[x]['symbol_id']]) * 0.02 / stock_dataframe.iloc[x]['close'])
-                    if quantity > number[stock_dataframe.iloc[x]['symbol_id']]:
-                        quantity = number[stock_dataframe.iloc[x]['symbol_id']]
-                    account += stock_dataframe.iloc[x]['close'] * 0.997 * quantity
-                    stock_price[stock_dataframe.iloc[x]['symbol_id']] -= stock_price[stock_dataframe.iloc[x]['symbol_id']] / number[stock_dataframe.iloc[x]['symbol_id']] * quantity
-                    number[stock_dataframe.iloc[x]['symbol_id']] -= quantity
-                else:
-                    pass
-            if number[stock_dataframe.iloc[-1]['symbol_id']] > 0:
-                pass
-                # print(stock_dataframe.iloc[x]['symbol_id'], stock_dataframe.iloc[x]['close'] / (stock_price[stock_dataframe.iloc[-1]['symbol_id']] / number[stock_dataframe.iloc[-1]['symbol_id']]) * 100)
-    # for stock_dataframe in temp_list_stock_dataframe:
-    #     if number[stock_dataframe.iloc[-1]['symbol_id']] != 0:
-    #         print(stock_dataframe.iloc[-1]['symbol_id'],
-    #               stock_dataframe.iloc[-1]['close'] / (number[stock_dataframe.iloc[-1]['symbol_id']] > 0 and stock_price[stock_dataframe.iloc[-1]['symbol_id']] / number[stock_dataframe.iloc[-1]['symbol_id']]))
-    price = 0
-    for stock_dataframe in list_stock_dataframe:
-        if number[stock_dataframe.iloc[-1]['symbol_id']] == 0:
-            continue
-        price += stock_dataframe.iloc[-1]['close'] * number[stock_dataframe.iloc[-1]['symbol_id']]
-    print(f"{price:>20.2f}, {account + price:>20.2f}")
