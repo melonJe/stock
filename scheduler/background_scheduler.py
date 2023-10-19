@@ -29,7 +29,7 @@ def update_subscription_defensive_investor():
             page = requests.get(f"""https://comp.fnguide.com/SVO2/ASP/SVD_FinanceRatio.asp?pGB=1&gicode=A{stock.symbol}&cID=&MenuYn=Y&ReportGB=&NewMenuID=104&stkGb=701""").text
             soup = BeautifulSoup(page, "html.parser")
             current_ratio = float(soup.select('tr#p_grid1_1 > td.cle')[0].text)
-            if current_ratio < 150:  # TODO 200으로 수정
+            if current_ratio < 200:
                 continue
             page = requests.get(f"""https://navercomp.wisereport.co.kr/v2/company/c1010001.aspx?cmp_cd={stock.symbol}""").text
             soup = BeautifulSoup(page, "html.parser")
