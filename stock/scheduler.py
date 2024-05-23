@@ -306,26 +306,24 @@ def update_sell_queue(ki_api: KoreaInvestmentAPI, email: Account):
 def trading_sell(ki_api: KoreaInvestmentAPI, sell: dict = dict()):
     # TODO 주식 판매 조건 공부 후 수정
     end_date = ki_api.get_nth_open_day(1)
-    subscription_stocks = set([stock.symbol.symbol for stock in Subscription.objects.select_related("symbol").all()])
-    blacklist_stocks = set([stock.symbol for stock in Blacklist.objects.all()])
-    # sell.update({owned_stock['pdno']: int(owned_stock['hldg_qty'] / 30) + 1 for owned_stock in ki_api.get_owned_stock_info() if owned_stock['pdno'] not in sell.keys()})
-    sell.update({owned_stock['pdno']: owned_stock['hldg_qty'] for owned_stock in ki_api.get_owned_stock_info() if owned_stock['pdno'] not in subscription_stocks or owned_stock['pdno'] in blacklist_stocks})
-    for symbol, volume in sell.copy().items():
-        stock = ki_api.get_owned_stock_info(symbol)
-        if (not stock) or stock["ord_psbl_qty"] == 0:  # 가지고 있지 않거나 주문 가능한 수량이 없으면 다음 주식으로 넘어감
-            continue
-        if volume == 'max' or volume > stock["ord_psbl_qty"]:  # 주문 가능 수량을 넘길 경우 주문 수량 수정
-            volume = stock["ord_psbl_qty"]
-        if volume > 0:
-            if stock["evlu_pfls_rt"] <= 0.5:  # 수익률이 0.5% 이하면 매입평균가격 * 1.0075 가격에 판매
-                korea_investment_trading_sell_reserve(ki_api, symbol=symbol, price=price_refine(price=stock["pchs_avg_pric"] * 1.0075), volume=volume, end_date=end_date)
-            else:
-                korea_investment_trading_sell_reserve(ki_api, symbol=symbol, price=stock["prpr"], volume=volume, end_date=end_date)
+    # subscription_stocks = set([stock.symbol.symbol for stock in Subscription.objects.select_related("symbol").all()])
+    # blacklist_stocks = set([stock.symbol for stock in Blacklist.objects.all()])
+    # # sell.update({owned_stock['pdno']: int(owned_stock['hldg_qty'] / 30) + 1 for owned_stock in ki_api.get_owned_stock_info() if owned_stock['pdno'] not in sell.keys()})
+    # sell.update({owned_stock['pdno']: owned_stock['hldg_qty'] for owned_stock in ki_api.get_owned_stock_info() if owned_stock['pdno'] not in subscription_stocks or owned_stock['pdno'] in blacklist_stocks})
+    # for symbol, volume in sell.copy().items():
+    #     stock = ki_api.get_owned_stock_info(symbol)
+    #     if (not stock) or stock["ord_psbl_qty"] == 0:  # 가지고 있지 않거나 주문 가능한 수량이 없으면 다음 주식으로 넘어감
+    #         continue
+    #     if volume == 'max' or volume > stock["ord_psbl_qty"]:  # 주문 가능 수량을 넘길 경우 주문 수량 수정
+    #         volume = stock["ord_psbl_qty"]
+    #     if volume > 0:
+    #         if stock["evlu_pfls_rt"] <= 0.5:  # 수익률이 0.5% 이하면 매입평균가격 * 1.0075 가격에 판매
+    #             korea_investment_trading_sell_reserve(ki_api, symbol=symbol, price=price_refine(price=stock["pchs_avg_pric"] * 1.0075), volume=volume, end_date=end_date)
+    #         else:
+    #             korea_investment_trading_sell_reserve(ki_api, symbol=symbol, price=stock["prpr"], volume=volume, end_date=end_date)
 
     queue_entries = SellQueue.objects.filter(email="cabs0814@naver.com")
-    sell_symbols = set(sell.keys())
-    entries_to_reserve = [entry for entry in queue_entries if entry.symbol not in sell_symbols]
-    for entry in entries_to_reserve:
+    for entry in queue_entries:
         korea_investment_trading_sell_reserve(ki_api, symbol=entry.symbol.symbol, price=price_refine(entry.price), volume=entry.volume, end_date=end_date)
 
 
