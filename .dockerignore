@@ -1,0 +1,16 @@
+.idea
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.env
+.env.stock
+.env.postgres
+.gitignore
+docker-build.sh
+docker-compose.yml
+nohup.out
+db.sqlite3
+venv/
+build/
+dist/
