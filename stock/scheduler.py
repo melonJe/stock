@@ -1,24 +1,25 @@
-from datetime import timedelta, datetime, time
 import math
 import threading
 import traceback
+from datetime import timedelta, datetime, time
 from time import sleep
+
 import numpy as np
 import pandas as pd
-from apscheduler.triggers.cron import CronTrigger
 from apscheduler.schedulers.background import BackgroundScheduler
+from apscheduler.triggers.cron import CronTrigger
 from django.conf import settings
 from django.db.models import Q
 from ta.volatility import AverageTrueRange
 from ta.volume import ChaikinMoneyFlowIndicator
-from stock.korea_investment.trading import korea_investment_trading_sell_reserve, korea_investment_trading_buy_reserve
+
 import stock.utils.stock_management as stock_update
 from stock import setting_env
-from stock.models import Account, SellQueue, Stock, Subscription, Blacklist, PriceHistory, StopLoss
 from stock.discord import discord
-from stock.korea_investment.api import KoreaInvestmentAPI
 from stock.dto.InquireDailyCcld import InquireDailyCcldRequestDTO
-
+from stock.korea_investment.api import KoreaInvestmentAPI
+from stock.korea_investment.trading import korea_investment_trading_sell_reserve, korea_investment_trading_buy_reserve
+from stock.models import Account, SellQueue, Stock, Subscription, Blacklist, PriceHistory, StopLoss
 
 
 # pd.set_option('display.max_rows', None)  # 모든 행 출력
@@ -44,7 +45,7 @@ def select_buy_stocks() -> dict:
         sieve = dict()
         for symbol in stocks:
             df = pd.DataFrame(PriceHistory.objects.filter(date__range=[datetime.now() - timedelta(days=550), datetime.now()], symbol=symbol).order_by('date').values())
-            if len(df) < 300:# or df.iloc[-1]['low'] < 10000:
+            if len(df) < 300:  # or df.iloc[-1]['low'] < 10000:
                 continue
 
             # 일봉데이터 주봉으로 변환
@@ -101,7 +102,7 @@ def select_buy_stocks() -> dict:
 
 #     이 함수는 현재 주식 시장 데이터를 분석하고,
 #     주식을 평가한 후 매도할 주식을 선택합니다.
-    
+
 #     반환값:
 #         dict: 키는 주식 식별자이고 값은 선택된 주식에 대한 세부 정보를 포함하는 사전입니다.
 #     """
@@ -197,11 +198,11 @@ def trading_buy(ki_api: KoreaInvestmentAPI, buy: dict):
             price = df.iloc[-1]['close']
 
             if stock:
-                if  inquire_balance["tot_evlu_amt"] * 0.25 < (stock["evlu_amt"] + price * volume):
-                    volume = int((inquire_balance["tot_evlu_amt"] * 0.25 - stock["evlu_amt"]) /price)
+                if inquire_balance["tot_evlu_amt"] * 0.25 < (stock["evlu_amt"] + price * volume):
+                    volume = int((inquire_balance["tot_evlu_amt"] * 0.25 - stock["evlu_amt"]) / price)
             else:
-                if inquire_balance["tot_evlu_amt"] * 0.25 < price * volume :
-                    volume = int(inquire_balance["tot_evlu_amt"] * 0.25  /price)
+                if inquire_balance["tot_evlu_amt"] * 0.25 < price * volume:
+                    volume = int(inquire_balance["tot_evlu_amt"] * 0.25 / price)
 
             try:
                 korea_investment_trading_buy_reserve(ki_api=ki_api, symbol=symbol, price=price, volume=int(volume * 0.1), end_date=end_date)
@@ -239,7 +240,7 @@ def update_sell_queue(ki_api: KoreaInvestmentAPI, email: Account):
         ACNT_PRDT_CD=ki_api._account_code,
         INQR_STRT_DT=today_str,
         INQR_END_DT=today_str,
-        CCLD_DVSN='01', # 체결된 주문 만
+        CCLD_DVSN='01',  # 체결된 주문 만
     )
 
     # 주식 일별 주문 체결 조회
@@ -253,7 +254,42 @@ def update_sell_queue(ki_api: KoreaInvestmentAPI, email: Account):
             price = int(trade.avg_prvs)  # 체결된 가격
             trade_type = trade.sll_buy_dvsn_cd  # 매도/매수 구분 코드 (01: 매도, 02: 매수)
 
-            if trade_type == "01":  # 매도
+            if trade_type == "02":  # 매수
+                volume_50 = int(volume * 0.5)
+                volume_30 = int(volume * 0.3)
+                volume_20 = volume - volume_50 - volume_30  # 소수점은 20%가 가져감
+                price_1_1 = price_refine(int(price * 1.1))
+                price_1_2 = price_refine(int(price * 1.2))
+                price_1_5 = price_refine(int(price * 1.5))
+
+                # 50% 부분을 1.1배 가격으로 처리
+                if volume_50 > 0:
+                    try:
+                        sell_entry_50 = SellQueue.objects.get(email=email, symbol=symbol, price=price_1_1)
+                        sell_entry_50.volume += volume_50
+                        sell_entry_50.save()
+                    except SellQueue.DoesNotExist:
+                        SellQueue.objects.create(email=email, symbol=symbol, volume=volume_50, price=price_1_1)
+
+                # 30% 부분을 1.2배 가격으로 처리
+                if volume_30 > 0:
+                    try:
+                        sell_entry_30 = SellQueue.objects.get(email=email, symbol=symbol, price=price_1_2)
+                        sell_entry_30.volume += volume_30
+                        sell_entry_30.save()
+                    except SellQueue.DoesNotExist:
+                        SellQueue.objects.create(email=email, symbol=symbol, volume=volume_30, price=price_1_2)
+
+                # 20% 부분을 1.5배 가격으로 처리
+                if volume_20 > 0:
+                    try:
+                        sell_entry_20 = SellQueue.objects.get(email=email, symbol=symbol, price=price_1_5)
+                        sell_entry_20.volume += volume_20
+                        sell_entry_20.save()
+                    except SellQueue.DoesNotExist:
+                        SellQueue.objects.create(email=email, symbol=symbol, volume=volume_20, price=price_1_5)
+
+            elif trade_type == "01":  # 매도
                 try:
                     sell_entry = SellQueue.objects.get(email=email, symbol=symbol, price=price)
                     sell_entry.volume -= volume
@@ -263,43 +299,9 @@ def update_sell_queue(ki_api: KoreaInvestmentAPI, email: Account):
                         sell_entry.save()
                 except SellQueue.DoesNotExist:
                     print(f"No entry found in sell_queue for symbol: {symbol}, email: {email}, price: {price}")
-            elif trade_type == "02":  # 매수
-                volume_50 = int(volume * 0.5)
-                volume_30 = int(volume * 0.3)
-                volume_20 = volume - volume_50 - volume_30  # 소수점은 20%가 가져감
-                price_1_1 = price_refine(int(price * 1.1))
-                price_1_2 = price_refine(int(price * 1.2))
-                price_1_5 = price_refine(int(price * 1.5))
-
-                # 50% 부분을 1.1배 가격으로 처리
-                if volume_50 <= 0:
-                    try:
-                        sell_entry_50 = SellQueue.objects.get(email=email, symbol=symbol, price=price_1_1)
-                        sell_entry_50.volume += volume_50
-                        sell_entry_50.save()
-                    except SellQueue.DoesNotExist:
-                        SellQueue.objects.create(email=email, symbol=symbol, volume=volume_50, price=price_1_1)
-
-                # 30% 부분을 1.2배 가격으로 처리
-                if volume_30 <= 0:
-                    try:
-                        sell_entry_30 = SellQueue.objects.get(email=email, symbol=symbol, price=price_1_2)
-                        sell_entry_30.volume += volume_30
-                        sell_entry_30.save()
-                    except SellQueue.DoesNotExist:
-                        SellQueue.objects.create(email=email, symbol=symbol, volume=volume_30, price=price_1_2)
-
-                # 20% 부분을 1.5배 가격으로 처리
-                if volume_20 <= 0:
-                    try:
-                        sell_entry_20 = SellQueue.objects.get(email=email, symbol=symbol, price=price_1_5)
-                        sell_entry_20.volume += volume_20
-                        sell_entry_20.save()
-                    except SellQueue.DoesNotExist:
-                        SellQueue.objects.create(email=email, symbol=symbol, volume=volume_20, price=price_1_5)
     else:
         print("Failed to retrieve sell data")
-    
+
     SellQueue.objects.filter(volume__lte=0).delete()
 
 
@@ -371,7 +373,8 @@ def korea_investment_trading():
     while datetime.now().time() < time(16, 00, 30):
         sleep(1 * 60)
 
-    # sell_stock = select_sell_stocks(ki_api)
+    update_sell_queue(ki_api, email=Account.objects.get(email='cabs0814@naver.com'))
+
     sell = threading.Thread(target=trading_sell, args=(ki_api,))
     sell.start()
     buy_stock = select_buy_stocks()
@@ -379,12 +382,11 @@ def korea_investment_trading():
     buy.start()
     # TODO profit_sell 테이블 정리 기능 추가
 
-    update_sell_queue(ki_api, email=Account.objects.get(email='cabs0814@naver.com'))
-
 
 def start():
     scheduler = BackgroundScheduler(misfire_grace_time=3600, coalesce=True, timezone=settings.TIME_ZONE)
     # ki_api = KoreaInvestmentAPI(app_key=setting_env.APP_KEY, app_secret=setting_env.APP_SECRET, account_number=setting_env.ACCOUNT_NUMBER, account_code=setting_env.ACCOUNT_CODE)
+    # update_sell_queue(ki_api, email=Account.objects.get(email='cabs0814@naver.com'))
     # stock_update.add_stock_price(start_date=datetime.now().strftime('%Y-%m-%d'), end_date=datetime.now().strftime('%Y-%m-%d'))
     # trading_buy(ki_api=ki_api, buy=select_buy_stocks())
     # trading_sell(ki_api=ki_api)
