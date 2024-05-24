@@ -131,7 +131,9 @@ class SellQueue(models.Model):
         db_table = 'sell_queue'
         app_label = 'stock_db'
         unique_together = (('symbol', 'email', 'price'),)
-        
+
+    objects = models.Manager()
+
     email = models.ForeignKey(Account, on_delete=models.DO_NOTHING, db_column='email')
     symbol = models.ForeignKey(Stock, on_delete=models.DO_NOTHING, db_column='symbol')
     volume = models.IntegerField()

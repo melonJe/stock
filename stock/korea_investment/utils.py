@@ -1,15 +1,4 @@
-from datetime import datetime
-
-
-def str_to_number(item: str):
-    """문자열을 숫자로 변환합니다."""
-    try:
-        return int(item)
-    except ValueError:
-        try:
-            return float(item)
-        except ValueError:
-            return item
+import math
 
 
 def find_nth_open_day(holiday_data, nth_day: int) -> str:
@@ -21,3 +10,26 @@ def find_nth_open_day(holiday_data, nth_day: int) -> str:
                 return key
             open_days_found += 1
     return ''
+
+
+def price_refine(price: int, number: int = 0) -> int:
+    PRICE_LEVELS = [(2000, 1), (5000, 5), (20000, 10), (50000, 50), (200000, 100), (500000, 500), (float('inf'), 1000)]
+
+    if number == 0:
+        for level_price, adjustment in PRICE_LEVELS:
+            if price < level_price or level_price == float('inf'):
+                return round(price / adjustment) * adjustment
+
+    increase = number > 0
+    number_of_adjustments = abs(number)
+
+    for _ in range(number_of_adjustments):
+        for level_price, adjustment in PRICE_LEVELS:
+            if (increase and price < level_price) or level_price == float('inf'):
+                price = (math.trunc(price / adjustment) + 1) * adjustment
+                break
+            elif (not increase and price <= level_price) or level_price == float('inf'):
+                price = (math.ceil(price / adjustment) - 1) * adjustment
+                break
+
+    return int(price)
