@@ -204,8 +204,8 @@ def update_sell_queue(ki_api: KoreaInvestmentAPI, email: Account):
     # 오늘 날짜를 기준으로 조회 데이터 생성
     today_str = datetime.now().strftime("%Y%m%d")
     request_dto = InquireDailyCcldRequestDTO(
-        CANO=ki_api._account_number,
-        ACNT_PRDT_CD=ki_api._account_code,
+        CANO=ki_api.get_account_number(),
+        ACNT_PRDT_CD=ki_api.get_account_code(),
         INQR_STRT_DT=today_str,
         INQR_END_DT=today_str,
         CCLD_DVSN='01',  # 체결된 주문 만
@@ -217,7 +217,7 @@ def update_sell_queue(ki_api: KoreaInvestmentAPI, email: Account):
     if response_data:
         # 매수 및 매도 데이터 처리
         for trade in response_data:
-            symbol = symbol = Stock.objects.get(symbol=trade.pdno)  # 주식 심볼
+            symbol = Stock.objects.get(symbol=trade.pdno)  # 주식 심볼
             volume = int(trade.tot_ccld_qty)  # 체결된 주식 수량
             price = int(trade.avg_prvs)  # 체결된 가격
             trade_type = trade.sll_buy_dvsn_cd  # 매도/매수 구분 코드 (01: 매도, 02: 매수)
@@ -273,7 +273,7 @@ def update_sell_queue(ki_api: KoreaInvestmentAPI, email: Account):
     SellQueue.objects.filter(volume__lte=0).delete()
 
 
-def trading_sell(ki_api: KoreaInvestmentAPI, sell: dict = dict()):
+def trading_sell(ki_api: KoreaInvestmentAPI):
     # TODO 주식 판매 조건 공부 후 수정
     end_date = ki_api.get_nth_open_day(1)
     # subscription_stocks = set([stock.symbol.symbol for stock in Subscription.objects.select_related("symbol").all()])
@@ -354,7 +354,6 @@ def korea_investment_trading():
 def start():
     scheduler = BackgroundScheduler(misfire_grace_time=3600, coalesce=True, timezone=settings.TIME_ZONE)
     # ki_api = KoreaInvestmentAPI(app_key=setting_env.APP_KEY, app_secret=setting_env.APP_SECRET, account_number=setting_env.ACCOUNT_NUMBER, account_code=setting_env.ACCOUNT_CODE)
-    # update_sell_queue(ki_api, email=Account.objects.get(email='cabs0814@naver.com'))
     # stock_update.add_stock_price(start_date=datetime.now().strftime('%Y-%m-%d'), end_date=datetime.now().strftime('%Y-%m-%d'))
     # trading_buy(ki_api=ki_api, buy=select_buy_stocks())
     # trading_sell(ki_api=ki_api)

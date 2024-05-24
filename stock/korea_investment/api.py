@@ -27,6 +27,12 @@ class KoreaInvestmentAPI:
         }
         self.total_holidays = {}
 
+    def get_account_number(self):
+        return self._account_number
+
+    def get_account_code(self):
+        return self._account_code
+
     def authenticate(self):
         auth_payload = {
             "grant_type": "client_credentials",
