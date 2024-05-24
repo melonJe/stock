@@ -1,4 +1,3 @@
-import math
 import threading
 import traceback
 from datetime import timedelta, datetime, time
@@ -19,11 +18,9 @@ from stock.discord import discord
 from stock.dto.InquireDailyCcld import InquireDailyCcldRequestDTO
 from stock.korea_investment.api import KoreaInvestmentAPI
 from stock.korea_investment.trading import korea_investment_trading_sell_reserve, korea_investment_trading_buy_reserve
+from stock.korea_investment.utils import price_refine
 from stock.models import Account, SellQueue, Stock, Subscription, Blacklist, PriceHistory, StopLoss
 
-
-# pd.set_option('display.max_rows', None)  # 모든 행 출력
-# pd.set_option('display.max_columns', None)  # 모든 열 출력
 
 def select_buy_stocks() -> dict:
     """
@@ -35,11 +32,8 @@ def select_buy_stocks() -> dict:
     반환값:
         dict: 키는 주식 식별자이고 값은 선택된 주식에 대한 세부 정보를 포함하는 사전입니다.
     """
-    # def select_buy_stocks (ki_api: KoreaInvestmentAPI) -> dict:
-    # inquire_balance = ki_api.get_account_info()
     result = dict()
     try:
-        # stocks = set(x['symbol'] for x in Stock.objects.all().values('symbol'))
         stocks = set(x['symbol'] for x in Subscription.objects.exclude(Q(symbol__in=Blacklist.objects.values_list('symbol', flat=True))).select_related("symbol").values('symbol'))
         buy = dict()
         sieve = dict()
@@ -72,7 +66,6 @@ def select_buy_stocks() -> dict:
 
             df['ma20'] = df['close'].rolling(window=20).mean()
             df['ma10'] = df['close'].rolling(window=10).mean()
-            # df['ma5'] = df['close'].rolling(window=5).mean()
             # 60, 20, 10, 5, close 순서대로 있지 않으면 다음 주식으로 넘어감
             if not (df.iloc[-1]['ma60'] < df.iloc[-1]['ma20'] < df.iloc[-1]['ma10'] < df.iloc[-1]['close']):
                 continue
@@ -83,7 +76,6 @@ def select_buy_stocks() -> dict:
                 df['ATR10'] = AverageTrueRange(high=df['high'].astype('float64'), low=df['low'].astype('float64'), close=df['close'].astype('float64'), window=10).average_true_range()
                 df['ATR20'] = AverageTrueRange(high=df['high'].astype('float64'), low=df['low'].astype('float64'), close=df['close'].astype('float64'), window=20).average_true_range()
                 atr = max(df.iloc[-1]['ATR5'], df.iloc[-1]['ATR10'], df.iloc[-1]['ATR20'])
-                # volume = min(int((10000000 / (100 * atr))), int(np.min(df['volume'][-5:]) / 100))  # 수량 = 계좌 잔액 / 100 / atr
                 volume = min(int((5000000 / (100 * atr))), int(np.min(df['volume'][-5:]) / 100))  # 수량 = 계좌 잔액 / 100 / atr
                 buy[symbol] = volume
                 sieve[symbol] = df.iloc[-1]['CMF']
@@ -92,7 +84,6 @@ def select_buy_stocks() -> dict:
     except Exception as e:
         traceback.print_exc()
         print(f"Error occurred: {e}")
-        # discord.error_message("stock_db\n" + str(traceback.print_exc()))
     return result
 
 
@@ -139,32 +130,9 @@ def select_buy_stocks() -> dict:
 #     return result
 
 
-def price_refine(price: int, number: int = 0) -> int:
-    PRICE_LEVELS = [(2000, 1), (5000, 5), (20000, 10), (50000, 50), (200000, 100), (500000, 500), (float('inf'), 1000)]
-
-    if number == 0:
-        for level_price, adjustment in PRICE_LEVELS:
-            if price < level_price or level_price == float('inf'):
-                return round(price / adjustment) * adjustment
-
-    increase = number > 0
-    number_of_adjustments = abs(number)
-
-    for _ in range(number_of_adjustments):
-        for level_price, adjustment in PRICE_LEVELS:
-            if (increase and price < level_price) or level_price == float('inf'):
-                price = (math.trunc(price / adjustment) + 1) * adjustment
-                break
-            elif (not increase and price <= level_price) or level_price == float('inf'):
-                price = (math.ceil(price / adjustment) - 1) * adjustment
-                break
-
-    return int(price)
-
-
 def trading_buy(ki_api: KoreaInvestmentAPI, buy: dict):
     try:
-        inquire_balance = ki_api.get_account_info()
+        account = ki_api.get_account_info()
     except Exception as e:
         traceback.print_exc()
         print(f"Error occurred while getting account info: {e}")
@@ -198,11 +166,11 @@ def trading_buy(ki_api: KoreaInvestmentAPI, buy: dict):
             price = df.iloc[-1]['close']
 
             if stock:
-                if inquire_balance["tot_evlu_amt"] * 0.25 < (stock["evlu_amt"] + price * volume):
-                    volume = int((inquire_balance["tot_evlu_amt"] * 0.25 - stock["evlu_amt"]) / price)
+                if int(account.tot_evlu_amt) * 0.25 < (int(stock.evlu_amt) + price * volume):
+                    volume = int((int(account.tot_evlu_amt) * 0.25 - int(stock.evlu_amt)) / price)
             else:
-                if inquire_balance["tot_evlu_amt"] * 0.25 < price * volume:
-                    volume = int(inquire_balance["tot_evlu_amt"] * 0.25 / price)
+                if int(account.tot_evlu_amt) * 0.25 < price * volume:
+                    volume = int(int(account.tot_evlu_amt) * 0.25 / price)
 
             try:
                 korea_investment_trading_buy_reserve(ki_api=ki_api, symbol=symbol, price=price, volume=int(volume * 0.1), end_date=end_date)
@@ -335,20 +303,20 @@ def stop_loss_notify(ki_api: KoreaInvestmentAPI):
         owned_stock = ki_api.get_owned_stock_info()
         for item in owned_stock:
             try:
-                if item["pdno"] in alert:
+                if item.pdno in alert:
                     continue
-                stock = StopLoss.objects.filter(symbol=item["pdno"]).first()
+                stock = StopLoss.objects.filter(symbol=item.pdno).first()
                 if not stock:
-                    stock_update.stop_loss_insert(item["pdno"])
+                    stock_update.stop_loss_insert(item.pdno)
                     continue
-                if stock.price < item["prpr"]:
+                if stock.price < int(item.prpr):
                     continue
                 discord.send_message(f"{item['prdt_name']} 판매 권유")
                 print(f"{item['prdt_name']} 판매 권유")
-                Subscription.objects.filter(symbol=item["pdno"]).delete()
-                alert.add(item["pdno"])
+                Subscription.objects.filter(symbol=item.pdno).delete()
+                alert.add(item.pdno)
             except Exception as e:
-                print(f"Error processing item {item['pdno']}: {e}")
+                print(f"Error processing item {item.pdno}: {e}")
                 traceback.print_exc()
 
         sleep(1 * 60)
@@ -368,7 +336,7 @@ def korea_investment_trading():
 
     stock_update.add_stock_price(start_date=datetime.now().strftime('%Y-%m-%d'), end_date=datetime.now().strftime('%Y-%m-%d'))
     for stock in ki_api.get_owned_stock_info():
-        stock_update.stop_loss_insert(stock['pdno'])
+        stock_update.stop_loss_insert(stock.pdno)
 
     while datetime.now().time() < time(16, 00, 30):
         sleep(1 * 60)

@@ -1,11 +1,16 @@
-import requests
+import logging
 import urllib.parse
 from datetime import datetime, timedelta
 from typing import List, Union
+
+import requests
+
 from stock import setting_env
 from stock.discord import discord
 from stock.dto.InquireDailyCcld import InquireDailyCcldRequestDTO, InquireDailyCcldResponseDTO
-from stock.korea_investment.utils import str_to_number, find_nth_open_day
+from stock.dto.accountDTO import InquireBalanceRequestDTO, AccountResponseDTO, StockResponseDTO
+from stock.korea_investment.utils import find_nth_open_day
+
 
 class KoreaInvestmentAPI:
     def __init__(self, app_key: str, app_secret: str, account_number: str, account_code: str, authorization: str = None):
@@ -79,66 +84,56 @@ class KoreaInvestmentAPI:
         reserve_payload = self._create_reserve_payload(symbol, price, volume, end_date, order_type, "01")
         return self._send_order("/uapi/domestic-stock/v1/trading/order-resv", headers, reserve_payload)
 
-    def get_account_info(self):
+    def get_account_info(self) -> Union[AccountResponseDTO, None]:
         headers = self._add_tr_id_to_headers("TTC8434R")
-        params = {
-            "CANO": self._account_number,
-            "ACNT_PRDT_CD": self._account_code,
-            "AFHR_FLPR_YN": "N",
-            "OFL_YN": "N",
-            "INQR_DVSN": "02",
-            "UNPR_DVSN": "01",
-            "FUND_STTL_ICLD_YN": "N",
-            "FNCG_AMT_AUTO_RDPT_YN": "N",
-            "PRCS_DVSN": "00",
-            "CTX_AREA_FK100": "",
-            "CTX_AREA_NK100": ""
-        }
+        params = InquireBalanceRequestDTO(cano=self._account_number, acnt_prdt_cd=self._account_code, inqr_dvsn="02").__dict__
         response_data = self._get_request("/uapi/domestic-stock/v1/trading/inquire-balance", params, headers)
-        if response_data:
-            account_data = response_data["output2"][0]
-            for key, value in account_data.items():
-                account_data[key] = str_to_number(account_data[key])
-            return account_data
-        else:
-            discord.error_message(f"stock_db\nHTTP 요청 실패. 상태 코드 : {response_data.status_code}\n{response_data}")
 
-    def get_owned_stock_info(self, stock: str = None):
-        headers = self._add_tr_id_to_headers("TTC8434R")
-        params = {
-            "CANO": self._account_number,
-            "ACNT_PRDT_CD": self._account_code,
-            "AFHR_FLPR_YN": "N",
-            "OFL_YN": "N",
-            "INQR_DVSN": "02",
-            "UNPR_DVSN": "01",
-            "FUND_STTL_ICLD_YN": "N",
-            "FNCG_AMT_AUTO_RDPT_YN": "N",
-            "PRCS_DVSN": "00",
-            "CTX_AREA_FK100": "",
-            "CTX_AREA_NK100": ""
-        }
-        response_data = self._get_request("/uapi/domestic-stock/v1/trading/inquire-balance", params, headers)
         if response_data:
+            try:
+                return AccountResponseDTO(**response_data.get("output2", [])[0])
+            except KeyError as e:
+                logging.error(f"KeyError: {e} - response data: {response_data}")
+                discord.error_message("stock_db\n응답 데이터 처리 실패.")
+                return None
+            except Exception as e:
+                logging.error(f"Unexpected error: {e} - response data: {response_data}")
+                discord.error_message("stock_db\n예상치 못한 오류 발생.")
+                return None
+        else:
+            logging.warning("Null response received from API")
+            discord.error_message("stock_db\nHTTP 요청 실패.")
+            return None
+
+    def get_owned_stock_info(self, stock: str = None) -> Union[List[StockResponseDTO], StockResponseDTO, None]:
+        headers = self._add_tr_id_to_headers("TTC8434R")
+        params = InquireBalanceRequestDTO(cano=self._account_number, acnt_prdt_cd=self._account_code, inqr_dvsn="02").__dict__
+        response_data = self._get_request("/uapi/domestic-stock/v1/trading/inquire-balance", params, headers)
+
+        if not response_data:
+            logging.warning("Null response received from API")
+            discord.error_message("stock_db\nHTTP 요청 실패.")
+            return None
+
+        try:
             stock_data = response_data.get("output1", [])
+            response_list = [StockResponseDTO(**item) for item in stock_data]
+
             if stock:
-                for item in stock_data:
-                    if item["pdno"] == stock:
-                        for key, value in item.items():
-                            if key == "pdno":
-                                continue
-                            item[key] = str_to_number(item[key])
+                for item in response_list:
+                    if item.pdno == stock:
                         return item
                 return None
             else:
-                for index in range(len(stock_data)):
-                    for key, value in stock_data[index].items():
-                        if key == "pdno":
-                            continue
-                        stock_data[index][key] = str_to_number(stock_data[index][key])
-                return stock_data
-        else:
-            discord.error_message(f"stock_db\nHTTP 요청 실패. 상태 코드 : {response_data.status_code}\n{response_data}")
+                return response_list
+        except KeyError as e:
+            logging.error(f"KeyError: {e} - response data: {response_data}")
+            discord.error_message("stock_db\n응답 데이터 처리 실패.")
+            return None
+        except Exception as e:
+            logging.error(f"Unexpected error: {e} - response data: {response_data}")
+            discord.error_message("stock_db\n예상치 못한 오류 발생.")
+            return None
 
     def get_cancellable_or_correctable_stock(self):
         if setting_env.SIMULATE:
@@ -252,7 +247,7 @@ class KoreaInvestmentAPI:
             if response["rt_cd"] == "0":
                 return True
             else:
-                discord.error_message(f"stock_db\n응답 코드 : {response['msg_cd']}\n응답 메세지 : {response['msg1']}") 
+                discord.error_message(f"stock_db\n응답 코드 : {response['msg_cd']}\n응답 메세지 : {response['msg1']}")
         else:
             discord.error_message("stock_db\nHTTP path 요청 실패.")
         return False
@@ -267,18 +262,13 @@ class KoreaInvestmentAPI:
         Returns:
             List[InquireDailyCcldResponseDTO]: API 응답 데이터 목록
         """
-        headers = self._add_tr_id_to_headers(
-            "TTTC8001R" if datetime.strptime(request_dto.INQR_END_DT, "%Y%m%d") >= datetime.now() - timedelta(days=90)
-            else "CTSC9115R",
-            use_prefix = False
-        )
+        headers = self._add_tr_id_to_headers("TTTC8001R" if datetime.strptime(request_dto.INQR_END_DT, "%Y%m%d") >= datetime.now() - timedelta(days=90) else "CTSC9115R", use_prefix=False)
         params = request_dto.__dict__
 
         response_data = self._get_request("/uapi/domestic-stock/v1/trading/inquire-daily-ccld", params, headers)
 
         if response_data:
-            output1 = response_data.get("output1", [])
-            response_list = [InquireDailyCcldResponseDTO(**item) for item in output1]
+            response_list = [InquireDailyCcldResponseDTO(**item) for item in response_data.get("output1", [])]
             return response_list
         else:
             discord.error_message("stock_db\n inquire_daily_ccld HTTP 요청 실패.")
