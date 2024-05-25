@@ -1,14 +1,16 @@
 import logging
 import urllib.parse
 from datetime import datetime, timedelta
-from typing import List, Union
+from typing import List
+from typing import Union
 
 import requests
 
 from stock import setting_env
 from stock.discord import discord
-from stock.dto.InquireDailyCcld import InquireDailyCcldRequestDTO, InquireDailyCcldResponseDTO
-from stock.dto.accountDTO import InquireBalanceRequestDTO, AccountResponseDTO, StockResponseDTO
+from stock.dto.account_dto import InquireBalanceRequestDTO, AccountResponseDTO, StockResponseDTO
+from stock.dto.holiday_dto import HolidayResponseDTO, HolidayRequestDTO
+from stock.dto.stock_trade_list import StockTradeListRequestDTO, StockTradeListResponseDTO
 from stock.korea_investment.utils import find_nth_open_day
 
 
@@ -42,17 +44,6 @@ class KoreaInvestmentAPI:
         response = self._post_request("/oauth2/tokenP", auth_payload, {"Content-Type": "application/json", "appkey": self.app_key, "appsecret": self.app_secret}, error_log_prefix="인증 실패")
         return f"{response['token_type']} {response['access_token']}"
 
-    def _post_request(self, path, payload, headers=None, error_log_prefix="HTTP 요청 실패"):
-        full_url = setting_env.DOMAIN + path
-        effective_headers = self._headers if headers is None else headers
-        try:
-            response = requests.post(full_url, json=payload, headers=effective_headers)
-            response.raise_for_status()
-            return response.json()
-        except requests.RequestException as e:
-            print(f"{error_log_prefix}. 예외: {e}.")
-            return None
-
     def _get_request(self, path, params, headers=None, error_log_prefix="HTTP 요청 실패"):
         full_url = f"{setting_env.DOMAIN}{path}?{urllib.parse.urlencode(params)}"
         effective_headers = self._headers if headers is None else headers
@@ -64,11 +55,66 @@ class KoreaInvestmentAPI:
             print(f"{error_log_prefix}. 예외: {e}.")
             return None
 
+    def _post_request(self, path, payload, headers=None, error_log_prefix="HTTP 요청 실패"):
+        full_url = setting_env.DOMAIN + path
+        effective_headers = self._headers if headers is None else headers
+        try:
+            response = requests.post(full_url, json=payload, headers=effective_headers)
+            response.raise_for_status()
+            return response.json()
+        except requests.RequestException as e:
+            print(f"{error_log_prefix}. 예외: {e}.")
+            return None
+
     def _add_tr_id_to_headers(self, tr_id_suffix: str, use_prefix: bool = True):
         headers = self._headers.copy()
         tr_id = setting_env.TR_ID + tr_id_suffix if use_prefix else tr_id_suffix
         headers["tr_id"] = tr_id
         return headers
+
+    def _create_order_payload(self, symbol: str, price: int, volume: int, order_type: str):
+        """주문 페이로드를 생성합니다."""
+        order_payload = {
+            "CANO": self._account_number,
+            "ACNT_PRDT_CD": self._account_code,
+            "PDNO": symbol,
+            "ORD_DVSN": order_type,
+            "ORD_QTY": str(volume),
+            "ORD_UNPR": str(price)
+        }
+        if order_payload["ORD_DVSN"] in {"01", "03", "04", "05", "06"}:
+            order_payload["ORD_UNPR"] = "0"
+        return order_payload
+
+    def _create_reserve_payload(self, symbol: str, price: int, volume: int, end_date: str, order_type: str, sll_buy_dvsn_cd: str):
+        """예약 주문 페이로드를 생성합니다."""
+        reserve_payload = {
+            "CANO": self._account_number,
+            "ACNT_PRDT_CD": self._account_code,
+            "PDNO": symbol,
+            "ORD_QTY": str(volume),
+            "ORD_UNPR": str(price),
+            "SLL_BUY_DVSN_CD": sll_buy_dvsn_cd,
+            "ORD_DVSN_CD": order_type,
+            "ORD_OBJT_CBLC_DVSN_CD": "10"
+        }
+        if reserve_payload["ORD_DVSN_CD"] in {"01", "05"}:
+            reserve_payload["ORD_UNPR"] = "0"
+        if end_date:
+            reserve_payload["RSVN_ORD_END_DT"] = end_date
+        return reserve_payload
+
+    def _send_order(self, path: str, headers, payload):
+        """주문 요청을 보내고 응답을 처리합니다."""
+        response = self._post_request(path, payload, headers)
+        if response:
+            if response["rt_cd"] == "0":
+                return True
+            else:
+                discord.error_message(f"stock_db\n응답 코드 : {response['msg_cd']}\n응답 메세지 : {response['msg1']}")
+        else:
+            discord.error_message("stock_db\nHTTP path 요청 실패.")
+        return False
 
     def buy(self, symbol: str, price: int, volume: int, order_type: str = "00"):
         headers = self._add_tr_id_to_headers("TTC0802U")
@@ -141,141 +187,57 @@ class KoreaInvestmentAPI:
             discord.error_message("stock_db\n예상치 못한 오류 발생.")
             return None
 
-    def get_cancellable_or_correctable_stock(self):
-        if setting_env.SIMULATE:
-            return None
-        headers = self._add_tr_id_to_headers("TTTC8036R", False)
-        params = {
-            "CANO": self._account_number,
-            "ACNT_PRDT_CD": self._account_code,
-            "CTX_AREA_FK100": "",
-            "CTX_AREA_NK100": "",
-            "INQR_DVSN_1": "0",
-            "INQR_DVSN_2": "0"
-        }
-        response_data = self._get_request("/uapi/domestic-stock/v1/trading/inquire-psbl-rvsecncl", params, headers)
-        if response_data:
-            return response_data["output"]
-        else:
-            discord.error_message(f"stock_db\nHTTP 요청 실패. 상태 코드 : {response_data.status_code}\n{response_data}")
-
-    def modify_stock_order(self, order_no: str, volume: str, price: str = '0', order_type: str = '03', order_code: str = '01', all_or_none: str = 'Y'):
-        headers = self._add_tr_id_to_headers("TTC0803U")
-        modify_payload = {
-            "CANO": self._account_number,
-            "ACNT_PRDT_CD": self._account_code,
-            "KRX_FWDG_ORD_ORGNO": "",
-            "ORGN_ODNO": order_no,
-            "ORD_DVSN": order_type,
-            "RVSE_CNCL_DVSN_CD": order_code,
-            "ORD_QTY": volume,
-            "ORD_UNPR": price,
-            "QTY_ALL_ORD_YN": all_or_none
-        }
-        response = self._post_request("/uapi/domestic-stock/v1/trading/order-rvsecncl", modify_payload, headers)
-        if response:
-            return True
-        else:
-            discord.error_message(f"stock_db\nHTTP 요청 실패. 상태 코드 : {response.status_code}\n{response}")
-
-    def get_domestic_market_holidays(self, base_date: datetime):
-        """API로부터 휴장일 데이터를 가져옵니다."""
+    def get_domestic_market_holidays(self, date: datetime) -> List[HolidayResponseDTO]:
+        """국내 휴장일 데이터를 API를 통해 조회합니다."""
         headers = self._add_tr_id_to_headers("CTCA0903R", False)
-        params = {
-            "BASS_DT": base_date.strftime("%Y%m%d"),
-            "CTX_AREA_NK": "",
-            "CTX_AREA_FK": ""
-        }
-        response_data = self._get_request("/uapi/domestic-stock/v1/quotations/chk-holiday", params, headers)
-        if response_data:
-            return response_data.get("output", [])
-        else:
-            discord.error_message(f"stock_db\nHTTP 요청 실패. 상태 코드 : {response_data.status_code}\n{response_data}")
+        params = HolidayRequestDTO(bass_dt=date.strftime("%Y%m%d")).__dict__
+        response = requests.get("https://openapi.koreainvestment.com:9443/uapi/domestic-stock/v1/quotations/chk-holiday", headers=headers, params=params)
+        response_data = response.json()
+        holidays = response_data.get("output", [])
+        return [HolidayResponseDTO(**item) for item in holidays]
 
     def get_nth_open_day(self, nth_day: int) -> str:
         """오늘을 제외한 nth 개장일을 반환합니다."""
         current_date = datetime.now()
 
         while True:
-            holiday_dict = {item["bass_dt"]: item for item in self.get_domestic_market_holidays(current_date)}
+            holidays = self.get_domestic_market_holidays(current_date)
+            holiday_dict = {item.bass_dt: item for item in holidays}
             self.total_holidays.update(holiday_dict)
 
-            nth_open_day = find_nth_open_day(self.total_holidays, nth_day)  # Pass the dictionary directly
+            nth_open_day = find_nth_open_day(self.total_holidays, nth_day + 1)  # Pass the dictionary directly
             if nth_open_day:
                 return nth_open_day
 
             current_date += timedelta(days=20)
 
-    def check_holiday(self, date: datetime):
+    def check_holiday(self, date: datetime) -> bool:
         """특정 날짜가 휴장일인지 확인합니다."""
         holidays = self.get_domestic_market_holidays(date)
         for item in holidays:
-            if item['bass_dt'] == date.strftime("%Y%m%d"):
-                return item['opnd_yn'] == "N"
+            if item.bass_dt == date.strftime("%Y%m%d"):
+                return item.opnd_yn == "N"
         return False
 
-    def _create_order_payload(self, symbol: str, price: int, volume: int, order_type: str):
-        """주문 페이로드를 생성합니다."""
-        order_payload = {
-            "CANO": self._account_number,
-            "ACNT_PRDT_CD": self._account_code,
-            "PDNO": symbol,
-            "ORD_DVSN": order_type,
-            "ORD_QTY": str(volume),
-            "ORD_UNPR": str(price)
-        }
-        if order_payload["ORD_DVSN"] in {"01", "03", "04", "05", "06"}:
-            order_payload["ORD_UNPR"] = "0"
-        return order_payload
-
-    def _create_reserve_payload(self, symbol: str, price: int, volume: int, end_date: str, order_type: str, sll_buy_dvsn_cd: str):
-        """예약 주문 페이로드를 생성합니다."""
-        reserve_payload = {
-            "CANO": self._account_number,
-            "ACNT_PRDT_CD": self._account_code,
-            "PDNO": symbol,
-            "ORD_QTY": str(volume),
-            "ORD_UNPR": str(price),
-            "SLL_BUY_DVSN_CD": sll_buy_dvsn_cd,
-            "ORD_DVSN_CD": order_type,
-            "ORD_OBJT_CBLC_DVSN_CD": "10"
-        }
-        if reserve_payload["ORD_DVSN_CD"] in {"01", "05"}:
-            reserve_payload["ORD_UNPR"] = "0"
-        if end_date:
-            reserve_payload["RSVN_ORD_END_DT"] = end_date
-        return reserve_payload
-
-    def _send_order(self, path: str, headers, payload):
-        """주문 요청을 보내고 응답을 처리합니다."""
-        response = self._post_request(path, payload, headers)
-        if response:
-            if response["rt_cd"] == "0":
-                return True
-            else:
-                discord.error_message(f"stock_db\n응답 코드 : {response['msg_cd']}\n응답 메세지 : {response['msg1']}")
-        else:
-            discord.error_message("stock_db\nHTTP path 요청 실패.")
-        return False
-
-    def inquire_daily_ccld(self, request_dto: InquireDailyCcldRequestDTO) -> Union[List[InquireDailyCcldResponseDTO], None]:
+    def get_stock_trade_list(self, start_date: str = datetime.now().strftime("%Y%m%d"), end_date: str = datetime.now().strftime("%Y%m%d")) -> Union[List[StockTradeListResponseDTO], None]:
         """
         주식일별주문체결조회 API 호출 함수.
 
         Args:
-            request_dto (InquireDailyCcldRequestDTO): 조회 요청 데이터
+            start_date (str): 조회 시작 날짜
+            end_date (str): 조회 마지막 날짜
 
         Returns:
-            List[InquireDailyCcldResponseDTO]: API 응답 데이터 목록
+            List[StockTradeListResponseDTO]: API 응답 데이터 목록
         """
-        headers = self._add_tr_id_to_headers("TTTC8001R" if datetime.strptime(request_dto.INQR_END_DT, "%Y%m%d") >= datetime.now() - timedelta(days=90) else "CTSC9115R", use_prefix=False)
-        params = request_dto.__dict__
+        headers = self._add_tr_id_to_headers("TTTC8001R" if datetime.strptime(end_date, "%Y%m%d") >= datetime.now() - timedelta(days=90) else "CTSC9115R", use_prefix=False)
+        params = StockTradeListRequestDTO(CANO=self._account_number, ACNT_PRDT_CD=self._account_code, INQR_STRT_DT=start_date, INQR_END_DT=end_date, CCLD_DVSN='01').__dict__
 
         response_data = self._get_request("/uapi/domestic-stock/v1/trading/inquire-daily-ccld", params, headers)
 
         if response_data:
-            response_list = [InquireDailyCcldResponseDTO(**item) for item in response_data.get("output1", [])]
+            response_list = [StockTradeListResponseDTO(**item) for item in response_data.get("output1", [])]
             return response_list
         else:
-            discord.error_message("stock_db\n inquire_daily_ccld HTTP 요청 실패.")
+            discord.error_message("stock_db\n stock_trade_list HTTP 요청 실패.")
             return None
