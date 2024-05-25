@@ -1,15 +1,15 @@
 import math
+from typing import Dict, Optional
+
+from stock.dto.holiday_dto import HolidayResponseDTO
 
 
-def find_nth_open_day(holiday_data, nth_day: int) -> str:
-    """오늘을 제외한 nth 개장일을 찾습니다."""
-    open_days_found = 0
-    for key, value in holiday_data.items():  # holiday_data should be a dictionary
-        if value.get("opnd_yn") == "Y":  # Ensure the key exists and check its value
-            if open_days_found == nth_day:
-                return key
-            open_days_found += 1
-    return ''
+def find_nth_open_day(holidays: Dict[str, HolidayResponseDTO], nth_day: int) -> Optional[str]:
+    """nth 개장일을 찾습니다."""
+    open_days = [date for date, info in sorted(holidays.items()) if info.opnd_yn == "Y"]
+    if len(open_days) >= nth_day:
+        return open_days[nth_day - 1]
+    return None
 
 
 def price_refine(price: int, number: int = 0) -> int:

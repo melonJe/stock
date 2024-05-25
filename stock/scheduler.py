@@ -15,7 +15,6 @@ from ta.volume import ChaikinMoneyFlowIndicator
 import stock.utils.stock_management as stock_update
 from stock import setting_env
 from stock.discord import discord
-from stock.dto.InquireDailyCcld import InquireDailyCcldRequestDTO
 from stock.korea_investment.api import KoreaInvestmentAPI
 from stock.korea_investment.trading import korea_investment_trading_sell_reserve, korea_investment_trading_buy_reserve
 from stock.korea_investment.utils import price_refine
@@ -201,18 +200,8 @@ def trading_buy(ki_api: KoreaInvestmentAPI, buy: dict):
 
 
 def update_sell_queue(ki_api: KoreaInvestmentAPI, email: Account):
-    # 오늘 날짜를 기준으로 조회 데이터 생성
     today_str = datetime.now().strftime("%Y%m%d")
-    request_dto = InquireDailyCcldRequestDTO(
-        CANO=ki_api.get_account_number(),
-        ACNT_PRDT_CD=ki_api.get_account_code(),
-        INQR_STRT_DT=today_str,
-        INQR_END_DT=today_str,
-        CCLD_DVSN='01',  # 체결된 주문 만
-    )
-
-    # 주식 일별 주문 체결 조회
-    response_data = ki_api.inquire_daily_ccld(request_dto)
+    response_data = ki_api.get_stock_trade_list(start_date=today_str, end_date=today_str)
 
     if response_data:
         # 매수 및 매도 데이터 처리

@@ -1,7 +1,8 @@
 from dataclasses import dataclass
 
+
 @dataclass
-class InquireDailyCcldRequestDTO:
+class StockTradeListRequestDTO:
     CANO: str
     ACNT_PRDT_CD: str
     INQR_STRT_DT: str
@@ -17,8 +18,9 @@ class InquireDailyCcldRequestDTO:
     CTX_AREA_FK100: str = ""
     CTX_AREA_NK100: str = ""
 
+
 @dataclass
-class InquireDailyCcldResponseDTO:
+class StockTradeListResponseDTO:
     ord_dt: str
     ord_gno_brno: str
     odno: str
