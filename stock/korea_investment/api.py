@@ -10,7 +10,7 @@ from stock import setting_env
 from stock.discord import discord
 from stock.dto.account_dto import InquireBalanceRequestDTO, AccountResponseDTO, StockResponseDTO
 from stock.dto.holiday_dto import HolidayResponseDTO, HolidayRequestDTO
-from stock.dto.stock_trade import StockTradeListRequestDTO, StockTradeListResponseDTO
+from stock.dto.stock_trade_dto import StockTradeListRequestDTO, StockTradeListResponseDTO
 from stock.korea_investment.utils import find_nth_open_day
 
 
@@ -36,12 +36,16 @@ class KoreaInvestmentAPI:
         return self._account_code
 
     def authenticate(self):
+        auth_header = {
+            "Content-Type": "application/json",
+            "appkey": self.app_key,
+            "appsecret": self.app_secret}
         auth_payload = {
             "grant_type": "client_credentials",
             "appkey": self.app_key,
             "appsecret": self.app_secret
         }
-        response = self._post_request("/oauth2/tokenP", auth_payload, {"Content-Type": "application/json", "appkey": self.app_key, "appsecret": self.app_secret}, error_log_prefix="인증 실패")
+        response = self._post_request("/oauth2/tokenP", auth_payload, auth_header, error_log_prefix="인증 실패")
         return f"{response['token_type']} {response['access_token']}"
 
     def _get_request(self, path, params, headers=None, error_log_prefix="HTTP 요청 실패"):
@@ -106,8 +110,10 @@ class KoreaInvestmentAPI:
             if response["rt_cd"] == "0":
                 return True
             else:
+                logging.error(f"stock_db\n응답 코드 : {response['msg_cd']}\n응답 메세지 : {response['msg1']}")
                 discord.error_message(f"stock_db\n응답 코드 : {response['msg_cd']}\n응답 메세지 : {response['msg1']}")
         else:
+            logging.error("stock_db\nHTTP path 요청 실패.")
             discord.error_message("stock_db\nHTTP path 요청 실패.")
         return False
 
@@ -141,15 +147,15 @@ class KoreaInvestmentAPI:
                 return AccountResponseDTO(**response_data.get("output2", [])[0])
             except KeyError as e:
                 logging.error(f"KeyError: {e} - response data: {response_data}")
-                discord.error_message("stock_db\n응답 데이터 처리 실패.")
+                discord.error_message(f"KeyError: {e} - response data: {response_data}")
                 return None
             except Exception as e:
                 logging.error(f"Unexpected error: {e} - response data: {response_data}")
-                discord.error_message("stock_db\n예상치 못한 오류 발생.")
+                discord.error_message(f"Unexpected error: {e} - response data: {response_data}")
                 return None
         else:
             logging.warning("Null response received from API")
-            discord.error_message("stock_db\nHTTP 요청 실패.")
+            discord.error_message("Null response received from API")
             return None
 
     def get_owned_stock_info(self, stock: str = None) -> Union[List[StockResponseDTO], StockResponseDTO, None]:
@@ -159,7 +165,7 @@ class KoreaInvestmentAPI:
 
         if not response_data:
             logging.warning("Null response received from API")
-            discord.error_message("stock_db\nHTTP 요청 실패.")
+            discord.error_message("Null response received from API")
             return None
 
         try:
@@ -175,11 +181,11 @@ class KoreaInvestmentAPI:
                 return response_list
         except KeyError as e:
             logging.error(f"KeyError: {e} - response data: {response_data}")
-            discord.error_message("stock_db\n응답 데이터 처리 실패.")
+            discord.error_message(f"KeyError: {e} - response data: {response_data}")
             return None
         except Exception as e:
             logging.error(f"Unexpected error: {e} - response data: {response_data}")
-            discord.error_message("stock_db\n예상치 못한 오류 발생.")
+            discord.error_message(f"Unexpected error: {e} - response data: {response_data}")
             return None
 
     def get_domestic_market_holidays(self, date: str):
