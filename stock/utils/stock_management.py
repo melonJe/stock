@@ -1,17 +1,16 @@
+from datetime import timedelta, datetime
+from urllib.parse import parse_qs, urlparse
+
 import FinanceDataReader
 import pandas as pd
 import requests
 from bs4 import BeautifulSoup
-from datetime import timedelta, datetime
-from stock.models import Subscription, Blacklist, PriceHistory, StopLoss, Account, Stock, StockUs, PriceHistoryUs
-from urllib.parse import parse_qs, urlparse
-from django.core.exceptions import ObjectDoesNotExist, ValidationError
+from django.core.exceptions import ObjectDoesNotExist
 from ta.volatility import AverageTrueRange
+
 from stock.models import Stock
+from stock.models import Subscription, Blacklist, PriceHistory, StopLoss, Account
 
-
-# pd.set_option('display.max_rows', None)  # 모든 행 출력
-# pd.set_option('display.max_columns', None)  # 모든 열 출력
 
 def bulk_insert(model_class, data: list, update_conflicts: bool, unique_fields: list, update_fields: list = None):
     try:
@@ -180,7 +179,7 @@ def stop_loss_insert(symbol: str):
     df['ATR5'] = AverageTrueRange(high=df['high'].astype('float64'), low=df['low'].astype('float64'), close=df['close'].astype('float64'), window=5).average_true_range()
     df['ATR10'] = AverageTrueRange(high=df['high'].astype('float64'), low=df['low'].astype('float64'), close=df['close'].astype('float64'), window=10).average_true_range()
     df['ATR20'] = AverageTrueRange(high=df['high'].astype('float64'), low=df['low'].astype('float64'), close=df['close'].astype('float64'), window=20).average_true_range()
-    atr = max(df.iloc[-1]['ATR5'], df.iloc[-1]['ATR10'], df.iloc[-1]['ATR20']) # 주가 변동성 체크
+    atr = max(df.iloc[-1]['ATR5'], df.iloc[-1]['ATR10'], df.iloc[-1]['ATR20'])  # 주가 변동성 체크
     stop_loss = df.iloc[-1]['ma20'] - atr  # 20일(보통), 60일(필수) 손절선
     StopLoss.objects.bulk_create([StopLoss(symbol=get_stock(symbol=symbol), price=stop_loss)], update_conflicts=True, unique_fields=['symbol'], update_fields=['price'])
 
@@ -226,39 +225,3 @@ def add_price_for_symbol(symbol: str, start_date: str, end_date: str = None):
         bulk_insert(PriceHistory, data_to_insert, True, ['symbol', 'date'], ['open', 'high', 'close', 'low', 'volume'])
     except Exception as e:
         print(f"Error processing symbol {symbol}: {e}")
-
-
-def add_us_stock():
-    df_krx = pd.concat([FinanceDataReader.StockListing('NASDAQ'), FinanceDataReader.StockListing('NYSE'), FinanceDataReader.StockListing('AMEX')], ignore_index=True).drop_duplicates(subset='Symbol')
-    data_to_insert = [{'symbol': item['Symbol'], 'company_name': item['Name']} for item in df_krx.to_dict('records')]
-    if data_to_insert:
-        bulk_insert(StockUs, data_to_insert, True, ['symbol'])
-    add_us_stock_price(start_date=(datetime.now() - timedelta(days=45)).strftime("%Y-%m-%d"), end_date=(datetime.now().strftime("%Y-%m-%d")))
-
-
-def add_us_stock_price(start_date: str = datetime.now().strftime('%Y-%m-%d'), end_date: str = None):
-    # 모든 미국 주식의 날짜별 데이터 가져오기
-    for stock in StockUs.objects.all():
-        data_to_insert = []
-        try:
-            df_krx = FinanceDataReader.DataReader(stock.symbol, start_date, end_date) if end_date else FinanceDataReader.DataReader(stock.symbol, start_date)
-            df_krx.fillna(0, inplace=True)
-            data_to_insert = [
-                {
-                    'symbol': stock,
-                    'date': idx,
-                    'open': row['Open'],
-                    'high': row['High'],
-                    'close': row['Close'],
-                    'low': row['Low'],
-                    'volume': row['Volume']
-                }
-                for idx, row in df_krx.iterrows()
-            ]
-        except Exception as e:
-            print(f"데이터 로딩 중 오류 발생: {e}")
-
-        try:
-            bulk_insert(PriceHistoryUs, data_to_insert, True, ['symbol', 'date'], ['open', 'high', 'close', 'low', 'volume'])
-        except Exception as e:
-            print(f"데이터 insert 중 오류 발생: {e}")

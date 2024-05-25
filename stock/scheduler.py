@@ -86,49 +86,6 @@ def select_buy_stocks() -> dict:
     return result
 
 
-# def select_sell_stocks(ki_api: KoreaInvestmentAPI) -> dict:
-#     """
-#     특정 기준에 따라 매도할 주식을 선택합니다.
-
-#     이 함수는 현재 주식 시장 데이터를 분석하고,
-#     주식을 평가한 후 매도할 주식을 선택합니다.
-
-#     반환값:
-#         dict: 키는 주식 식별자이고 값은 선택된 주식에 대한 세부 정보를 포함하는 사전입니다.
-#     """
-#     result = dict()
-#     try:
-#         stocks = ki_api.get_owned_stock_info()
-#         if stocks is not None:
-#             for stock in stocks:
-#                 df = pd.DataFrame(PriceHistory.objects.filter(date__range=[datetime.now() - timedelta(days=365), datetime.now()], symbol=stock['pdno']).order_by('date').values())
-#                 if df.empty:
-#                     continue
-#                 df['CMF'] = ChaikinMoneyFlowIndicator(high=df['high'].astype('float64'), low=df['low'].astype('float64'), close=df['close'].astype('float64'), volume=df['volume'].astype('float64')).chaikin_money_flow()
-#                 df['ma60'] = df['close'].rolling(window=60).mean()
-#                 df['ma20'] = df['close'].rolling(window=20).mean()
-#                 df['ma10'] = df['close'].rolling(window=10).mean()
-#                 df['ma5'] = df['close'].rolling(window=5).mean()
-
-#                 if df.iloc[-1]['CMF'] < -0.25 or df.iloc[-1]['close'] < df.iloc[-1]['ma60']:
-#                     result[stock['pdno']] = 'max'
-#                     continue
-
-#                 if df.iloc[-1]['low'] < df.iloc[-1]['ma60'] or df.iloc[-1]['close'] < df.iloc[-1]['ma20']:
-#                     result[stock['pdno']] = int(stock['hldg_qty'] / 5) + 1
-#                     continue
-
-#                 if df.iloc[-1]['low'] < df.iloc[-1]['ma20'] or df.iloc[-1]['close'] < df.iloc[-1]['ma10']:
-#                     result[stock['pdno']] = int(stock['hldg_qty'] / 10) + 1
-#                     continue
-
-#     except Exception as e:
-#         traceback.print_exc()
-#         print(f"Error occurred: {e}")
-#         # discord.error_message("stock_db\n" + str(traceback.print_exc()))
-#     return result
-
-
 def trading_buy(ki_api: KoreaInvestmentAPI, buy: dict):
     try:
         account = ki_api.get_account_info()
@@ -201,7 +158,7 @@ def trading_buy(ki_api: KoreaInvestmentAPI, buy: dict):
 
 def update_sell_queue(ki_api: KoreaInvestmentAPI, email: Account):
     today_str = datetime.now().strftime("%Y%m%d")
-    response_data = ki_api.get_stock_trade_list(start_date=today_str, end_date=today_str)
+    response_data = ki_api.get_stock_order_list(start_date=today_str, end_date=today_str)
 
     if response_data:
         # 매수 및 매도 데이터 처리
@@ -265,22 +222,6 @@ def update_sell_queue(ki_api: KoreaInvestmentAPI, email: Account):
 def trading_sell(ki_api: KoreaInvestmentAPI):
     # TODO 주식 판매 조건 공부 후 수정
     end_date = ki_api.get_nth_open_day(1)
-    # subscription_stocks = set([stock.symbol.symbol for stock in Subscription.objects.select_related("symbol").all()])
-    # blacklist_stocks = set([stock.symbol for stock in Blacklist.objects.all()])
-    # # sell.update({owned_stock['pdno']: int(owned_stock['hldg_qty'] / 30) + 1 for owned_stock in ki_api.get_owned_stock_info() if owned_stock['pdno'] not in sell.keys()})
-    # sell.update({owned_stock['pdno']: owned_stock['hldg_qty'] for owned_stock in ki_api.get_owned_stock_info() if owned_stock['pdno'] not in subscription_stocks or owned_stock['pdno'] in blacklist_stocks})
-    # for symbol, volume in sell.copy().items():
-    #     stock = ki_api.get_owned_stock_info(symbol)
-    #     if (not stock) or stock["ord_psbl_qty"] == 0:  # 가지고 있지 않거나 주문 가능한 수량이 없으면 다음 주식으로 넘어감
-    #         continue
-    #     if volume == 'max' or volume > stock["ord_psbl_qty"]:  # 주문 가능 수량을 넘길 경우 주문 수량 수정
-    #         volume = stock["ord_psbl_qty"]
-    #     if volume > 0:
-    #         if stock["evlu_pfls_rt"] <= 0.5:  # 수익률이 0.5% 이하면 매입평균가격 * 1.0075 가격에 판매
-    #             korea_investment_trading_sell_reserve(ki_api, symbol=symbol, price=price_refine(price=stock["pchs_avg_pric"] * 1.0075), volume=volume, end_date=end_date)
-    #         else:
-    #             korea_investment_trading_sell_reserve(ki_api, symbol=symbol, price=stock["prpr"], volume=volume, end_date=end_date)
-
     queue_entries = SellQueue.objects.filter(email="cabs0814@naver.com")
     for entry in queue_entries:
         korea_investment_trading_sell_reserve(ki_api, symbol=entry.symbol.symbol, price=price_refine(entry.price), volume=entry.volume, end_date=end_date)
@@ -314,7 +255,7 @@ def stop_loss_notify(ki_api: KoreaInvestmentAPI):
 def korea_investment_trading():
     # TODO 일정 % 수익 때 마다 판매 기능 구축을 위한 DB table 생성 profit_sell (symbol, price, volume(단위 %, int * 100), expire_date...?)
     ki_api = KoreaInvestmentAPI(app_key=setting_env.APP_KEY, app_secret=setting_env.APP_SECRET, account_number=setting_env.ACCOUNT_NUMBER, account_code=setting_env.ACCOUNT_CODE)
-    if ki_api.check_holiday(datetime.now()):
+    if ki_api.check_holiday(datetime.now().strftime("%Y%m%d")):
         print(f'{datetime.now()} 휴장일')
         return
     stop_loss = threading.Thread(target=stop_loss_notify, args=(ki_api,))
@@ -388,32 +329,6 @@ def start():
         max_instances=1,
         replace_existing=True,
     )
-
-    # scheduler.add_job(
-    #     stock_update.add_us_stock,
-    #     trigger=CronTrigger(day=1, hour=8),
-    #     id="add_us_stock",
-    #     max_instances=1,
-    #     replace_existing=True,
-    # )
-    #
-    # scheduler.add_job(
-    #     stock_update.add_us_stock_price,
-    #     trigger=CronTrigger(day_of_week="sat", hour=8),
-    #     kwargs={'start_date': (datetime.now() - timedelta(days=7)).strftime('%Y-%m-%d'), 'end_date': datetime.now().strftime('%Y-%m-%d')},
-    #     id="add_us_stock_price_1week",
-    #     max_instances=1,
-    #     replace_existing=True,
-    # )
-    #
-    # scheduler.add_job(
-    #     stock_update.add_us_stock_price,
-    #     trigger=CronTrigger(day_of_week="mon-fri", hour=8, minute=00, second=00),
-    #     kwargs={'start_date': datetime.now().strftime('%Y-%m-%d'), 'end_date': datetime.now().strftime('%Y-%m-%d')},
-    #     id="add_us_stock_price_1day",
-    #     max_instances=1,
-    #     replace_existing=True,
-    # )
 
     scheduler.add_job(
         stock_update.update_blacklist,

@@ -10,12 +10,12 @@ from stock import setting_env
 from stock.discord import discord
 from stock.dto.account_dto import InquireBalanceRequestDTO, AccountResponseDTO, StockResponseDTO
 from stock.dto.holiday_dto import HolidayResponseDTO, HolidayRequestDTO
-from stock.dto.stock_trade_list import StockTradeListRequestDTO, StockTradeListResponseDTO
+from stock.dto.stock_trade import StockTradeListRequestDTO, StockTradeListResponseDTO
 from stock.korea_investment.utils import find_nth_open_day
 
 
 class KoreaInvestmentAPI:
-    def __init__(self, app_key: str, app_secret: str, account_number: str, account_code: str, authorization: str = None):
+    def __init__(self, app_key: str, app_secret: str, account_number: str, account_code: str):
         self.app_key = app_key
         self.app_secret = app_secret
         self._account_number = account_number
@@ -80,10 +80,8 @@ class KoreaInvestmentAPI:
             "PDNO": symbol,
             "ORD_DVSN": order_type,
             "ORD_QTY": str(volume),
-            "ORD_UNPR": str(price)
+            "ORD_UNPR": "0" if order_type in {"01", "03", "04", "05", "06"} else str(price)
         }
-        if order_payload["ORD_DVSN"] in {"01", "03", "04", "05", "06"}:
-            order_payload["ORD_UNPR"] = "0"
         return order_payload
 
     def _create_reserve_payload(self, symbol: str, price: int, volume: int, end_date: str, order_type: str, sll_buy_dvsn_cd: str):
@@ -93,15 +91,12 @@ class KoreaInvestmentAPI:
             "ACNT_PRDT_CD": self._account_code,
             "PDNO": symbol,
             "ORD_QTY": str(volume),
-            "ORD_UNPR": str(price),
+            "ORD_UNPR": "0" if order_type in {"01", "05"} else str(price),
             "SLL_BUY_DVSN_CD": sll_buy_dvsn_cd,
             "ORD_DVSN_CD": order_type,
-            "ORD_OBJT_CBLC_DVSN_CD": "10"
+            "ORD_OBJT_CBLC_DVSN_CD": "10",
+            "RSVN_ORD_END_DT": end_date if end_date else ''
         }
-        if reserve_payload["ORD_DVSN_CD"] in {"01", "05"}:
-            reserve_payload["ORD_UNPR"] = "0"
-        if end_date:
-            reserve_payload["RSVN_ORD_END_DT"] = end_date
         return reserve_payload
 
     def _send_order(self, path: str, headers, payload):
@@ -187,49 +182,34 @@ class KoreaInvestmentAPI:
             discord.error_message("stock_db\n예상치 못한 오류 발생.")
             return None
 
-    def get_domestic_market_holidays(self, date: datetime) -> List[HolidayResponseDTO]:
+    def get_domestic_market_holidays(self, date: str):
         """국내 휴장일 데이터를 API를 통해 조회합니다."""
         headers = self._add_tr_id_to_headers("CTCA0903R", False)
-        params = HolidayRequestDTO(bass_dt=date.strftime("%Y%m%d")).__dict__
+        params = HolidayRequestDTO(bass_dt=date).__dict__
         response = requests.get("https://openapi.koreainvestment.com:9443/uapi/domestic-stock/v1/quotations/chk-holiday", headers=headers, params=params)
         response_data = response.json()
         holidays = response_data.get("output", [])
-        return [HolidayResponseDTO(**item) for item in holidays]
+        holiday_dtos = [HolidayResponseDTO(**item) for item in holidays]
+        return {dto.bass_dt: dto for dto in holiday_dtos}
 
     def get_nth_open_day(self, nth_day: int) -> str:
         """오늘을 제외한 nth 개장일을 반환합니다."""
-        current_date = datetime.now()
+        current_date = sorted(self.total_holidays.keys())[-1]
 
         while True:
-            holidays = self.get_domestic_market_holidays(current_date)
-            holiday_dict = {item.bass_dt: item for item in holidays}
-            self.total_holidays.update(holiday_dict)
-
             nth_open_day = find_nth_open_day(self.total_holidays, nth_day + 1)  # Pass the dictionary directly
             if nth_open_day:
                 return nth_open_day
 
-            current_date += timedelta(days=20)
+            holidays = self.get_domestic_market_holidays(current_date)
+            self.total_holidays.update(holidays)
 
-    def check_holiday(self, date: datetime) -> bool:
+    def check_holiday(self, date: str) -> bool:
         """특정 날짜가 휴장일인지 확인합니다."""
-        holidays = self.get_domestic_market_holidays(date)
-        for item in holidays:
-            if item.bass_dt == date.strftime("%Y%m%d"):
-                return item.opnd_yn == "N"
-        return False
+        return self.get_domestic_market_holidays(date)[date].opnd_yn == "N"
 
-    def get_stock_trade_list(self, start_date: str = datetime.now().strftime("%Y%m%d"), end_date: str = datetime.now().strftime("%Y%m%d")) -> Union[List[StockTradeListResponseDTO], None]:
-        """
-        주식일별주문체결조회 API 호출 함수.
-
-        Args:
-            start_date (str): 조회 시작 날짜
-            end_date (str): 조회 마지막 날짜
-
-        Returns:
-            List[StockTradeListResponseDTO]: API 응답 데이터 목록
-        """
+    def get_stock_order_list(self, start_date: str = datetime.now().strftime("%Y%m%d"), end_date: str = datetime.now().strftime("%Y%m%d")) -> Union[List[StockTradeListResponseDTO], None]:
+        """주식 주문 목록을 가져옵니다."""
         headers = self._add_tr_id_to_headers("TTTC8001R" if datetime.strptime(end_date, "%Y%m%d") >= datetime.now() - timedelta(days=90) else "CTSC9115R", use_prefix=False)
         params = StockTradeListRequestDTO(CANO=self._account_number, ACNT_PRDT_CD=self._account_code, INQR_STRT_DT=start_date, INQR_END_DT=end_date, CCLD_DVSN='01').__dict__
 
