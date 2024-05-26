@@ -225,6 +225,7 @@ def trading_sell(ki_api: KoreaInvestmentAPI):
     for entry in queue_entries:
         stock = ki_api.get_owned_stock_info(entry.symbol.symbol)
         if not stock:
+            discord.send_message(f'Not held a stock {entry.symbol.company_name}')
             continue
         sell_price = price_refine(entry.price)
         if sell_price < int(stock.pchs_avg_pric):
