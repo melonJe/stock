@@ -220,11 +220,17 @@ def update_sell_queue(ki_api: KoreaInvestmentAPI, email: Account):
 
 
 def trading_sell(ki_api: KoreaInvestmentAPI):
-    # TODO 주식 판매 조건 공부 후 수정
     end_date = ki_api.get_nth_open_day(1)
     queue_entries = SellQueue.objects.filter(email="cabs0814@naver.com")
     for entry in queue_entries:
-        korea_investment_trading_sell_reserve(ki_api, symbol=entry.symbol.symbol, price=price_refine(entry.price), volume=entry.volume, end_date=end_date)
+        stock = ki_api.get_owned_stock_info(entry.symbol.symbol)
+        if not stock:
+            continue
+        sell_price = price_refine(entry.price)
+        if sell_price < int(stock.pchs_avg_pric):
+            discord.send_message(f'Sell {stock.prdt_name} below average purchase price: {sell_price}')
+
+        korea_investment_trading_sell_reserve(ki_api, symbol=entry.symbol.symbol, price=sell_price, volume=entry.volume, end_date=end_date)
 
 
 def stop_loss_notify(ki_api: KoreaInvestmentAPI):
