@@ -1,3 +1,4 @@
+import logging
 from datetime import timedelta, datetime
 from urllib.parse import parse_qs, urlparse
 
@@ -16,7 +17,7 @@ def bulk_insert(model_class, data: list, update_conflicts: bool, unique_fields: 
     try:
         model_class.objects.bulk_create([model_class(**vals) for vals in data], update_conflicts=update_conflicts, unique_fields=unique_fields, update_fields=update_fields)
     except Exception as e:
-        print(f"Error during data insertion: {e}")
+        logging.error(f"Error during data insertion: {e}")
 
 
 def get_company_name(symbol: str):
@@ -24,14 +25,14 @@ def get_company_name(symbol: str):
         df_krx = FinanceDataReader.StockListing('KRX')
         stock_info = df_krx[df_krx['Symbol'] == symbol].to_dict('records').first()
         if not stock_info:
-            print("No stock found with that symbol.")
+            logging.error("No stock found with that symbol.")
             return None
         company_name = stock_info.get('Name')
         if not company_name:
             return None
         return company_name
     except Exception as e:
-        print(f"Failed to fetch stock data: {e}")
+        logging.error(f"Failed to fetch stock data: {e}")
         return None
 
 
@@ -39,7 +40,7 @@ def insert_stock(symbol: str, company_name: str = None):
     # 이미 존재하는 주식인지 확인
     existing_stock = Stock.objects.filter(symbol=symbol).first()
     if existing_stock:
-        print(f"Error: A stock with symbol '{symbol}' already exists.")
+        logging.error(f"Error: A stock with symbol '{symbol}' already exists.")
         return existing_stock
 
     # company_name이 제공되었는지 확인
@@ -61,7 +62,7 @@ def get_stock(symbol: str):
 
 
 def update_defensive_subscription_stock():  # 방어적 투자
-    print(f'{datetime.now()} update_defensive_subscription_stock 시작')
+    logging.info(f'{datetime.now()} update_defensive_subscription_stock 시작')
     data_to_insert = list()
     user = Account.objects.get(email='cabs0814@naver.com')
     for stock in Stock.objects.all():
@@ -119,7 +120,7 @@ def update_defensive_subscription_stock():  # 방어적 투자
     Subscription.objects.filter(email='cabs0814@naver.com').delete()
     if data_to_insert:
         data_to_insert = [Subscription(**vals) for vals in data_to_insert]
-        print(f"{len(data_to_insert)}개 주식")
+        logging.info(f"{len(data_to_insert)}개 주식")
         Subscription.objects.bulk_create(data_to_insert)
 
 
@@ -154,7 +155,7 @@ def update_aggressive_subscription_stock():  # 공격적 투자
     Subscription.objects.filter(email='jmayermj@gmail.com').delete()
     if data_to_insert:
         data_to_insert = [Subscription(**vals) for vals in data_to_insert]
-        print(f"{len(data_to_insert)}개 주식")
+        logging.info(f"{len(data_to_insert)}개 주식")
         Subscription.objects.bulk_create(data_to_insert)
 
 
@@ -185,13 +186,12 @@ def stop_loss_insert(symbol: str):
 
 
 def add_stock():
-    print(f'{datetime.now()} add_stock 시작')
     df_krx = FinanceDataReader.StockListing('KRX')
     try:
         for symbol, company_name in [[item['Code'], item['Name']] for item in df_krx.to_dict('records')]:
             insert_stock(symbol, company_name)
     except Exception as e:
-        print(f"데이터 로딩 중 오류 발생: {e}")
+        logging.error(f"데이터 로딩 중 오류 발생: {e}")
 
 
 def add_stock_price(symbol: str = None, start_date: str = None, end_date: str = None):
@@ -224,4 +224,4 @@ def add_price_for_symbol(symbol: str, start_date: str, end_date: str = None):
         ]
         bulk_insert(PriceHistory, data_to_insert, True, ['symbol', 'date'], ['open', 'high', 'close', 'low', 'volume'])
     except Exception as e:
-        print(f"Error processing symbol {symbol}: {e}")
+        logging.error(f"Error processing symbol {symbol}: {e}")

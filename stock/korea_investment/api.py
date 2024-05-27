@@ -56,7 +56,7 @@ class KoreaInvestmentAPI:
             response.raise_for_status()
             return response.json()
         except requests.RequestException as e:
-            print(f"{error_log_prefix}. 예외: {e}.")
+            logging.error(f"{error_log_prefix}. 예외: {e}.")
             return None
 
     def _post_request(self, path, payload, headers=None, error_log_prefix="HTTP 요청 실패"):
@@ -67,7 +67,7 @@ class KoreaInvestmentAPI:
             response.raise_for_status()
             return response.json()
         except requests.RequestException as e:
-            print(f"{error_log_prefix}. 예외: {e}.")
+            logging.error(f"{error_log_prefix}. 예외: {e}.")
             return None
 
     def _add_tr_id_to_headers(self, tr_id_suffix: str, use_prefix: bool = True):
@@ -200,7 +200,8 @@ class KoreaInvestmentAPI:
 
     def get_nth_open_day(self, nth_day: int) -> str:
         """오늘을 제외한 nth 개장일을 반환합니다."""
-        current_date = sorted(self.total_holidays.keys())[-1]
+        holiday_keys = sorted(self.total_holidays.keys())
+        current_date = holiday_keys[-1] if holiday_keys else datetime.now().strftime("%Y%m%d")
 
         while True:
             nth_open_day = find_nth_open_day(self.total_holidays, nth_day + 1)  # Pass the dictionary directly
