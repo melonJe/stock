@@ -1,3 +1,4 @@
+import logging
 import threading
 import traceback
 from datetime import timedelta, datetime, time
@@ -82,7 +83,7 @@ def select_buy_stocks() -> dict:
             result[x] = buy[x]
     except Exception as e:
         traceback.print_exc()
-        print(f"Error occurred: {e}")
+        logging.error(f"Error occurred: {e}")
     return result
 
 
@@ -91,14 +92,14 @@ def trading_buy(ki_api: KoreaInvestmentAPI, buy: dict):
         account = ki_api.get_account_info()
     except Exception as e:
         traceback.print_exc()
-        print(f"Error occurred while getting account info: {e}")
+        logging.error(f"Error occurred while getting account info: {e}")
         return
 
     try:
         end_date = ki_api.get_nth_open_day(3)
     except Exception as e:
         traceback.print_exc()
-        print(f"Error occurred while getting nth open day: {e}")
+        logging.error(f"Error occurred while getting nth open day: {e}")
         return
 
     money = 0
@@ -109,10 +110,10 @@ def trading_buy(ki_api: KoreaInvestmentAPI, buy: dict):
             df = pd.DataFrame(PriceHistory.objects.filter(date__range=[datetime.now() - timedelta(days=100), datetime.now()], symbol=symbol).order_by('date').values())
 
             if df.empty:
-                print(f"No price history found for symbol: {symbol}")
+                logging.error(f"No price history found for symbol: {symbol}")
                 continue
             elif len(df) < 20:
-                print(f"Not enough price history for symbol: {symbol}")
+                logging.error(f"Not enough price history for symbol: {symbol}")
                 continue
 
             stock_update.stop_loss_insert(symbol)
@@ -133,7 +134,7 @@ def trading_buy(ki_api: KoreaInvestmentAPI, buy: dict):
                 money += price * int(volume * 0.1)
             except Exception as e:
                 traceback.print_exc()
-                print(f"Error occurred while executing trades for symbol {symbol}: {e}")
+                logging.error(f"Error occurred while executing trades for symbol {symbol}: {e}")
 
             for ma in ['ma5', 'ma10', 'ma20']:
                 price = price_refine(df.iloc[-1][ma])
@@ -142,18 +143,18 @@ def trading_buy(ki_api: KoreaInvestmentAPI, buy: dict):
                     money += price * int(volume * 0.3)
                 except Exception as e:
                     traceback.print_exc()
-                    print(f"Error occurred while executing trades for symbol {symbol}: {e}")
+                    logging.error(f"Error occurred while executing trades for symbol {symbol}: {e}")
 
         except Exception as e:
             traceback.print_exc()
-            print(f"Error occurred while processing symbol {symbol}: {e}")
+            logging.error(f"Error occurred while processing symbol {symbol}: {e}")
 
     if money:
         try:
             discord.send_message(f'총 액 : {money}')
         except Exception as e:
             traceback.print_exc()
-            print(f"Error occurred while sending message to Discord: {e}")
+            logging.error(f"Error occurred while sending message to Discord: {e}")
 
 
 def update_sell_queue(ki_api: KoreaInvestmentAPI, email: Account):
@@ -212,9 +213,9 @@ def update_sell_queue(ki_api: KoreaInvestmentAPI, email: Account):
                     else:
                         sell_entry.save()
                 except SellQueue.DoesNotExist:
-                    print(f"No entry found in sell_queue for symbol: {symbol}, email: {email}, price: {price}")
+                    logging.info(f"No entry found in sell_queue for symbol: {symbol}, email: {email}, price: {price}")
     else:
-        print("Failed to retrieve sell data")
+        logging.info("Failed to retrieve sell data")
 
     SellQueue.objects.filter(volume__lte=0).delete()
 
@@ -228,7 +229,7 @@ def trading_sell(ki_api: KoreaInvestmentAPI):
             discord.send_message(f'Not held a stock {entry.symbol.company_name}')
             continue
         sell_price = price_refine(entry.price)
-        if sell_price < int(stock.pchs_avg_pric):
+        if sell_price < float(stock.pchs_avg_pric):
             discord.send_message(f'Sell {stock.prdt_name} below average purchase price: {sell_price}')
 
         korea_investment_trading_sell_reserve(ki_api, symbol=entry.symbol.symbol, price=sell_price, volume=entry.volume, end_date=end_date)
@@ -248,12 +249,12 @@ def stop_loss_notify(ki_api: KoreaInvestmentAPI):
                     continue
                 if stock.price < int(item.prpr):
                     continue
-                discord.send_message(f"{item['prdt_name']} 판매 권유")
-                print(f"{item['prdt_name']} 판매 권유")
+                discord.send_message(f"{item.prdt_name} 판매 권유")
+                logging.info(f"{item.prdt_name} 판매 권유")
                 Subscription.objects.filter(symbol=item.pdno).delete()
                 alert.add(item.pdno)
             except Exception as e:
-                print(f"Error processing item {item.pdno}: {e}")
+                logging.error(f"Error processing item {item.pdno}: {e}")
                 traceback.print_exc()
 
         sleep(1 * 60)
@@ -263,7 +264,7 @@ def korea_investment_trading():
     # TODO 일정 % 수익 때 마다 판매 기능 구축을 위한 DB table 생성 profit_sell (symbol, price, volume(단위 %, int * 100), expire_date...?)
     ki_api = KoreaInvestmentAPI(app_key=setting_env.APP_KEY, app_secret=setting_env.APP_SECRET, account_number=setting_env.ACCOUNT_NUMBER, account_code=setting_env.ACCOUNT_CODE)
     if ki_api.check_holiday(datetime.now().strftime("%Y%m%d")):
-        print(f'{datetime.now()} 휴장일')
+        logging.info(f'{datetime.now()} 휴장일')
         return
     stop_loss = threading.Thread(target=stop_loss_notify, args=(ki_api,))
     stop_loss.start()
@@ -290,10 +291,10 @@ def korea_investment_trading():
 
 def start():
     scheduler = BackgroundScheduler(misfire_grace_time=3600, coalesce=True, timezone=settings.TIME_ZONE)
-    # ki_api = KoreaInvestmentAPI(app_key=setting_env.APP_KEY, app_secret=setting_env.APP_SECRET, account_number=setting_env.ACCOUNT_NUMBER, account_code=setting_env.ACCOUNT_CODE)
+    ki_api = KoreaInvestmentAPI(app_key=setting_env.APP_KEY, app_secret=setting_env.APP_SECRET, account_number=setting_env.ACCOUNT_NUMBER, account_code=setting_env.ACCOUNT_CODE)
     # stock_update.add_stock_price(start_date=datetime.now().strftime('%Y-%m-%d'), end_date=datetime.now().strftime('%Y-%m-%d'))
     # trading_buy(ki_api=ki_api, buy=select_buy_stocks())
-    # trading_sell(ki_api=ki_api)
+    trading_sell(ki_api=ki_api)
 
     scheduler.add_job(
         stock_update.update_defensive_subscription_stock,
