@@ -127,9 +127,9 @@ def trading_buy(ki_api: KoreaInvestmentAPI, buy: dict):
                 # if int(account.tot_evlu_amt) * 0.15 < (int(stock.evlu_amt) + price * volume):
                 #     volume = int((int(account.tot_evlu_amt) * 0.15 - int(stock.evlu_amt)) / price)
                 # volume = int(volume / 3)
-            else:
-                if int(account.tot_evlu_amt) * 0.15 < price * volume:
-                    volume = int(int(account.tot_evlu_amt) * 0.15 / price)
+            # else:
+            #     if int(account.tot_evlu_amt) * 0.15 < price * volume:
+            #         volume = int(int(account.tot_evlu_amt) * 0.15 / price)
 
             try:
                 korea_investment_trading_buy_reserve(ki_api=ki_api, symbol=symbol, price=price, volume=int(volume * 0.1), end_date=end_date)
