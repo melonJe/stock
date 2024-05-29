@@ -76,7 +76,7 @@ def select_buy_stocks() -> dict:
                 df['ATR10'] = AverageTrueRange(high=df['high'].astype('float64'), low=df['low'].astype('float64'), close=df['close'].astype('float64'), window=10).average_true_range()
                 df['ATR20'] = AverageTrueRange(high=df['high'].astype('float64'), low=df['low'].astype('float64'), close=df['close'].astype('float64'), window=20).average_true_range()
                 atr = max(df.iloc[-1]['ATR5'], df.iloc[-1]['ATR10'], df.iloc[-1]['ATR20'])
-                volume = min(int((5000000 / (100 * atr))), int(np.min(df['volume'][-5:]) / 100))  # 수량 = 계좌 잔액 / 100 / atr
+                volume = min(int((50000000 / (100 * atr))), int(np.min(df['volume'][-5:]) / 100))  # 수량 = 계좌 잔액 / 100 / atr
                 buy[symbol] = volume
                 sieve[symbol] = df.iloc[-1]['CMF']
         for x in list(dict(sorted(sieve.items(), key=lambda item: item[1], reverse=True)).keys()):
@@ -123,9 +123,10 @@ def trading_buy(ki_api: KoreaInvestmentAPI, buy: dict):
             price = df.iloc[-1]['close']
 
             if stock:
-                if int(account.tot_evlu_amt) * 0.15 < (int(stock.evlu_amt) + price * volume):
-                    volume = int((int(account.tot_evlu_amt) * 0.15 - int(stock.evlu_amt)) / price)
-                volume = int(volume / 3)
+                continue
+                # if int(account.tot_evlu_amt) * 0.15 < (int(stock.evlu_amt) + price * volume):
+                #     volume = int((int(account.tot_evlu_amt) * 0.15 - int(stock.evlu_amt)) / price)
+                # volume = int(volume / 3)
             else:
                 if int(account.tot_evlu_amt) * 0.15 < price * volume:
                     volume = int(int(account.tot_evlu_amt) * 0.15 / price)
