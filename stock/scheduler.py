@@ -9,7 +9,7 @@ import pandas as pd
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
 from django.conf import settings
-from django.db.models import Q
+from django.db.models import Q, Sum
 from ta.volatility import AverageTrueRange
 from ta.volume import ChaikinMoneyFlowIndicator
 
@@ -163,61 +163,79 @@ def update_sell_queue(ki_api: KoreaInvestmentAPI, email: Account):
     today_str = datetime.now().strftime("%Y%m%d")
     response_data = ki_api.get_stock_order_list(start_date=today_str, end_date=today_str)
 
-    if response_data:
-        # 매수 및 매도 데이터 처리
-        for trade in response_data:
-            symbol = Stock.objects.get(symbol=trade.pdno)  # 주식 심볼
-            volume = int(trade.tot_ccld_qty)  # 체결된 주식 수량
-            price = int(trade.avg_prvs)  # 체결된 가격
-            trade_type = trade.sll_buy_dvsn_cd  # 매도/매수 구분 코드 (01: 매도, 02: 매수)
-
-            if trade_type == "02":  # 매수
-                volume_50 = int(volume * 0.5)
-                volume_30 = int(volume * 0.3)
-                volume_20 = volume - volume_50 - volume_30  # 소수점은 20%가 가져감
-                price_1_1 = price_refine(int(price * 1.1))
-                price_1_2 = price_refine(int(price * 1.2))
-                price_1_5 = price_refine(int(price * 1.5))
-
-                # 50% 부분을 1.1배 가격으로 처리
-                if volume_50 > 0:
-                    try:
-                        sell_entry_50 = SellQueue.objects.get(email=email, symbol=symbol, price=price_1_1)
-                        sell_entry_50.volume += volume_50
-                        sell_entry_50.save()
-                    except SellQueue.DoesNotExist:
-                        SellQueue.objects.create(email=email, symbol=symbol, volume=volume_50, price=price_1_1)
-
-                # 30% 부분을 1.2배 가격으로 처리
-                if volume_30 > 0:
-                    try:
-                        sell_entry_30 = SellQueue.objects.get(email=email, symbol=symbol, price=price_1_2)
-                        sell_entry_30.volume += volume_30
-                        sell_entry_30.save()
-                    except SellQueue.DoesNotExist:
-                        SellQueue.objects.create(email=email, symbol=symbol, volume=volume_30, price=price_1_2)
-
-                # 20% 부분을 1.5배 가격으로 처리
-                if volume_20 > 0:
-                    try:
-                        sell_entry_20 = SellQueue.objects.get(email=email, symbol=symbol, price=price_1_5)
-                        sell_entry_20.volume += volume_20
-                        sell_entry_20.save()
-                    except SellQueue.DoesNotExist:
-                        SellQueue.objects.create(email=email, symbol=symbol, volume=volume_20, price=price_1_5)
-
-            elif trade_type == "01":  # 매도
-                try:
-                    sell_entry = SellQueue.objects.get(email=email, symbol=symbol, price=price)
-                    sell_entry.volume -= volume
-                    if sell_entry.volume <= 0:
-                        sell_entry.delete()
-                    else:
-                        sell_entry.save()
-                except SellQueue.DoesNotExist:
-                    logging.info(f"No entry found in sell_queue for symbol: {symbol}, email: {email}, price: {price}")
-    else:
+    if not response_data:
         logging.info("Failed to retrieve sell data")
+        return
+
+    sell_queue_entries = {}
+    for trade in response_data:
+        symbol = Stock.objects.get(symbol=trade.pdno)  # 주식 심볼
+        volume = int(trade.tot_ccld_qty)  # 체결된 주식 수량
+        price = int(trade.avg_prvs)  # 체결된 가격
+        trade_type = trade.sll_buy_dvsn_cd  # 매도/매수 구분 코드 (01: 매도, 02: 매수)
+
+        if trade_type == "02":  # 매수
+            volumes_and_prices = [
+                (int(volume * 0.5), price_refine(int(price * 1.1))),
+                (int(volume * 0.3), price_refine(int(price * 1.2))),
+                (volume - int(volume * 0.5) - int(volume * 0.3), price_refine(int(price * 1.5)))
+            ]
+
+            for vol, prc in volumes_and_prices:
+                if vol > 0:
+                    sell_queue_entries[(email, symbol, prc)] = sell_queue_entries.get((email, symbol, prc), 0) + vol
+
+        elif trade_type == "01":  # 매도
+            sell_queue_entries[(email, symbol, price)] = sell_queue_entries.get((email, symbol, price), 0) - volume
+
+    for (email, symbol, price), volume in sell_queue_entries.items():
+        try:
+            sell_entry = SellQueue.objects.get(email=email, symbol=symbol, price=price)
+            sell_entry.volume += volume
+            if sell_entry.volume <= 0:
+                sell_entry.delete()
+            else:
+                sell_entry.save()
+        except SellQueue.DoesNotExist:
+            if volume > 0:
+                SellQueue.objects.create(email=email, symbol=symbol, volume=volume, price=price)
+
+    owned_stock_info = ki_api.get_owned_stock_info()
+    for stock in owned_stock_info:
+        symbol = Stock.objects.get(symbol=stock.pdno)  # 주식 심볼
+        owned_volume = int(stock.hldg_qty)
+        total_db_volume = SellQueue.objects.filter(email=email, symbol=stock.pdno).aggregate(total_volume=Sum('volume'))['total_volume'] or 0
+
+        if owned_volume < total_db_volume:
+            excess_volume = total_db_volume - owned_volume
+            while excess_volume > 0:
+                smallest_price_entry = SellQueue.objects.filter(email=email, symbol=symbol).order_by('price').first()
+                if smallest_price_entry:
+                    if smallest_price_entry.volume <= excess_volume:
+                        excess_volume -= smallest_price_entry.volume
+                        smallest_price_entry.delete()
+                    else:
+                        smallest_price_entry.volume -= excess_volume
+                        smallest_price_entry.save()
+                        excess_volume = 0
+        elif owned_volume > total_db_volume:
+            additional_volume = owned_volume - total_db_volume
+            avg_price = float(stock.pchs_avg_pric)
+
+            volumes_and_prices = [
+                (int(additional_volume * 0.5), price_refine(int(avg_price * 1.1))),
+                (int(additional_volume * 0.3), price_refine(int(avg_price * 1.2))),
+                (additional_volume - int(additional_volume * 0.5) - int(additional_volume * 0.3), price_refine(int(avg_price * 1.5)))
+            ]
+
+            for vol, prc in volumes_and_prices:
+                if vol > 0:
+                    try:
+                        sell_entry = SellQueue.objects.get(email=email, symbol=symbol, price=prc)
+                        sell_entry.volume += vol
+                        sell_entry.save()
+                    except SellQueue.DoesNotExist:
+                        SellQueue.objects.create(email=email, symbol=symbol, volume=vol, price=prc)
 
     SellQueue.objects.filter(volume__lte=0).delete()
 
