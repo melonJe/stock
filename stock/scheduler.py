@@ -130,16 +130,8 @@ def trading_buy(ki_api: KoreaInvestmentAPI, buy: dict):
             #     if int(account.tot_evlu_amt) * 0.15 < price * volume:
             #         volume = int(int(account.tot_evlu_amt) * 0.15 / price)
 
-            try:
-                price = price_refine(df.iloc[-1]['close'] + df.iloc[-1]['open'])
-                korea_investment_trading_buy_reserve(ki_api=ki_api, symbol=symbol, price=price, volume=int(volume * 0.1), end_date=end_date)
-                money += price * int(volume * 0.1)
-            except Exception as e:
-                traceback.print_exc()
-                logging.error(f"Error occurred while executing trades for symbol {symbol}: {e}")
-
-            for ma in ['ma5', 'ma10', 'ma20']:
-                price = price_refine(df.iloc[-1][ma])
+            last_row = df.iloc[-1]
+            for price in (price_refine(price) for price in [last_row['close'] + last_row['open'], last_row['ma5'], last_row['ma10'], last_row['ma20']]):
                 try:
                     korea_investment_trading_buy_reserve(ki_api=ki_api, symbol=symbol, price=price, volume=int(volume * 0.3), end_date=end_date)
                     money += price * int(volume * 0.3)
