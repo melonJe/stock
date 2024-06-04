@@ -14,41 +14,6 @@ from stock.models import Stock, Subscription, Blacklist, PriceHistory, StopLoss,
 from .utils import bulk_insert, fetch_page_content, parse_finance_ratios
 
 
-def get_company_name(symbol: str) -> Optional[str]:
-    try:
-        df_krx = FinanceDataReader.StockListing('KRX')
-        stock_info = df_krx[df_krx['Symbol'] == symbol].to_dict('records')
-        if not stock_info:
-            logging.error("No stock found with that symbol.")
-            return None
-        return stock_info[0].get('Name')
-    except Exception as e:
-        logging.error(f"Failed to fetch stock data: {e}")
-        return None
-
-
-def insert_stock(symbol: str, company_name: str = None):
-    existing_stock = Stock.objects.filter(symbol=symbol).first()
-    if existing_stock:
-        logging.error(f"Error: A stock with symbol '{symbol}' already exists.")
-        return existing_stock
-
-    if not company_name:
-        company_name = get_company_name(symbol)
-
-    new_stock = Stock(symbol=symbol, company_name=company_name)
-    new_stock.save()
-    add_stock_price(symbol=symbol, start_date=(datetime.now() - timedelta(days=45)).strftime("%Y-%m-%d"), end_date=datetime.now().strftime("%Y-%m-%d"))
-    return new_stock
-
-
-def get_stock(symbol: str):
-    try:
-        return Stock.objects.get(symbol=symbol)
-    except ObjectDoesNotExist:
-        return insert_stock(symbol=symbol)
-
-
 def parse_income_elements(tr_tag) -> set:
     income = set()
     for item in tr_tag:
@@ -152,6 +117,41 @@ def stop_loss_insert(symbol: str):
     atr = max(df.iloc[-1]['ATR5'], df.iloc[-1]['ATR10'], df.iloc[-1]['ATR20'])  # 주가 변동성 체크
     stop_loss = df.iloc[-1]['ma20'] - atr  # 20일(보통), 60일(필수) 손절선
     StopLoss.objects.bulk_create([StopLoss(symbol=get_stock(symbol=symbol), price=stop_loss)], update_conflicts=True, unique_fields=['symbol'], update_fields=['price'])
+
+
+def get_stock(symbol: str):
+    try:
+        return Stock.objects.get(symbol=symbol)
+    except ObjectDoesNotExist:
+        return insert_stock(symbol=symbol)
+
+
+def get_company_name(symbol: str) -> Optional[str]:
+    try:
+        df_krx = FinanceDataReader.StockListing('KRX')
+        stock_info = df_krx[df_krx['Symbol'] == symbol].to_dict('records')
+        if not stock_info:
+            logging.error("No stock found with that symbol.")
+            return None
+        return stock_info[0].get('Name')
+    except Exception as e:
+        logging.error(f"Failed to fetch stock data: {e}")
+        return None
+
+
+def insert_stock(symbol: str, company_name: str = None):
+    existing_stock = Stock.objects.filter(symbol=symbol).first()
+    if existing_stock:
+        logging.error(f"Error: A stock with symbol '{symbol}' already exists.")
+        return existing_stock
+
+    if not company_name:
+        company_name = get_company_name(symbol)
+
+    new_stock = Stock(symbol=symbol, company_name=company_name)
+    new_stock.save()
+    add_stock_price(symbol=symbol, start_date=(datetime.now() - timedelta(days=45)).strftime("%Y-%m-%d"), end_date=datetime.now().strftime("%Y-%m-%d"))
+    return new_stock
 
 
 def add_stock():

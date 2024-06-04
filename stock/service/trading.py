@@ -127,6 +127,21 @@ def trading_buy(ki_api: KoreaInvestmentAPI, buy: dict):
             logging.error(f"Error occurred while sending message to Discord: {e}")
 
 
+def trading_sell(ki_api: KoreaInvestmentAPI):
+    end_date = ki_api.get_nth_open_day(1)
+    queue_entries = SellQueue.objects.filter(email="cabs0814@naver.com")
+    for entry in queue_entries:
+        stock = ki_api.get_owned_stock_info(entry.symbol.symbol)
+        if not stock:
+            discord.send_message(f'Not held a stock {entry.symbol.company_name}')
+            continue
+        sell_price = price_refine(entry.price)
+        if sell_price < float(stock.pchs_avg_pric):
+            discord.send_message(f'Sell {stock.prdt_name} below average purchase price: {sell_price}')
+
+        reserve_sell_stock(ki_api, symbol=entry.symbol.symbol, price=sell_price, volume=entry.volume, end_date=end_date)
+
+
 def update_sell_queue(ki_api: KoreaInvestmentAPI, email: Account):
     today_str = datetime.now().strftime("%Y%m%d")
     response_data = ki_api.get_stock_order_list(start_date=today_str, end_date=today_str)
@@ -206,21 +221,6 @@ def update_sell_queue(ki_api: KoreaInvestmentAPI, email: Account):
                         SellQueue.objects.create(email=email, symbol=symbol, volume=vol, price=prc)
 
     SellQueue.objects.filter(volume__lte=0).delete()
-
-
-def trading_sell(ki_api: KoreaInvestmentAPI):
-    end_date = ki_api.get_nth_open_day(1)
-    queue_entries = SellQueue.objects.filter(email="cabs0814@naver.com")
-    for entry in queue_entries:
-        stock = ki_api.get_owned_stock_info(entry.symbol.symbol)
-        if not stock:
-            discord.send_message(f'Not held a stock {entry.symbol.company_name}')
-            continue
-        sell_price = price_refine(entry.price)
-        if sell_price < float(stock.pchs_avg_pric):
-            discord.send_message(f'Sell {stock.prdt_name} below average purchase price: {sell_price}')
-
-        reserve_sell_stock(ki_api, symbol=entry.symbol.symbol, price=sell_price, volume=entry.volume, end_date=end_date)
 
 
 def stop_loss_notify(ki_api: KoreaInvestmentAPI):
