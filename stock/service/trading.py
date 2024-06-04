@@ -1,4 +1,5 @@
 import logging
+import math
 import threading
 import traceback
 from datetime import datetime, time, timedelta
@@ -12,10 +13,50 @@ from ta.volume import ChaikinMoneyFlowIndicator
 
 from stock.discord import discord
 from stock.korea_investment.api import KoreaInvestmentAPI
-from stock.korea_investment.trading_operations import price_refine, reserve_sell_stock, reserve_buy_stock
 from stock.models import Account, SellQueue, Stock, Subscription, PriceHistory, StopLoss, Blacklist
 from .data_handler import stop_loss_insert, add_stock_price
 from .. import setting_env
+
+
+def log_and_handle_exception(func):
+    def wrapper(*args, **kwargs):
+        try:
+            return func(*args, **kwargs)
+        except Exception as e:
+            traceback.print_exc()
+            logging.error(f"Error occurred: {e}")
+
+    return wrapper
+
+
+def price_refine(price: int, number: int = 0) -> int:
+    PRICE_LEVELS = [(2000, 1), (5000, 5), (20000, 10), (50000, 50), (200000, 100), (500000, 500), (float('inf'), 1000)]
+
+    if number == 0:
+        for level_price, adjustment in PRICE_LEVELS:
+            if price < level_price or level_price == float('inf'):
+                return round(price / adjustment) * adjustment
+
+    increase = number > 0
+    number_of_adjustments = abs(number)
+
+    for _ in range(number_of_adjustments):
+        for level_price, adjustment in PRICE_LEVELS:
+            if (increase and price < level_price) or level_price == float('inf'):
+                price = (math.trunc(price / adjustment) + 1) * adjustment
+                break
+            elif (not increase and price <= level_price) or level_price == float('inf'):
+                price = (math.ceil(price / adjustment) - 1) * adjustment
+                break
+
+    return int(price)
+
+
+def validate_and_adjust_volume(stock, requested_volume):
+    if not stock or int(stock.ord_psbl_qty) == 0:
+        logging.info(f"{stock.prdt_name if stock else '주식'} 가지고 있지 않거나 주문 가능한 수량이 없음")
+        return 0
+    return min(requested_volume, int(stock.ord_psbl_qty))
 
 
 def select_buy_stocks() -> dict:
@@ -109,7 +150,7 @@ def trading_buy(ki_api: KoreaInvestmentAPI, buy: dict):
             last_row = df.iloc[-1]
             for price in (price_refine(price) for price in [last_row['close'] + last_row['open'], last_row['ma5'], last_row['ma10'], last_row['ma20']]):
                 try:
-                    reserve_buy_stock(ki_api=ki_api, symbol=symbol, price=price, volume=int(volume * 0.3), end_date=end_date)
+                    ki_api.buy_reserve(symbol=symbol, price=price, volume=int(volume * 0.3), end_date=end_date)
                     money += price * int(volume * 0.3)
                 except Exception as e:
                     traceback.print_exc()
@@ -139,7 +180,10 @@ def trading_sell(ki_api: KoreaInvestmentAPI):
         if sell_price < float(stock.pchs_avg_pric):
             discord.send_message(f'Sell {stock.prdt_name} below average purchase price: {sell_price}')
 
-        reserve_sell_stock(ki_api, symbol=entry.symbol.symbol, price=sell_price, volume=entry.volume, end_date=end_date)
+        volume = validate_and_adjust_volume(stock, entry.volume)
+        if volume > 0:
+            if ki_api.sell_reserve(symbol=entry.symbol.symbol, price=sell_price, volume=volume, end_date=end_date):
+                return True
 
 
 def update_sell_queue(ki_api: KoreaInvestmentAPI, email: Account):
