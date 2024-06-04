@@ -76,7 +76,7 @@ def select_buy_stocks() -> dict:
                 df['ATR10'] = AverageTrueRange(high=df['high'].astype('float64'), low=df['low'].astype('float64'), close=df['close'].astype('float64'), window=10).average_true_range()
                 df['ATR20'] = AverageTrueRange(high=df['high'].astype('float64'), low=df['low'].astype('float64'), close=df['close'].astype('float64'), window=20).average_true_range()
                 atr = max(df.iloc[-1]['ATR5'], df.iloc[-1]['ATR10'], df.iloc[-1]['ATR20'])
-                volume = min(int((50000000 / (100 * atr))), int(np.min(df['volume'][-5:]) / 100))  # 수량 = 계좌 잔액 / 100 / atr
+                volume = min(int((10000000 / (100 * atr))), int(np.min(df['volume'][-5:]) / 100))  # 수량 = 계좌 잔액 / 100 / atr
                 buy[symbol] = volume
                 sieve[symbol] = df.iloc[-1]['CMF']
         for x in list(dict(sorted(sieve.items(), key=lambda item: item[1], reverse=True)).keys()):
@@ -120,7 +120,6 @@ def trading_buy(ki_api: KoreaInvestmentAPI, buy: dict):
             df['ma5'] = df['close'].rolling(window=5).mean()
             df['ma10'] = df['close'].rolling(window=10).mean()
             df['ma20'] = df['close'].rolling(window=20).mean()
-            price = df.iloc[-1]['close']
 
             if stock:
                 continue
@@ -132,6 +131,7 @@ def trading_buy(ki_api: KoreaInvestmentAPI, buy: dict):
             #         volume = int(int(account.tot_evlu_amt) * 0.15 / price)
 
             try:
+                price = price_refine(df.iloc[-1]['close'] + df.iloc[-1]['open'])
                 korea_investment_trading_buy_reserve(ki_api=ki_api, symbol=symbol, price=price, volume=int(volume * 0.1), end_date=end_date)
                 money += price * int(volume * 0.1)
             except Exception as e:
