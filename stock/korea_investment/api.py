@@ -11,7 +11,7 @@ from stock.discord import discord
 from stock.dto.account_dto import InquireBalanceRequestDTO, AccountResponseDTO, StockResponseDTO
 from stock.dto.holiday_dto import HolidayResponseDTO, HolidayRequestDTO
 from stock.dto.stock_trade_dto import StockTradeListRequestDTO, StockTradeListResponseDTO
-from stock.korea_investment.trading_operations import find_nth_open_day
+from stock.korea_investment.operations import find_nth_open_day
 
 
 class KoreaInvestmentAPI:
@@ -105,16 +105,22 @@ class KoreaInvestmentAPI:
 
     def _send_order(self, path: str, headers, payload):
         """주문 요청을 보내고 응답을 처리합니다."""
+        if int(payload.get("ORD_QTY", '0')) == 0:
+            logging.info(f"주문 수량: 0\n{payload}")
+            return False
+
         response = self._post_request(path, payload, headers)
         if response:
             if response["rt_cd"] == "0":
                 return True
             else:
-                logging.error(f"stock_db\n응답 코드 : {response['msg_cd']}\n응답 메세지 : {response['msg1']}")
-                discord.error_message(f"stock_db\n응답 코드 : {response['msg_cd']}\n응답 메세지 : {response['msg1']}")
+                error_msg = f"stock_db\n응답 코드 : {response['msg_cd']}\n응답 메세지 : {response['msg1']}"
+                logging.error(error_msg)
+                discord.error_message(error_msg)
         else:
-            logging.error("stock_db\nHTTP path 요청 실패.")
-            discord.error_message("stock_db\nHTTP path 요청 실패.")
+            error_msg = "stock_db\nHTTP path 요청 실패."
+            logging.error(error_msg)
+            discord.error_message(error_msg)
         return False
 
     def buy(self, symbol: str, price: int, volume: int, order_type: str = "00"):
