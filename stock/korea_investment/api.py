@@ -11,7 +11,7 @@ from stock.discord import discord
 from stock.dto.account_dto import InquireBalanceRequestDTO, AccountResponseDTO, StockResponseDTO
 from stock.dto.holiday_dto import HolidayResponseDTO, HolidayRequestDTO
 from stock.dto.stock_trade_dto import StockTradeListRequestDTO, StockTradeListResponseDTO
-from stock.korea_investment.utils import find_nth_open_day
+from stock.korea_investment.trading_operations import find_nth_open_day
 
 
 class KoreaInvestmentAPI:

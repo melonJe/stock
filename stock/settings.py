@@ -134,7 +134,6 @@ APSCHEDULER_RUN_NOW_TIMEOUT = 86400
 SCHEDULER_ENABLED = True
 
 # 로깅 설정
-
 LOGGING = {
     'version': 1,
     'disable_existing_loggers': False,
