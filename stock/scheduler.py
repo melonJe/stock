@@ -312,6 +312,7 @@ def korea_investment_trading():
 def start():
     scheduler = BackgroundScheduler(misfire_grace_time=3600, coalesce=True, timezone=settings.TIME_ZONE)
     # ki_api = KoreaInvestmentAPI(app_key=setting_env.APP_KEY, app_secret=setting_env.APP_SECRET, account_number=setting_env.ACCOUNT_NUMBER, account_code=setting_env.ACCOUNT_CODE)
+    # update_sell_queue(ki_api, email=Account.objects.get(email='cabs0814@naver.com'))
     # stock_update.add_stock_price(start_date=datetime.now().strftime('%Y-%m-%d'), end_date=datetime.now().strftime('%Y-%m-%d'))
     # trading_buy(ki_api=ki_api, buy=select_buy_stocks())
     # trading_sell(ki_api=ki_api)
