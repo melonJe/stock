@@ -148,7 +148,7 @@ def trading_buy(ki_api: KoreaInvestmentAPI, buy: dict):
                 continue
 
             last_row = df.iloc[-1]
-            for price in (price_refine(price) for price in [last_row['close'] + last_row['open'], last_row['ma5'], last_row['ma10'], last_row['ma20']]):
+            for price in (price_refine(price) for price in [int((last_row['close'] + last_row['open']) / 2), last_row['ma5'], last_row['ma10'], last_row['ma20']]):
                 try:
                     ki_api.buy_reserve(symbol=symbol, price=price, volume=int(volume * 0.3), end_date=end_date)
                     money += price * int(volume * 0.3)
@@ -182,8 +182,7 @@ def trading_sell(ki_api: KoreaInvestmentAPI):
 
         volume = validate_and_adjust_volume(stock, entry.volume)
         if volume > 0:
-            if ki_api.sell_reserve(symbol=entry.symbol.symbol, price=sell_price, volume=volume, end_date=end_date):
-                return True
+            ki_api.sell_reserve(symbol=entry.symbol.symbol, price=sell_price, volume=volume, end_date=end_date)
 
 
 def update_sell_queue(ki_api: KoreaInvestmentAPI, email: Account):
