@@ -189,10 +189,6 @@ def update_sell_queue(ki_api: KoreaInvestmentAPI, email: Account):
     today_str = datetime.now().strftime("%Y%m%d")
     response_data = ki_api.get_stock_order_list(start_date=today_str, end_date=today_str)
 
-    if not response_data:
-        logging.info("Failed to retrieve sell data")
-        return
-
     sell_queue_entries = {}
     for trade in response_data:
         symbol = Stock.objects.get(symbol=trade.pdno)
