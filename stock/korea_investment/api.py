@@ -115,9 +115,8 @@ class KoreaInvestmentAPI:
             if response["rt_cd"] == "0":
                 return True
             else:
-                error_msg = f"stock_db\n응답 코드 : {response['msg_cd']}\n응답 메세지 : {response['msg1']}"
-                logging.error(error_msg)
-                discord.error_message(error_msg)
+                logging.error(response)
+                discord.error_message(response)
         else:
             error_msg = "stock_db\nHTTP path 요청 실패."
             logging.error(error_msg)
