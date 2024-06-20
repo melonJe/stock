@@ -115,7 +115,7 @@ def stop_loss_insert(symbol: str):
     df['ATR10'] = AverageTrueRange(high=df['high'].astype('float64'), low=df['low'].astype('float64'), close=df['close'].astype('float64'), window=10).average_true_range()
     df['ATR20'] = AverageTrueRange(high=df['high'].astype('float64'), low=df['low'].astype('float64'), close=df['close'].astype('float64'), window=20).average_true_range()
     atr = max(df.iloc[-1]['ATR5'], df.iloc[-1]['ATR10'], df.iloc[-1]['ATR20'])  # 주가 변동성 체크
-    stop_loss = df.iloc[-1]['ma20'] - atr  # 20일(보통), 60일(필수) 손절선
+    stop_loss = df.iloc[-1]['ma20'] - 2 * atr  # 20일(보통), 60일(필수) 손절선
     StopLoss.objects.bulk_create([StopLoss(symbol=get_stock(symbol=symbol), price=stop_loss)], update_conflicts=True, unique_fields=['symbol'], update_fields=['price'])
 
 
