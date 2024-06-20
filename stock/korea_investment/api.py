@@ -109,7 +109,6 @@ class KoreaInvestmentAPI:
             logging.info(f"주문 수량: 0\n{payload}")
             return False
 
-        logging.info(f"headers: {headers}\npayload: {payload}")
         response = self._post_request(path, payload, headers)
         if response:
             if response["rt_cd"] == "0":
