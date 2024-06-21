@@ -115,11 +115,9 @@ class KoreaInvestmentAPI:
                 return True
             else:
                 logging.error(response)
-                discord.error_message(response)
         else:
             error_msg = "stock_db\nHTTP path 요청 실패."
             logging.error(error_msg)
-            discord.error_message(error_msg)
         return False
 
     def buy(self, symbol: str, price: int, volume: int, order_type: str = "00"):
