@@ -155,13 +155,6 @@ def select_buy_stocks_ver2() -> dict:
 
 def trading_buy(ki_api: KoreaInvestmentAPI, buy: dict):
     try:
-        account = ki_api.get_account_info()
-    except Exception as e:
-        traceback.print_exc()
-        logging.error(f"Error occurred while getting account info: {e}")
-        return
-
-    try:
         end_date = ki_api.get_nth_open_day(3)
     except Exception as e:
         traceback.print_exc()
@@ -178,7 +171,7 @@ def trading_buy(ki_api: KoreaInvestmentAPI, buy: dict):
             if df.empty:
                 logging.error(f"No price history found for symbol: {symbol}")
                 continue
-            elif len(df) < 20:
+            elif len(df) < 50:
                 logging.error(f"Not enough price history for symbol: {symbol}")
                 continue
 
@@ -193,7 +186,7 @@ def trading_buy(ki_api: KoreaInvestmentAPI, buy: dict):
             last_row = df.iloc[-1]
             for price in (price_refine(price) for price in [int((last_row['close'] + last_row['open']) / 2), last_row['ma5'], last_row['ma10'], last_row['ma20']]):
                 try:
-                    ki_api.buy_reserve(symbol=symbol, price=price, volume=int(volume * 0.3), end_date=end_date)
+                    ki_api.buy_reserve(symbol=symbol, price=price, volume=int(volume * 0.25), end_date=end_date)
                     money += price * int(volume * 0.3)
                 except Exception as e:
                     traceback.print_exc()
@@ -202,6 +195,27 @@ def trading_buy(ki_api: KoreaInvestmentAPI, buy: dict):
         except Exception as e:
             traceback.print_exc()
             logging.error(f"Error occurred while processing symbol {symbol}: {e}")
+
+    try:
+        end_date = ki_api.get_nth_open_day(1)
+        stocks = ki_api.get_owned_stock_info()
+    except Exception as e:
+        traceback.print_exc()
+        logging.error(f"Error occurred while getting nth open day: {e}")
+        return
+
+    for stock in stocks:
+        df = pd.DataFrame(PriceHistory.objects.filter(date__range=[datetime.now() - timedelta(days=100), datetime.now()], symbol=stock.pdno).order_by('date').values())
+
+        if df.empty:
+            logging.error(f"No price history found for symbol: {stock.pdno}")
+            continue
+        elif len(df) < 100:
+            logging.error(f"Not enough price history for symbol: {stock.pdno}")
+            continue
+
+        df['ma60'] = df['close'].rolling(window=60).mean()
+        ki_api.buy_reserve(symbol=stock.pdno, price=price_refine(df['ma60']), volume=int(int(stock.hldg_qty) * 0.1), end_date=end_date)
 
     if money:
         try:
@@ -240,11 +254,12 @@ def update_sell_queue(ki_api: KoreaInvestmentAPI, email: Account):
         trade_type = trade.sll_buy_dvsn_cd
 
         if trade_type == "02":
+            rate = 5 / 6
             volumes_and_prices = [
-                (int(volume * 0.4), price_refine(int(price * 1.15))),
-                (int(volume * 0.3), price_refine(int(price * 1.2))),
-                (int(volume * 0.2), price_refine(int(price * 1.3))),
-                (volume - int(volume * 0.4) - int(volume * 0.3) - int(volume * 0.2), price_refine(int(price * 1.6)))
+                (int(volume * 0.4), price_refine(int(price * rate * 1.15))),
+                (int(volume * 0.3), price_refine(int(price * rate * 1.2))),
+                (int(volume * 0.2), price_refine(int(price * rate * 1.3))),
+                (volume - int(volume * 0.4) - int(volume * 0.3) - int(volume * 0.2), price_refine(int(price * rate * 1.6)))
             ]
 
             for vol, prc in volumes_and_prices:
