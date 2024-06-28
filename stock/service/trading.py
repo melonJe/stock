@@ -134,7 +134,7 @@ def select_buy_stocks_ver2() -> dict:
 
             df['CMF'] = ChaikinMoneyFlowIndicator(high=df['high'].astype('float64'), low=df['low'].astype('float64'), close=df['close'].astype('float64'), volume=df['volume'].astype('float64')).chaikin_money_flow()
             df_cmf = df[:-10]['CMF']
-            if np.any(df_cmf < -0.25) or np.any(0.25 < df_cmf):
+            if np.any(df_cmf < -0.25):
                 continue
 
             if df.iloc[-1]['CMF'] > 0.25:
@@ -215,8 +215,11 @@ def trading_buy(ki_api: KoreaInvestmentAPI, buy: dict):
             continue
 
         df['ma60'] = df['close'].rolling(window=60).mean()
-        if df['ma60'] < int(int(stock.pchs_avg_pric) * 0.9) and df['ma60'] < df['low']:
-            ki_api.buy_reserve(symbol=stock.pdno, price=price_refine(df['ma60']), volume=int(int(stock.hldg_qty) * 0.1 + 1), end_date=end_date)
+        df['CMF'] = ChaikinMoneyFlowIndicator(high=df['high'].astype('float64'), low=df['low'].astype('float64'), close=df['close'].astype('float64'), volume=df['volume'].astype('float64')).chaikin_money_flow()
+        if np.any(df[:-5]['CMF'] < -0.25):
+            continue
+        if df.iloc[-1]['ma60'] < int(float(stock.pchs_avg_pric) * 0.995) and df.iloc[-1]['ma60'] < df.iloc[-1]['low']:
+            ki_api.buy_reserve(symbol=stock.pdno, price=price_refine(df.iloc[-1]['ma60']), volume=int(int(stock.hldg_qty) * 0.1 + 1), end_date=end_date)
 
     if money:
         try:
