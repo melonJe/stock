@@ -66,7 +66,7 @@ def select_buy_stocks() -> dict:
         buy = dict()
         sieve = dict()
         for symbol in stocks:
-            df = pd.DataFrame(PriceHistory.objects.filter(date__range=[datetime.now() - timedelta(days=550), datetime.now()], symbol=symbol).order_by('date').values())
+            df = pd.DataFrame(PriceHistory.objects.filter(date__range=[datetime.now() - timedelta(days=600), datetime.now()], symbol=symbol).order_by('date').values())
             if len(df) < 300:
                 continue
 
@@ -117,7 +117,7 @@ def select_buy_stocks_ver2() -> dict:
         buy = dict()
         sieve = dict()
         for symbol in stocks:
-            df = pd.DataFrame(PriceHistory.objects.filter(date__range=[datetime.now() - timedelta(days=220), datetime.now()], symbol=symbol).order_by('date').values())
+            df = pd.DataFrame(PriceHistory.objects.filter(date__range=[datetime.now() - timedelta(days=240), datetime.now()], symbol=symbol).order_by('date').values())
             if len(df) < 120:
                 continue
 
