@@ -215,8 +215,8 @@ def trading_buy(ki_api: KoreaInvestmentAPI, buy: dict):
             continue
 
         df['ma60'] = df['close'].rolling(window=60).mean()
-        if df['ma60'] < int(int(stock.pchs_avg_pric) * 0.9) and df['ma60'] < int(stock.prpr):
-            ki_api.buy_reserve(symbol=stock.pdno, price=price_refine(df['ma60']), volume=int(int(stock.hldg_qty) * 0.1), end_date=end_date)
+        if df['ma60'] < int(int(stock.pchs_avg_pric) * 0.9) and df['ma60'] < df['low']:
+            ki_api.buy_reserve(symbol=stock.pdno, price=price_refine(df['ma60']), volume=int(int(stock.hldg_qty) * 0.1 + 1), end_date=end_date)
 
     if money:
         try:
