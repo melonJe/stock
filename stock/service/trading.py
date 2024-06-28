@@ -205,12 +205,12 @@ def trading_buy(ki_api: KoreaInvestmentAPI, buy: dict):
         return
 
     for stock in stocks:
-        df = pd.DataFrame(PriceHistory.objects.filter(date__range=[datetime.now() - timedelta(days=100), datetime.now()], symbol=stock.pdno).order_by('date').values())
+        df = pd.DataFrame(PriceHistory.objects.filter(date__range=[datetime.now() - timedelta(days=160), datetime.now()], symbol=stock.pdno).order_by('date').values())
 
         if df.empty:
             logging.error(f"No price history found for symbol: {stock.pdno}")
             continue
-        elif len(df) < 100:
+        elif len(df) < 80:
             logging.error(f"Not enough price history for symbol: {stock.pdno}")
             continue
 
