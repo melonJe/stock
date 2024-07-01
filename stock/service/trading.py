@@ -121,8 +121,6 @@ def select_buy_stocks_ver2() -> dict:
             if len(df) < 120:
                 continue
 
-            df = df[-120:]
-
             df['ma60'] = df['close'].rolling(window=60).mean()
             if df.iloc[-1]['ma60'] > df.iloc[-1]['low']:
                 continue
@@ -133,8 +131,8 @@ def select_buy_stocks_ver2() -> dict:
                 continue
 
             df['CMF'] = ChaikinMoneyFlowIndicator(high=df['high'].astype('float64'), low=df['low'].astype('float64'), close=df['close'].astype('float64'), volume=df['volume'].astype('float64')).chaikin_money_flow()
-            df_cmf = df[:-10]['CMF']
-            if np.any(df_cmf < -0.25):
+            df_cmf = df[-120:-10]['CMF']
+            if np.any(df_cmf < -0.15) or np.any(0.15 < df_cmf):
                 continue
 
             if df.iloc[-1]['CMF'] > 0.25:
@@ -179,47 +177,31 @@ def trading_buy(ki_api: KoreaInvestmentAPI, buy: dict):
             df['ma5'] = df['close'].rolling(window=5).mean()
             df['ma10'] = df['close'].rolling(window=10).mean()
             df['ma20'] = df['close'].rolling(window=20).mean()
+            df['ma60'] = df['close'].rolling(window=60).mean()
+            last_row = df.iloc[-1]
 
             if stock:
-                continue
-
-            last_row = df.iloc[-1]
-            for price in (price_refine(price) for price in [int((last_row['close'] + last_row['open']) / 2), last_row['ma5'], last_row['ma10'], last_row['ma20']]):
-                try:
-                    ki_api.buy_reserve(symbol=symbol, price=price, volume=int(volume * 0.25), end_date=end_date)
-                    money += price * int(volume * 0.3)
-                except Exception as e:
-                    traceback.print_exc()
-                    logging.error(f"Error occurred while executing trades for symbol {symbol}: {e}")
+                for price in (price_refine(price) for price in [last_row['ma20'], last_row['ma60']]):
+                    if price > float(stock.pchs_avg_pric) * 0.995:
+                        continue
+                    try:
+                        ki_api.buy_reserve(symbol=symbol, price=price, volume=int(volume * 0.1), end_date=end_date)
+                        money += price * int(volume * 0.1)
+                    except Exception as e:
+                        traceback.print_exc()
+                        logging.error(f"Error occurred while executing trades for symbol {symbol}: {e}")
+            else:
+                for price in (price_refine(price) for price in [int((last_row['close'] + last_row['open']) / 2), last_row['ma5'], last_row['ma10'], last_row['ma20']]):
+                    try:
+                        ki_api.buy_reserve(symbol=symbol, price=price, volume=int(volume * 0.25), end_date=end_date)
+                        money += price * int(volume * 0.25)
+                    except Exception as e:
+                        traceback.print_exc()
+                        logging.error(f"Error occurred while executing trades for symbol {symbol}: {e}")
 
         except Exception as e:
             traceback.print_exc()
             logging.error(f"Error occurred while processing symbol {symbol}: {e}")
-
-    try:
-        end_date = ki_api.get_nth_open_day(1)
-        stocks = ki_api.get_owned_stock_info()
-    except Exception as e:
-        traceback.print_exc()
-        logging.error(f"Error occurred while getting nth open day: {e}")
-        return
-
-    for stock in stocks:
-        df = pd.DataFrame(PriceHistory.objects.filter(date__range=[datetime.now() - timedelta(days=160), datetime.now()], symbol=stock.pdno).order_by('date').values())
-
-        if df.empty:
-            logging.error(f"No price history found for symbol: {stock.pdno}")
-            continue
-        elif len(df) < 80:
-            logging.error(f"Not enough price history for symbol: {stock.pdno}")
-            continue
-
-        df['ma60'] = df['close'].rolling(window=60).mean()
-        df['CMF'] = ChaikinMoneyFlowIndicator(high=df['high'].astype('float64'), low=df['low'].astype('float64'), close=df['close'].astype('float64'), volume=df['volume'].astype('float64')).chaikin_money_flow()
-        if np.any(df[:-5]['CMF'] < -0.25):
-            continue
-        if df.iloc[-1]['ma60'] < int(float(stock.pchs_avg_pric) * 0.995) and df.iloc[-1]['ma60'] < df.iloc[-1]['low']:
-            ki_api.buy_reserve(symbol=stock.pdno, price=price_refine(df.iloc[-1]['ma60']), volume=int(int(stock.hldg_qty) * 0.1 + 1), end_date=end_date)
 
     if money:
         try:
