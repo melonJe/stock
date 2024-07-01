@@ -249,6 +249,7 @@ def trading_sell(ki_api: KoreaInvestmentAPI):
 def update_sell_queue(ki_api: KoreaInvestmentAPI, email: Account):
     today_str = datetime.now().strftime("%Y%m%d")
     response_data = ki_api.get_stock_order_list(start_date=today_str, end_date=today_str)
+    rate = 5 / 6
 
     sell_queue_entries = {}
     for trade in response_data:
@@ -258,7 +259,6 @@ def update_sell_queue(ki_api: KoreaInvestmentAPI, email: Account):
         trade_type = trade.sll_buy_dvsn_cd
 
         if trade_type == "02":
-            rate = 5 / 6
             volumes_and_prices = [
                 (int(volume * 0.4), price_refine(int(price * rate * 1.15))),
                 (int(volume * 0.3), price_refine(int(price * rate * 1.2))),
@@ -306,7 +306,6 @@ def update_sell_queue(ki_api: KoreaInvestmentAPI, email: Account):
         elif owned_volume > total_db_volume:
             additional_volume = owned_volume - total_db_volume
             avg_price = float(stock.pchs_avg_pric)
-            rate = 5 / 6
 
             volumes_and_prices = [
                 (int(additional_volume * 0.4), price_refine(int(avg_price * rate * 1.15))),
