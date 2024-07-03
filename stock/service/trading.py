@@ -18,17 +18,6 @@ from .data_handler import stop_loss_insert, add_stock_price
 from .. import setting_env
 
 
-def log_and_handle_exception(func):
-    def wrapper(*args, **kwargs):
-        try:
-            return func(*args, **kwargs)
-        except Exception as e:
-            traceback.print_exc()
-            logging.error(f"Error occurred: {e}")
-
-    return wrapper
-
-
 def price_refine(price: int, number: int = 0) -> int:
     PRICE_LEVELS = [(2000, 1), (5000, 5), (20000, 10), (50000, 50), (200000, 100), (500000, 500), (float('inf'), 1000)]
 
@@ -74,18 +63,8 @@ def select_buy_stocks() -> dict:
             if df.iloc[-1]['ma60'] > df.iloc[-1]['low']:
                 continue
 
-            df['ma240'] = df['close'].rolling(window=240).mean()
-            df['ma120'] = df['close'].rolling(window=120).mean()
             last_3_days = df[-3:]
-            condition1 = np.any(last_3_days['ma240'] > last_3_days['close'])
-            condition2 = np.any(last_3_days['ma120'] > last_3_days['close'])
-            if condition1 or condition2:
-                continue
-
-            last_10_days = df[-10:]
-            condition1 = np.all(last_10_days['ma240'] < last_10_days['close'])
-            condition2 = np.all(last_10_days['ma120'] < last_10_days['close'])
-            if condition1 and condition2:
+            if np.any(last_3_days['ma60'] > last_3_days['close']):
                 continue
 
             df['ma20'] = df['close'].rolling(window=20).mean()
