@@ -160,19 +160,19 @@ def trading_buy(ki_api: KoreaInvestmentAPI, buy: dict):
             last_row = df.iloc[-1]
 
             if stock:
-                for price in (price_refine(price) for price in [last_row['ma20'], last_row['ma60']]):
+                for idx, price in enumerate(price_refine(price) for price in [last_row['ma20'], last_row['ma60']]):
                     if price > float(stock.pchs_avg_pric) * 0.995:
                         continue
                     try:
-                        ki_api.buy_reserve(symbol=symbol, price=price, volume=int(volume * 0.1), end_date=end_date)
+                        ki_api.buy_reserve(symbol=symbol, price=price, volume=int(volume * 0.1 * (idx + 1)), end_date=end_date)
                         money += price * int(volume * 0.1)
                     except Exception as e:
                         traceback.print_exc()
                         logging.error(f"Error occurred while executing trades for symbol {symbol}: {e}")
             else:
-                for price in (price_refine(price) for price in [int((last_row['close'] + last_row['open']) / 2), last_row['ma5'], last_row['ma10'], last_row['ma20']]):
+                for idx, price in enumerate(price_refine(price) for price in [int((last_row['close'] + last_row['open']) / 2), last_row['ma5'], last_row['ma10'], last_row['ma20']]):
                     try:
-                        ki_api.buy_reserve(symbol=symbol, price=price, volume=int(volume * 0.25), end_date=end_date)
+                        ki_api.buy_reserve(symbol=symbol, price=price, volume=int(volume * 0.1 * (idx + 1)), end_date=end_date)
                         money += price * int(volume * 0.25)
                     except Exception as e:
                         traceback.print_exc()
