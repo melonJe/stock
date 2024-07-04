@@ -32,7 +32,7 @@ services:
       - TZ=Asia/Seoul
     depends_on:
       - stock_db
-      -
+
 networks:
   melon-net:
     name: melon-net
