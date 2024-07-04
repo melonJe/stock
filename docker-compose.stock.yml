@@ -11,6 +11,8 @@ services:
       - "15432:5432"
     env_file:
       - .env.stock_db
+    environment:
+      - TZ=Asia/Seoul
     volumes:
       - ./stock_db:/var/lib/postgresql/data
 
@@ -20,17 +22,17 @@ services:
     networks:
       - melon-net
     #    restart: always
+    ports:
+      - "18000:8000"
     env_file:
       - .env
     volumes:
       - ./logs_stock:/app/logs
-    ports:
-      - "18000:8000"
     environment:
       - TZ=Asia/Seoul
     depends_on:
       - stock_db
-
+      -
 networks:
   melon-net:
     name: melon-net

@@ -302,7 +302,6 @@ def stop_loss_notify(ki_api: KoreaInvestmentAPI):
                     continue
                 discord.send_message(f"{item.prdt_name} 판매 권유")
                 logging.info(f"{item.prdt_name} 판매 권유")
-                Subscription.objects.filter(symbol=item.pdno).delete()
                 alert.add(item.pdno)
             except Exception as e:
                 logging.error(f"Error processing item {item.pdno}: {e}")
