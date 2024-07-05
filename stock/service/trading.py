@@ -67,6 +67,10 @@ def select_buy_stocks() -> dict:
             if np.any(last_3_days['ma60'] > last_3_days['close']):
                 continue
 
+            last_10_days = df[-10:]
+            if np.all(last_10_days['ma60'] < last_10_days['close']):
+                continue
+
             df['ma20'] = df['close'].rolling(window=20).mean()
             df['ma10'] = df['close'].rolling(window=10).mean()
             if not (df.iloc[-1]['ma60'] < df.iloc[-1]['ma20'] < df.iloc[-1]['ma10'] < df.iloc[-1]['close']):
@@ -132,7 +136,7 @@ def select_buy_stocks_ver2() -> dict:
 
 def trading_buy(ki_api: KoreaInvestmentAPI, buy: dict):
     try:
-        end_date = ki_api.get_nth_open_day(3)
+        end_date = ki_api.get_nth_open_day(5)
     except Exception as e:
         traceback.print_exc()
         logging.error(f"Error occurred while getting nth open day: {e}")
