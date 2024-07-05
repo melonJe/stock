@@ -223,10 +223,10 @@ def update_sell_queue(ki_api: KoreaInvestmentAPI, email: Account):
 
         if trade_type == "02":
             volumes_and_prices = [
-                (volume - int(volume * 0.3) - int(volume * 0.2) - int(volume * 0.1), price_refine(int(price * 1.10))),
+                (volume - int(volume * 0.3) - int(volume * 0.2) - int(volume * 0.1), price_refine(int(price * 1.1))),
                 (int(volume * 0.3), price_refine(int(price * 1.2))),
-                (int(volume * 0.2), price_refine(int(price * 1.3))),
-                (int(volume * 0.1), price_refine(int(price * 1.4)))
+                (int(volume * 0.2), price_refine(int(price * 1.4))),
+                (int(volume * 0.1), price_refine(int(price * 1.7)))
             ]
 
             for vol, prc in volumes_and_prices:
@@ -271,10 +271,10 @@ def update_sell_queue(ki_api: KoreaInvestmentAPI, email: Account):
             avg_price = float(stock.pchs_avg_pric)
 
             volumes_and_prices = [
-                (additional_volume - int(additional_volume * 0.3) - int(additional_volume * 0.2) - int(additional_volume * 0.1), price_refine(int(avg_price * 1.10))),
+                (additional_volume - int(additional_volume * 0.3) - int(additional_volume * 0.2) - int(additional_volume * 0.1), price_refine(int(avg_price * 1.1))),
                 (int(additional_volume * 0.3), price_refine(int(avg_price * 1.2))),
-                (int(additional_volume * 0.2), price_refine(int(avg_price * 1.3))),
-                (int(additional_volume * 0.1), price_refine(int(avg_price * 1.4)))
+                (int(additional_volume * 0.2), price_refine(int(avg_price * 1.4))),
+                (int(additional_volume * 0.1), price_refine(int(avg_price * 1.7)))
             ]
 
             for vol, prc in volumes_and_prices:
