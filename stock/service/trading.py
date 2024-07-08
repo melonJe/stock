@@ -156,7 +156,7 @@ def trading_buy(ki_api: KoreaInvestmentAPI, buy: dict):
                 logging.error(f"Not enough price history for symbol: {symbol}")
                 continue
 
-            stop_loss_insert(symbol)
+            stop_loss_insert(symbol, float(stock.pchs_avg_pric))
             df['ma10'] = df['close'].rolling(window=10).mean()
             df['ma20'] = df['close'].rolling(window=20).mean()
             df['ma60'] = df['close'].rolling(window=60).mean()
@@ -299,7 +299,7 @@ def stop_loss_notify(ki_api: KoreaInvestmentAPI):
                     continue
                 stock = StopLoss.objects.filter(symbol=item.pdno).first()
                 if not stock:
-                    stop_loss_insert(item.pdno)
+                    stop_loss_insert(item.pdno, float(item.pchs_avg_pric))
                     continue
                 if stock.price < int(item.prpr):
                     continue
@@ -326,7 +326,7 @@ def korea_investment_trading():
 
     add_stock_price(start_date=datetime.now().strftime('%Y-%m-%d'), end_date=datetime.now().strftime('%Y-%m-%d'))
     for stock in ki_api.get_owned_stock_info():
-        stop_loss_insert(stock.pdno)
+        stop_loss_insert(stock.pdno, float(stock.pchs_avg_pric))
 
     while datetime.now().time() < time(16, 00, 30):
         sleep(1 * 60)
