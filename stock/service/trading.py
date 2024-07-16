@@ -67,8 +67,8 @@ def select_buy_stocks() -> dict:
             if np.any(last_3_days['ma60'] > last_3_days['close']):
                 continue
 
-            last_10_days = df[-10:]
-            if np.all(last_10_days['ma60'] < last_10_days['close']):
+            last_15_days = df[-15:]
+            if np.all(last_15_days['ma60'] < last_15_days['close']):
                 continue
 
             df['ma20'] = df['close'].rolling(window=20).mean()
