@@ -202,12 +202,13 @@ def trading_sell(ki_api: KoreaInvestmentAPI):
             discord.send_message(f'Not held a stock {entry.symbol.company_name}')
             continue
         sell_price = price_refine(entry.price)
-        if sell_price < float(stock.pchs_avg_pric):
-            discord.send_message(f'Sell {stock.prdt_name} below average purchase price: {sell_price}')
-
         volume = validate_and_adjust_volume(stock, entry.volume)
-        if volume > 0:
-            ki_api.sell_reserve(symbol=entry.symbol.symbol, price=sell_price, volume=volume, end_date=end_date)
+        if volume <= 0:
+            continue
+
+        if sell_price < float(stock.pchs_avg_pric):
+            sell_price = price_refine(int(float(stock.pchs_avg_pric)), 2)
+        ki_api.sell_reserve(symbol=entry.symbol.symbol, price=sell_price, volume=volume, end_date=end_date)
 
 
 def update_sell_queue(ki_api: KoreaInvestmentAPI, email: Account):
