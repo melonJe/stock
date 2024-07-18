@@ -148,12 +148,12 @@ def trading_buy(ki_api: KoreaInvestmentAPI, buy: dict):
     for symbol, volume in buy.items():
         try:
             stock = ki_api.get_owned_stock_info(symbol)
-            df = pd.DataFrame(PriceHistory.objects.filter(date__range=[datetime.now() - timedelta(days=100), datetime.now()], symbol=symbol).order_by('date').values())
+            df = pd.DataFrame(PriceHistory.objects.filter(date__range=[datetime.now() - timedelta(days=200), datetime.now()], symbol=symbol).order_by('date').values())
 
             if df.empty:
                 logging.error(f"No price history found for symbol: {symbol}")
                 continue
-            elif len(df) < 50:
+            elif len(df) < 100:
                 logging.error(f"Not enough price history for symbol: {symbol}")
                 continue
 
@@ -169,7 +169,7 @@ def trading_buy(ki_api: KoreaInvestmentAPI, buy: dict):
                         continue
                     try:
                         ki_api.buy_reserve(symbol=symbol, price=price, volume=int(volume * 0.1 * (idx + 1)), end_date=end_date)
-                        money += price * int(volume * 0.1)
+                        money += price * int(volume * 0.1 * (idx + 1))
                     except Exception as e:
                         traceback.print_exc()
                         logging.error(f"Error occurred while executing trades for symbol {symbol}: {e}")
@@ -178,7 +178,7 @@ def trading_buy(ki_api: KoreaInvestmentAPI, buy: dict):
                 for idx, price in enumerate(price_refine(price) for price in [int((last_row['close'] + last_row['open']) / 2), last_row['ma10'], last_row['ma20'], last_row['ma60']]):
                     try:
                         ki_api.buy_reserve(symbol=symbol, price=price, volume=int(volume * 0.1 * (idx + 1)), end_date=end_date)
-                        money += price * int(volume * 0.25)
+                        money += price * int(volume * 0.1 * (idx + 1))
                     except Exception as e:
                         traceback.print_exc()
                         logging.error(f"Error occurred while executing trades for symbol {symbol}: {e}")
