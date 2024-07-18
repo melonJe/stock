@@ -64,7 +64,7 @@ def select_buy_stocks() -> dict:
                 continue
 
             last_3_days = df[-3:]
-            if np.any(last_3_days['ma60'] > last_3_days['close']):
+            if not (np.all(last_3_days['ma60'] < last_3_days['close'])):
                 continue
 
             last_15_days = df[-15:]
@@ -73,7 +73,8 @@ def select_buy_stocks() -> dict:
 
             df['ma20'] = df['close'].rolling(window=20).mean()
             df['ma10'] = df['close'].rolling(window=10).mean()
-            if not (df.iloc[-1]['ma60'] < df.iloc[-1]['ma20'] < df.iloc[-1]['ma10'] < df.iloc[-1]['close']):
+            df['ma5'] = df['close'].rolling(window=5).mean()
+            if not (df.iloc[-1]['ma20'] < df.iloc[-1]['ma10'] < df.iloc[-1]['ma5'] < df.iloc[-1]['close']):
                 continue
 
             df['CMF'] = ChaikinMoneyFlowIndicator(high=df['high'].astype('float64'), low=df['low'].astype('float64'), close=df['close'].astype('float64'), volume=df['volume'].astype('float64')).chaikin_money_flow()
@@ -156,13 +157,13 @@ def trading_buy(ki_api: KoreaInvestmentAPI, buy: dict):
                 logging.error(f"Not enough price history for symbol: {symbol}")
                 continue
 
-            stop_loss_insert(symbol, float(stock.pchs_avg_pric))
             df['ma10'] = df['close'].rolling(window=10).mean()
             df['ma20'] = df['close'].rolling(window=20).mean()
             df['ma60'] = df['close'].rolling(window=60).mean()
             last_row = df.iloc[-1]
 
             if stock:
+                stop_loss_insert(symbol, float(stock.pchs_avg_pric))
                 for idx, price in enumerate(price_refine(price) for price in [last_row['ma20'], last_row['ma60']]):
                     if price > float(stock.pchs_avg_pric) * 0.995:
                         continue
@@ -173,6 +174,7 @@ def trading_buy(ki_api: KoreaInvestmentAPI, buy: dict):
                         traceback.print_exc()
                         logging.error(f"Error occurred while executing trades for symbol {symbol}: {e}")
             else:
+                stop_loss_insert(symbol, df.iloc[-1]['ma60'])
                 for idx, price in enumerate(price_refine(price) for price in [int((last_row['close'] + last_row['open']) / 2), last_row['ma10'], last_row['ma20'], last_row['ma60']]):
                     try:
                         ki_api.buy_reserve(symbol=symbol, price=price, volume=int(volume * 0.1 * (idx + 1)), end_date=end_date)
