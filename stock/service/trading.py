@@ -165,7 +165,7 @@ def trading_buy(ki_api: KoreaInvestmentAPI, buy: dict):
             if stock:
                 stop_loss_insert(symbol, float(stock.pchs_avg_pric))
                 for idx, price in enumerate(price_refine(price) for price in [last_row['ma20'], last_row['ma60']]):
-                    if price > float(stock.pchs_avg_pric) * 0.995:
+                    if price > float(stock.pchs_avg_pric) * 0.975:
                         continue
                     try:
                         ki_api.buy_reserve(symbol=symbol, price=price, volume=int(volume * 0.1 * (idx + 1)), end_date=end_date)
