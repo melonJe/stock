@@ -71,11 +71,11 @@ def update_defensive_subscription_stock():  # 방어적 투자
                 continue
 
             income = set([])
-            # tr_tag = BeautifulSoup(page, "html.parser").select('div.um_table')[-1].select('tr')
-            # for item in tr_tag:
-            #     check = item.select('th > div > div > dl > dt')
-            #     if isinstance(check, list) and check and check[0].text in ['매출액증가율', '영업이익증가율']:  # 'EPS증가율'
-            #         income = income.union(set([float(x.text.replace(',', '')) for x in item.select('td.r')][1:]))
+            tr_tag = BeautifulSoup(page, "html.parser").select('div.um_table')[-1].select('tr')
+            for item in tr_tag:
+                check = item.select('th > div > div > dl > dt')
+                if isinstance(check, list) and check and check[0].text in ['매출액증가율', '영업이익증가율']:  # 'EPS증가율'
+                    income = income.union(set([float(x.text.replace(',', '')) for x in item.select('td.r')][1:]))
 
             page = requests.get(f"https://comp.fnguide.com/SVO2/ASP/SVD_Finance.asp?pGB=1&gicode=A{stock.symbol}&cID=&MenuYn=Y&ReportGB=&NewMenuID=103&stkGb=701").text
             tr_tag = BeautifulSoup(page, "html.parser").select('tr.rwf')
@@ -129,7 +129,7 @@ def update_aggressive_subscription_stock():  # 공격적 투자
             tr_tag = BeautifulSoup(page, "html.parser").select('tr.rwf')
             for item in tr_tag:
                 check = item.select('tr > th > div')
-                if isinstance(check, list) and check and check[0].text in ['영업이익', '당기순이익']:  # , '영업활동으로인한현금흐름'
+                if isinstance(check, list) and check and check[0].text in ['영업이익', '당기순이익', '영업활동으로인한현금흐름']:  # , '영업활동으로인한현금흐름'
                     income = income.union(set([float(x.text.replace(',', '')) for x in item.select('td.r')][:-2]))
             if len(income) < 1 or any([x < 0 for x in income]):
                 continue
