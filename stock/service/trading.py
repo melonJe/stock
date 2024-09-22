@@ -63,10 +63,6 @@ def select_buy_stocks() -> dict:
             if df.iloc[-1]['ma60'] > df.iloc[-1]['low'] or df.iloc[-1]['ma60'] * 1.05 < df.iloc[-1]['close']:
                 continue
 
-            last_3_days = df[-3:]
-            if not (np.all(last_3_days['ma60'] < last_3_days['close'])):
-                continue
-
             last_15_days = df[-15:]
             if np.all(last_15_days['ma60'] < last_15_days['close']):
                 continue
@@ -74,7 +70,7 @@ def select_buy_stocks() -> dict:
             df['ma20'] = df['close'].rolling(window=20).mean()
             df['ma10'] = df['close'].rolling(window=10).mean()
             df['ma5'] = df['close'].rolling(window=5).mean()
-            if not (df.iloc[-1]['ma20'] < df.iloc[-1]['ma10'] < df.iloc[-1]['ma5'] < df.iloc[-1]['close']):
+            if not (df.iloc[-1]['ma60'] < df.iloc[-1]['ma20'] < df.iloc[-1]['ma10'] < df.iloc[-1]['ma5'] < df.iloc[-1]['close']):
                 continue
 
             df['CMF'] = ChaikinMoneyFlowIndicator(high=df['high'].astype('float64'), low=df['low'].astype('float64'), close=df['close'].astype('float64'), volume=df['volume'].astype('float64')).chaikin_money_flow()
