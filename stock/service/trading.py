@@ -60,7 +60,7 @@ def select_buy_stocks() -> dict:
                 continue
 
             df['ma60'] = df['close'].rolling(window=60).mean()
-            if df.iloc[-1]['ma60'] > df.iloc[-1]['low']:
+            if df.iloc[-1]['ma60'] > df.iloc[-1]['low'] or df.iloc[-1]['ma60'] * 1.05 < df.iloc[-1]['close']:
                 continue
 
             last_3_days = df[-3:]
@@ -226,11 +226,11 @@ def update_sell_queue(ki_api: KoreaInvestmentAPI, email: Account):
         trade_type = trade.sll_buy_dvsn_cd
 
         if trade_type == "02":
+            df = pd.DataFrame(PriceHistory.objects.filter(date__range=[datetime.now() - timedelta(days=600), datetime.now()], symbol=symbol).order_by('date').values())
+            df['ma60'] = df['close'].rolling(window=60).mean()
             volumes_and_prices = [
-                (volume - int(volume * 0.3) - int(volume * 0.2) - int(volume * 0.1), price_refine(int(price * 1.1))),
-                (int(volume * 0.3), price_refine(int(price * 1.2))),
-                (int(volume * 0.2), price_refine(int(price * 1.4))),
-                (int(volume * 0.1), price_refine(int(price * 1.7)))
+                (volume - int(volume * 0.5), price_refine(price + 2 * abs(price - df.iloc[-1]['ma60']))),
+                (int(volume * 0.5), price_refine(price + 4 * abs(price - df.iloc[-1]['ma60'])))
             ]
 
             for vol, prc in volumes_and_prices:
@@ -274,11 +274,11 @@ def update_sell_queue(ki_api: KoreaInvestmentAPI, email: Account):
             additional_volume = owned_volume - total_db_volume
             avg_price = float(stock.pchs_avg_pric)
 
+            df = pd.DataFrame(PriceHistory.objects.filter(date__range=[datetime.now() - timedelta(days=600), datetime.now()], symbol=symbol).order_by('date').values())
+            df['ma60'] = df['close'].rolling(window=60).mean()
             volumes_and_prices = [
-                (additional_volume - int(additional_volume * 0.3) - int(additional_volume * 0.2) - int(additional_volume * 0.1), price_refine(int(avg_price * 1.1))),
-                (int(additional_volume * 0.3), price_refine(int(avg_price * 1.2))),
-                (int(additional_volume * 0.2), price_refine(int(avg_price * 1.4))),
-                (int(additional_volume * 0.1), price_refine(int(avg_price * 1.7)))
+                (additional_volume - int(additional_volume * 0.5), price_refine(avg_price + 2 * abs(avg_price - df.iloc[-1]['ma60']))),
+                (int(additional_volume * 0.5), price_refine(avg_price + 4 * abs(avg_price - df.iloc[-1]['ma60'])))
             ]
 
             for vol, prc in volumes_and_prices:
