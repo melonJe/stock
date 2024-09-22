@@ -176,7 +176,7 @@ def trading_buy(ki_api: KoreaInvestmentAPI, buy: dict):
                         logging.error(f"Error occurred while executing trades for symbol {symbol}: {e}")
             else:
                 stop_loss_insert(symbol, df.iloc[-1]['ma60'])
-                for idx, price in enumerate(price_refine(price) for price in [df['ma5'], last_row['ma10'], last_row['ma20'], last_row['ma60']]):
+                for idx, price in enumerate(price_refine(price) for price in [last_row['ma10'], last_row['ma20'], last_row['ma60']]):
                     try:
                         ki_api.buy_reserve(symbol=symbol, price=price, volume=int(volume * 0.1 * (idx + 1)), end_date=end_date)
                         money += price * int(volume * 0.1 * (idx + 1))
