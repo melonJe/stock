@@ -1,3 +1,4 @@
+import json
 import logging
 from datetime import timedelta, datetime
 from urllib.parse import parse_qs, urlparse
@@ -118,10 +119,60 @@ def update_defensive_subscription_stock():  # 방어적 투자
         Subscription.objects.bulk_create(data_to_insert)
 
 
+def fetch_krx_market_data():
+    url = 'http://data.krx.co.kr/comm/bldAttendant/executeForResourceBundle.cmd?baseName=krx.mdc.i18n.component&key=B128.bld'
+    headers = {
+        'User-Agent': 'Chrome/78.0.3904.87 Safari/537.36',
+        'Referer': 'http://data.krx.co.kr/'
+    }
+    j = json.loads(requests.get(url, headers=headers).text)
+    date_str = j['result']['output'][0]['max_work_dt']
+    url = 'http://data.krx.co.kr/comm/bldAttendant/getJsonData.cmd'
+    data = {
+        'bld': 'dbms/MDC/STAT/standard/MDCSTAT01501',
+        'mktId': 'ALL',
+        'trdDd': date_str,
+        'share': '1',
+        'money': '1',
+        'csvxls_isNo': 'false',
+    }
+
+    html_text = requests.post(url, headers=headers, data=data).text
+    j = json.loads(html_text)
+    df_krx = pd.DataFrame(j['OutBlock_1'])
+
+    # 데이터 변환 및 정리
+    df_krx = df_krx.replace(r',', '', regex=True)
+    numeric_cols = ['CMPPREVDD_PRC', 'FLUC_RT', 'TDD_OPNPRC', 'TDD_HGPRC', 'TDD_LWPRC',
+                    'ACC_TRDVOL', 'ACC_TRDVAL', 'MKTCAP', 'LIST_SHRS']
+    df_krx[numeric_cols] = df_krx[numeric_cols].apply(pd.to_numeric, errors='coerce')
+
+    # MKTCAP 기준으로 정렬
+    df_krx = df_krx.sort_values('MKTCAP', ascending=False)
+
+    # 컬럼 이름 변경
+    cols_map = {
+        'ISU_SRT_CD': 'Code', 'ISU_ABBRV': 'Name', 'TDD_CLSPRC': 'Close',
+        'SECT_TP_NM': 'Dept', 'FLUC_TP_CD': 'ChangeCode', 'CMPPREVDD_PRC': 'Changes',
+        'FLUC_RT': 'ChagesRatio', 'ACC_TRDVOL': 'Volume', 'ACC_TRDVAL': 'Amount',
+        'TDD_OPNPRC': 'Open', 'TDD_HGPRC': 'High', 'TDD_LWPRC': 'Low',
+        'MKTCAP': 'Marcap', 'LIST_SHRS': 'Stocks', 'MKT_NM': 'Market', 'MKT_ID': 'MarketId'
+    }
+    df_krx = df_krx.rename(columns=cols_map)
+
+    # 인덱스 초기화
+    df_krx = df_krx.reset_index(drop=True)
+
+    # 속성 추가
+    df_krx.attrs = {'exchange': 'KRX', 'source': 'KRX', 'data': 'LISTINGS'}
+
+    return df_krx
+
+
 def update_aggressive_subscription_stock():  # 공격적 투자
     data_to_insert = list()
     user = Account.objects.get(email='jmayermj@gmail.com')
-    df_krx = FinanceDataReader.StockListing('KRX-MARCAP')
+    df_krx = fetch_krx_market_data()
     for symbol in df_krx[df_krx['Marcap'] > 300000000000]['Code'].tolist():
         income = set([])
         try:
