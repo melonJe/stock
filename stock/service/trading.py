@@ -161,7 +161,7 @@ def trading_buy(ki_api: KoreaInvestmentAPI, buy: dict):
 
             if stock:
                 stop_loss_insert(symbol, float(stock.pchs_avg_pric))
-                for idx, price in enumerate(price_refine(price) for price in [last_row['ma20'], last_row['ma60']] if price < df.iloc[-1]['ma60'] * 1.05):
+                for idx, price in enumerate(price_refine(price) for price in [last_row['ma5'], last_row['ma20']] if price < df.iloc[-1]['ma60'] * 1.05):
                     if price > float(stock.pchs_avg_pric) * 0.975:
                         continue
                     try:
@@ -172,7 +172,7 @@ def trading_buy(ki_api: KoreaInvestmentAPI, buy: dict):
                         logging.error(f"Error occurred while executing trades for symbol {symbol}: {e}")
             else:
                 stop_loss_insert(symbol, df.iloc[-1]['ma60'])
-                for idx, price in enumerate(price_refine(price) for price in [last_row['ma5'], last_row['ma10'], last_row['ma20'], last_row['ma60']] if price < df.iloc[-1]['ma60'] * 1.05):
+                for idx, price in enumerate(price_refine(price) for price in [last_row['ma5'], last_row['ma10'], last_row['ma20']] if price < df.iloc[-1]['ma60'] * 1.05):
                     try:
                         ki_api.buy_reserve(symbol=symbol, price=price, volume=int(volume * 0.1 * (idx + 1)), end_date=end_date)
                         money += price * int(volume * 0.1 * (idx + 1))
