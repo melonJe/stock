@@ -225,8 +225,8 @@ def update_sell_queue(ki_api: KoreaInvestmentAPI, email: Account):
             df = pd.DataFrame(PriceHistory.objects.filter(date__range=[datetime.now() - timedelta(days=600), datetime.now()], symbol=symbol).order_by('date').values())
             df['ma60'] = df['close'].rolling(window=60).mean()
             volumes_and_prices = [
-                (volume - int(volume * 0.5), price_refine(math.ceil(max(price * 1.005, df.iloc[-1]['ma60'] * 1.05)))),
-                (int(volume * 0.5), price_refine(math.ceil(max(price * 1.005, df.iloc[-1]['ma60'] * 1.10))))
+                (volume - int(volume * 0.5), price_refine(math.ceil(max(price * 1.005, df.iloc[-1]['ma60'] * 1.10)))),
+                (int(volume * 0.5), price_refine(math.ceil(max(price * 1.005, df.iloc[-1]['ma60'] * 1.15))))
             ]
 
             for vol, prc in volumes_and_prices:
@@ -274,8 +274,8 @@ def update_sell_queue(ki_api: KoreaInvestmentAPI, email: Account):
             df['ma60'] = df['close'].rolling(window=60).mean()
 
             volumes_and_prices = [
-                (additional_volume - int(additional_volume * 0.5), price_refine(math.ceil(max(avg_price * 1.005, df.iloc[-1]['ma60'] * 1.05)))),
-                (int(additional_volume * 0.5), price_refine(math.ceil(max(avg_price * 1.005, df.iloc[-1]['ma60'] * 1.10))))
+                (additional_volume - int(additional_volume * 0.5), price_refine(math.ceil(max(avg_price * 1.005, df.iloc[-1]['ma60'] * 1.10)))),
+                (int(additional_volume * 0.5), price_refine(math.ceil(max(avg_price * 1.005, df.iloc[-1]['ma60'] * 1.15))))
             ]
 
             for vol, prc in volumes_and_prices:
