@@ -120,7 +120,7 @@ def select_buy_stocks_ver2() -> dict:
                 df['ATR10'] = AverageTrueRange(high=df['high'].astype('float64'), low=df['low'].astype('float64'), close=df['close'].astype('float64'), window=10).average_true_range()
                 df['ATR20'] = AverageTrueRange(high=df['high'].astype('float64'), low=df['low'].astype('float64'), close=df['close'].astype('float64'), window=20).average_true_range()
                 atr = max(df.iloc[-1]['ATR5'], df.iloc[-1]['ATR10'], df.iloc[-1]['ATR20'])
-                volume = min(int((10000000 / (100 * atr))), int(np.min(df['volume'][-5:]) / 100))
+                volume = min(int((100000000 / (100 * atr))), int(np.min(df['volume'][-5:]) / 100))
                 buy[symbol] = volume
                 sieve[symbol] = df.iloc[-1]['CMF']
         for x in list(dict(sorted(sieve.items(), key=lambda item: item[1], reverse=True)).keys()):
@@ -140,6 +140,7 @@ def trading_buy(ki_api: KoreaInvestmentAPI, buy: dict):
         return
 
     money = 0
+    volume_index = 0.001
 
     for symbol, volume in buy.items():
         try:
@@ -159,26 +160,20 @@ def trading_buy(ki_api: KoreaInvestmentAPI, buy: dict):
             df['ma60'] = df['close'].rolling(window=60).mean()
             last_row = df.iloc[-1]
 
-            if stock:
-                stop_loss_insert(symbol, float(stock.pchs_avg_pric))
-                for idx, price in enumerate(price_refine(price) for price in [last_row['ma5'], last_row['ma20']] if price < df.iloc[-1]['ma60'] * 1.05):
-                    if price > float(stock.pchs_avg_pric) * 0.975:
+            stop_loss_insert(symbol, df.iloc[-1]['ma60'])
+            for idx, price in enumerate(price_refine(price) for price in [last_row['ma5'], last_row['ma10'], last_row['ma20']]):
+                try:
+                    if price > df.iloc[-1]['ma60'] * 1.05:
                         continue
-                    try:
-                        ki_api.buy_reserve(symbol=symbol, price=price, volume=int(volume * 0.02 * (idx * 2 + 1)), end_date=end_date)
-                        money += price * int(volume * 0.02 * (idx * 2 + 1))
-                    except Exception as e:
-                        traceback.print_exc()
-                        logging.error(f"Error occurred while executing trades for symbol {symbol}: {e}")
-            else:
-                stop_loss_insert(symbol, df.iloc[-1]['ma60'])
-                for idx, price in enumerate(price_refine(price) for price in [last_row['ma5'], last_row['ma10'], last_row['ma20']] if price < df.iloc[-1]['ma60'] * 1.05):
-                    try:
-                        ki_api.buy_reserve(symbol=symbol, price=price, volume=int(volume * 0.02 * (idx * 2 + 1)), end_date=end_date)
-                        money += price * int(volume * 0.02 * (idx * 2 + 1))
-                    except Exception as e:
-                        traceback.print_exc()
-                        logging.error(f"Error occurred while executing trades for symbol {symbol}: {e}")
+
+                    if stock and price > float(stock.pchs_avg_pric) * 0.975:
+                        continue
+
+                    ki_api.buy_reserve(symbol=symbol, price=price, volume=int(volume * volume_index * (idx * 2 + 1)), end_date=end_date)
+                    money += price * int(volume * volume_index * (idx * 2 + 1))
+                except Exception as e:
+                    traceback.print_exc()
+                    logging.error(f"Error occurred while executing trades for symbol {symbol}: {e}")
 
         except Exception as e:
             traceback.print_exc()
