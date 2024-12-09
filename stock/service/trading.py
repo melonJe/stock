@@ -261,6 +261,7 @@ def update_sell_queue(ki_api: KoreaInvestmentAPI, email: Account):
                         smallest_price_entry.volume -= excess_volume
                         smallest_price_entry.save()
                         excess_volume = 0
+
         elif owned_volume > total_db_volume:
             additional_volume = owned_volume - total_db_volume
             avg_price = float(stock.pchs_avg_pric)
@@ -269,8 +270,7 @@ def update_sell_queue(ki_api: KoreaInvestmentAPI, email: Account):
             df['ma60'] = df['close'].rolling(window=60).mean()
 
             volumes_and_prices = [
-                (additional_volume - int(additional_volume * 0.5), price_refine(math.ceil(max(avg_price * 1.005, df.iloc[-1]['ma60'] * 1.125)))),
-                (int(additional_volume * 0.5), price_refine(math.ceil(max(avg_price * 1.005, df.iloc[-1]['ma60'] * 1.175))))
+                (additional_volume, price_refine(math.ceil(avg_price * 1.005)), 2)
             ]
 
             for vol, prc in volumes_and_prices:
