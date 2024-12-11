@@ -270,7 +270,7 @@ def update_sell_queue(ki_api: KoreaInvestmentAPI, email: Account):
             df['ma60'] = df['close'].rolling(window=60).mean()
 
             volumes_and_prices = [
-                (additional_volume, price_refine(math.ceil(avg_price * 1.005), 2))
+                (additional_volume, price_refine(math.ceil(avg_price * 1.005), 1))
             ]
 
             for vol, prc in volumes_and_prices:
