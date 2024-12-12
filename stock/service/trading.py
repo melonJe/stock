@@ -169,8 +169,8 @@ def trading_buy(ki_api: KoreaInvestmentAPI, buy: dict):
                     if stock and price > float(stock.pchs_avg_pric) * 0.975:
                         continue
 
-                    ki_api.buy_reserve(symbol=symbol, price=price, volume=int(volume * volume_index * (idx * 2 + 1)), end_date=end_date)
-                    money += price * int(volume * volume_index * (idx * 2 + 1))
+                    ki_api.buy_reserve(symbol=symbol, price=price, volume=int(volume * volume_index * (idx * 2 + 1)) + 1, end_date=end_date)
+                    money += price * (int(volume * volume_index * (idx * 2 + 1)) + 1)
                 except Exception as e:
                     traceback.print_exc()
                     logging.error(f"Error occurred while executing trades for symbol {symbol}: {e}")
