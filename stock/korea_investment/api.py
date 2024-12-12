@@ -117,7 +117,7 @@ class KoreaInvestmentAPI:
                 logging.error(response)
         else:
             error_msg = "stock_db\nHTTP path 요청 실패."
-            logging.error(error_msg)
+            logging.error(f"Order processing failed for payload: {payload}.\nError: {error_msg}")
         return False
 
     def buy(self, symbol: str, price: int, volume: int, order_type: str = "00"):
