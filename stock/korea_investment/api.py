@@ -127,6 +127,7 @@ class KoreaInvestmentAPI:
 
     def buy_reserve(self, symbol: str, price: int, volume: int, end_date: str, order_type: str = "00"):
         headers = self._add_tr_id_to_headers("CTSC0008U", False)
+        logging.info(f"예약 매수: {symbol}, {price}, {volume}, {end_date}")
         reserve_payload = self._create_reserve_payload(symbol, price, volume, end_date, order_type, "02")
         return self._send_order("/uapi/domestic-stock/v1/trading/order-resv", headers, reserve_payload)
 
@@ -137,7 +138,7 @@ class KoreaInvestmentAPI:
 
     def sell_reserve(self, symbol: str, price: int, volume: int, end_date: str, order_type: str = "00"):
         headers = self._add_tr_id_to_headers("CTSC0008U", False)
-        logging.info(f"주식 구매 예약: {symbol}, {price}, {volume}, {end_date}")
+        logging.info(f"예약 매도: {symbol}, {price}, {volume}, {end_date}")
         reserve_payload = self._create_reserve_payload(symbol, price, volume, end_date, order_type, "01")
         return self._send_order("/uapi/domestic-stock/v1/trading/order-resv", headers, reserve_payload)
 
