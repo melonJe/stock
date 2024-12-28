@@ -90,47 +90,6 @@ def select_buy_stocks() -> dict:
     return result
 
 
-def select_buy_stocks_ver2() -> dict:
-    result = dict()
-    try:
-        stocks = set(x['symbol'] for x in Stock.objects.exclude(Q(symbol__in=Blacklist.objects.values_list('symbol', flat=True))).select_related("symbol").values('symbol'))
-        buy = dict()
-        sieve = dict()
-        for symbol in stocks:
-            df = pd.DataFrame(PriceHistory.objects.filter(date__range=[datetime.now() - timedelta(days=240), datetime.now()], symbol=symbol).order_by('date').values())
-            if len(df) < 120:
-                continue
-
-            df['ma60'] = df['close'].rolling(window=60).mean()
-            if df.iloc[-1]['ma60'] > df.iloc[-1]['low']:
-                continue
-
-            df['ma20'] = df['close'].rolling(window=20).mean()
-            df['ma10'] = df['close'].rolling(window=10).mean()
-            if not (df.iloc[-1]['ma60'] < df.iloc[-1]['ma20'] < df.iloc[-1]['ma10'] < df.iloc[-1]['close']):
-                continue
-
-            df['CMF'] = ChaikinMoneyFlowIndicator(high=df['high'].astype('float64'), low=df['low'].astype('float64'), close=df['close'].astype('float64'), volume=df['volume'].astype('float64')).chaikin_money_flow()
-            df_cmf = df[-120:-10]['CMF']
-            if np.any(df_cmf < -0.15) or np.any(0.15 < df_cmf):
-                continue
-
-            if df.iloc[-1]['CMF'] > 0.25:
-                df['ATR5'] = AverageTrueRange(high=df['high'].astype('float64'), low=df['low'].astype('float64'), close=df['close'].astype('float64'), window=5).average_true_range()
-                df['ATR10'] = AverageTrueRange(high=df['high'].astype('float64'), low=df['low'].astype('float64'), close=df['close'].astype('float64'), window=10).average_true_range()
-                df['ATR20'] = AverageTrueRange(high=df['high'].astype('float64'), low=df['low'].astype('float64'), close=df['close'].astype('float64'), window=20).average_true_range()
-                atr = max(df.iloc[-1]['ATR5'], df.iloc[-1]['ATR10'], df.iloc[-1]['ATR20'])
-                volume = min(int((100000000 / (100 * atr))), int(np.min(df['volume'][-5:]) / 100))
-                buy[symbol] = volume
-                sieve[symbol] = df.iloc[-1]['CMF']
-        for x in list(dict(sorted(sieve.items(), key=lambda item: item[1], reverse=True)).keys()):
-            result[x] = buy[x]
-    except Exception as e:
-        traceback.print_exc()
-        logging.error(f"Error occurred: {e}")
-    return result
-
-
 def trading_buy(ki_api: KoreaInvestmentAPI, buy: dict):
     try:
         end_date = ki_api.get_nth_open_day(5)
@@ -334,6 +293,3 @@ def korea_investment_trading():
     buy_stock = select_buy_stocks()
     buy = threading.Thread(target=trading_buy, args=(ki_api, buy_stock,))
     buy.start()
-    buy_stock_ver2 = select_buy_stocks_ver2()
-    buy_ver2 = threading.Thread(target=trading_buy, args=(ki_api, buy_stock_ver2,))
-    buy_ver2.start()
