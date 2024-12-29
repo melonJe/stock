@@ -1,6 +1,8 @@
-import json
 import logging
-from datetime import timedelta, datetime
+import os
+from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime
+from datetime import timedelta
 from urllib.parse import parse_qs, urlparse
 
 import FinanceDataReader
@@ -10,6 +12,7 @@ from bs4 import BeautifulSoup
 from django.core.exceptions import ObjectDoesNotExist
 from ta.volatility import AverageTrueRange
 
+from finance.financial_statement import get_financial_summary
 from stock.models import Stock
 from stock.models import Subscription, Blacklist, PriceHistory, StopLoss, Account
 from stock.service.utils import bulk_insert
@@ -56,148 +59,47 @@ def get_stock(symbol: str):
         return insert_stock(symbol=symbol)
 
 
-def update_defensive_subscription_stock():  # 방어적 투자
-    logging.info(f'{datetime.now()} update_defensive_subscription_stock 시작')
-    data_to_insert = list()
-    user = Account.objects.get(email='cabs0814@naver.com')
-    for stock in Stock.objects.all():
-        try:
-            if requests.get(f"https://navercomp.wisereport.co.kr/company/chart/c1030001.aspx?cmp_cd={stock.symbol}&frq=Y&rpt=ISM&finGubun=MAIN&chartType=svg",
-                            headers={'Accept': 'application/json'}).json()['chartData1']['series'][0]['data'][-2] < 1500:
-                continue
-            page = requests.get(f"https://comp.fnguide.com/SVO2/ASP/SVD_FinanceRatio.asp?pGB=1&gicode=A{stock.symbol}&cID=&MenuYn=Y&ReportGB=&NewMenuID=104&stkGb=701").text
-            soup = BeautifulSoup(page, "html.parser")
-            current_ratio = float(soup.select('tr#p_grid1_1 > td.cle')[0].text)
-            if current_ratio < 150:
-                continue
+def update_subscription_process(stock, user, data_to_insert):
+    try:
+        df_q = get_financial_summary(stock.symbol, report_type='B', period='Q', include_estimates=False)
+        df_y = get_financial_summary(stock.symbol, report_type='B', period='Y', include_estimates=False)
 
-            income = set([])
-            tr_tag = BeautifulSoup(page, "html.parser").select('div.um_table')[-1].select('tr')
-            for item in tr_tag:
-                check = item.select('th > div > div > dl > dt')
-                if isinstance(check, list) and check and check[0].text in ['매출액증가율', '영업이익증가율']:  # 'EPS증가율'
-                    income = income.union(set([float(x.text.replace(',', '')) for x in item.select('td.r')][1:]))
+        # if not pd.to_numeric(df_y["PER(배)"].str.replace(",", ""), errors="coerce").iloc[-1] < 10:
+        #     continue
+        if not pd.to_numeric(df_q["ROE(%)"].str.replace(",", ""), errors="coerce").iloc[-1] > 10:
+            return
+        if not pd.to_numeric(df_q["ROA(%)"].str.replace(",", ""), errors="coerce").iloc[-1] > 10:
+            return
+        if not pd.to_numeric(df_q["부채비율(%)"].str.replace(",", ""), errors="coerce").iloc[-1] < 100:
+            return
+        # if not pd.to_numeric(df_q["배당수익률(%)"].str.replace(",", ""), errors="coerce").iloc[-1] > 2:
+        #     return
+        # if not (10 < pd.to_numeric(df_q["현금배당성향(%)"].str.replace(",", ""), errors="coerce").iloc[-1] < 70):
+        #     return
+        # if not (pd.to_numeric(df_y["매출액"].str.replace(",", ""), errors="coerce").diff()[1:] > 0).all():
+        #     return
+        # if not (pd.to_numeric(df_y["영업이익"].str.replace(",", ""), errors="coerce").diff()[1:] > 0).all():
+        #     return
+        if not (pd.to_numeric(df_y["EPS(원)"].str.replace(",", ""), errors="coerce").diff()[1:] > 0).all():
+            return
 
-            page = requests.get(f"https://comp.fnguide.com/SVO2/ASP/SVD_Finance.asp?pGB=1&gicode=A{stock.symbol}&cID=&MenuYn=Y&ReportGB=&NewMenuID=103&stkGb=701").text
-            tr_tag = BeautifulSoup(page, "html.parser").select('tr.rwf')
-            for item in tr_tag:
-                check = item.select('tr > th > div')
-                if isinstance(check, list) and check and check[0].text in ['영업이익', '당기순이익', '영업활동으로인한현금흐름']:
-                    income = income.union(set([float(x.text.replace(',', '')) for x in item.select('td.r')][:-2]))
-            if len(income) < 1 or any([x < 0 for x in income]):
-                continue
-
-            page = requests.get(f"https://navercomp.wisereport.co.kr/v2/company/c1010001.aspx?cmp_cd={stock.symbol}").text
-            soup = BeautifulSoup(page, "html.parser")
-            elements = soup.select('td.cmp-table-cell > dl > dt.line-left')
-            per = -1
-            pbr = -1
-            dividend_rate = -1
-            for x in elements:
-                item = x.text.split(' ')
-                if item[0] == 'PER':
-                    per = float(item[1])
-                if item[0] == 'PBR':
-                    pbr = float(item[1])
-                if item[0] == '현금배당수익률':
-                    dividend_rate = float(item[1][:-1])
-        except:
-            continue
-        del item
-        if dividend_rate == -1:
-            continue
-        if per > 15:
-            continue
-        if per * pbr > 22.5:
-            continue
         data_to_insert.append({'email': user, 'symbol': stock})
+    except Exception as e:
+        pass
 
+
+def update_subscription_stock():
+    logging.info(f'{datetime.now()} update_subscription_stock 시작')
     Subscription.objects.filter(email='cabs0814@naver.com').delete()
-    if data_to_insert:
-        data_to_insert = [Subscription(**vals) for vals in data_to_insert]
-        logging.info(f"{len(data_to_insert)}개 주식")
-        Subscription.objects.bulk_create(data_to_insert)
+    data_to_insert = []
+    user = Account.objects.get(email='cabs0814@naver.com')
 
+    with ThreadPoolExecutor(max_workers=os.cpu_count() // 2) as executor:
+        futures = [executor.submit(update_subscription_process, stock, user, data_to_insert) for stock in Stock.objects.all()]
 
-def fetch_krx_market_data():
-    url = 'http://data.krx.co.kr/comm/bldAttendant/executeForResourceBundle.cmd?baseName=krx.mdc.i18n.component&key=B128.bld'
-    headers = {
-        'User-Agent': 'Chrome/78.0.3904.87 Safari/537.36',
-        'Referer': 'http://data.krx.co.kr/'
-    }
-    j = json.loads(requests.get(url, headers=headers).text)
-    date_str = j['result']['output'][0]['max_work_dt']
-    url = 'http://data.krx.co.kr/comm/bldAttendant/getJsonData.cmd'
-    data = {
-        'bld': 'dbms/MDC/STAT/standard/MDCSTAT01501',
-        'mktId': 'ALL',
-        'trdDd': date_str,
-        'share': '1',
-        'money': '1',
-        'csvxls_isNo': 'false',
-    }
+        for future in futures:
+            future.result()  # Ensure any raised exceptions are handled
 
-    html_text = requests.post(url, headers=headers, data=data).text
-    j = json.loads(html_text)
-    df_krx = pd.DataFrame(j['OutBlock_1'])
-
-    # 데이터 변환 및 정리
-    df_krx = df_krx.replace(r',', '', regex=True)
-    numeric_cols = ['CMPPREVDD_PRC', 'FLUC_RT', 'TDD_OPNPRC', 'TDD_HGPRC', 'TDD_LWPRC',
-                    'ACC_TRDVOL', 'ACC_TRDVAL', 'MKTCAP', 'LIST_SHRS']
-    df_krx[numeric_cols] = df_krx[numeric_cols].apply(pd.to_numeric, errors='coerce')
-
-    # MKTCAP 기준으로 정렬
-    df_krx = df_krx.sort_values('MKTCAP', ascending=False)
-
-    # 컬럼 이름 변경
-    cols_map = {
-        'ISU_SRT_CD': 'Code', 'ISU_ABBRV': 'Name', 'TDD_CLSPRC': 'Close',
-        'SECT_TP_NM': 'Dept', 'FLUC_TP_CD': 'ChangeCode', 'CMPPREVDD_PRC': 'Changes',
-        'FLUC_RT': 'ChagesRatio', 'ACC_TRDVOL': 'Volume', 'ACC_TRDVAL': 'Amount',
-        'TDD_OPNPRC': 'Open', 'TDD_HGPRC': 'High', 'TDD_LWPRC': 'Low',
-        'MKTCAP': 'Marcap', 'LIST_SHRS': 'Stocks', 'MKT_NM': 'Market', 'MKT_ID': 'MarketId'
-    }
-    df_krx = df_krx.rename(columns=cols_map)
-
-    # 인덱스 초기화
-    df_krx = df_krx.reset_index(drop=True)
-
-    # 속성 추가
-    df_krx.attrs = {'exchange': 'KRX', 'source': 'KRX', 'data': 'LISTINGS'}
-
-    return df_krx
-
-
-def update_aggressive_subscription_stock():  # 공격적 투자
-    data_to_insert = list()
-    user = Account.objects.get(email='jmayermj@gmail.com')
-    df_krx = fetch_krx_market_data()
-    for symbol in df_krx[df_krx['Marcap'] > 300000000000]['Code'].tolist():
-        income = set([])
-        try:
-            page = requests.get(f"https://comp.fnguide.com/SVO2/ASP/SVD_Finance.asp?pGB=1&gicode=A{symbol}&cID=&MenuYn=Y&ReportGB=&NewMenuID=103&stkGb=701").text
-            tr_tag = BeautifulSoup(page, "html.parser").select('tr.rwf')
-            for item in tr_tag:
-                check = item.select('tr > th > div')
-                if isinstance(check, list) and check and check[0].text in ['영업이익', '당기순이익', '영업활동으로인한현금흐름']:  # , '영업활동으로인한현금흐름'
-                    income = income.union(set([float(x.text.replace(',', '')) for x in item.select('td.r')][:-2]))
-            if len(income) < 1 or any([x < 0 for x in income]):
-                continue
-
-            page = requests.get(f"https://navercomp.wisereport.co.kr/v2/company/c1010001.aspx?cmp_cd={symbol}").text
-            soup = BeautifulSoup(page, "html.parser")
-            elements = soup.select('td.cmp-table-cell > dl > dt.line-left')
-            if [float(x.text.split(' ')[1][:-1]) for x in elements if x.text.split(' ')[0] == '현금배당수익률'][0] == -1:
-                continue
-        except:
-            continue
-        try:
-            data_to_insert.append({'email': user, 'symbol': get_stock(symbol=symbol)})
-        except:
-            insert_stock(symbol)
-            data_to_insert.append({'email': user, 'symbol': get_stock(symbol=symbol)})
-    Subscription.objects.filter(email='jmayermj@gmail.com').delete()
     if data_to_insert:
         data_to_insert = [Subscription(**vals) for vals in data_to_insert]
         logging.info(f"{len(data_to_insert)}개 주식")
