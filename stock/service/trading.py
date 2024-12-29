@@ -108,14 +108,14 @@ def select_buy_stocks() -> dict:
 def select_sell_stocks(ki_api: KoreaInvestmentAPI) -> list:
     result = list()
     try:
-        stocks = set(ki_api.get_owned_stock_info())
+        stocks = ki_api.get_owned_stock_info()
         for stock in stocks:
             df = pd.DataFrame(PriceHistory.objects.filter(date__range=[datetime.now() - timedelta(days=365), datetime.now()], symbol=stock.pdno).order_by('date').values())
             if len(df) < 200:
                 continue
 
-            df['MA20'] = df['Close'].rolling(window=20).mean()
-            df['STD20'] = df['Close'].rolling(window=20).std()
+            df['MA20'] = df['close'].rolling(window=20).mean()
+            df['STD20'] = df['close'].rolling(window=20).std()
             df['Upper_BB'] = df['MA20'] + (df['STD20'] * 2)
             df['Lower_BB'] = df['MA20'] - (df['STD20'] * 2)
 
