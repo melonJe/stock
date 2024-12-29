@@ -17,17 +17,9 @@ def start():
     # trading_sell(ki_api=ki_api)
 
     scheduler.add_job(
-        data_handler.update_defensive_subscription_stock,
+        data_handler.update_subscription_stock,
         trigger=CronTrigger(day=1, hour=2),
         id="update_defensive_subscription_stock",
-        max_instances=1,
-        replace_existing=True,
-    )
-
-    scheduler.add_job(
-        data_handler.update_aggressive_subscription_stock,
-        trigger=CronTrigger(day=1, hour=4),
-        id="update_aggressive_subscription_stock",
         max_instances=1,
         replace_existing=True,
     )

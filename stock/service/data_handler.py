@@ -66,14 +66,14 @@ def update_subscription_process(stock, user, data_to_insert):
 
         # if not pd.to_numeric(df_y["PER(배)"].str.replace(",", ""), errors="coerce").iloc[-1] < 10:
         #     continue
-        if not pd.to_numeric(df_q["ROE(%)"].str.replace(",", ""), errors="coerce").iloc[-1] > 10:
-            return
-        if not pd.to_numeric(df_q["ROA(%)"].str.replace(",", ""), errors="coerce").iloc[-1] > 10:
-            return
+        # if not pd.to_numeric(df_q["ROE(%)"].str.replace(",", ""), errors="coerce").iloc[-1] > 10:
+        #     return
+        # if not pd.to_numeric(df_q["ROA(%)"].str.replace(",", ""), errors="coerce").iloc[-1] > 10:
+        #     return
         if not pd.to_numeric(df_q["부채비율(%)"].str.replace(",", ""), errors="coerce").iloc[-1] < 100:
             return
-        # if not pd.to_numeric(df_q["배당수익률(%)"].str.replace(",", ""), errors="coerce").iloc[-1] > 2:
-        #     return
+        if not pd.to_numeric(df_q["배당수익률(%)"].str.replace(",", ""), errors="coerce").iloc[-1] > 2:
+            return
         # if not (10 < pd.to_numeric(df_q["현금배당성향(%)"].str.replace(",", ""), errors="coerce").iloc[-1] < 70):
         #     return
         # if not (pd.to_numeric(df_y["매출액"].str.replace(",", ""), errors="coerce").diff()[1:] > 0).all():
@@ -94,7 +94,7 @@ def update_subscription_stock():
     data_to_insert = []
     user = Account.objects.get(email='cabs0814@naver.com')
 
-    with ThreadPoolExecutor(max_workers=os.cpu_count() // 2) as executor:
+    with ThreadPoolExecutor(max_workers=os.cpu_count() // 3) as executor:
         futures = [executor.submit(update_subscription_process, stock, user, data_to_insert) for stock in Stock.objects.all()]
 
         for future in futures:
