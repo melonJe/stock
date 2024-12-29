@@ -12,7 +12,7 @@ from bs4 import BeautifulSoup
 from django.core.exceptions import ObjectDoesNotExist
 from ta.volatility import AverageTrueRange
 
-from finance.financial_statement import get_financial_summary
+from finance.financial_statement import get_financial_summary_for_update_stock, get_finance_from_fnguide
 from stock.models import Stock
 from stock.models import Subscription, Blacklist, PriceHistory, StopLoss, Account
 from stock.service.utils import bulk_insert
@@ -61,26 +61,33 @@ def get_stock(symbol: str):
 
 def update_subscription_process(stock, user, data_to_insert):
     try:
-        df_q = get_financial_summary(stock.symbol, report_type='B', period='Q', include_estimates=False)
-        df_y = get_financial_summary(stock.symbol, report_type='B', period='Y', include_estimates=False)
+        summary_dict = get_financial_summary_for_update_stock(stock.symbol)
+        df_highlight = get_finance_from_fnguide(stock.symbol, 'highlight', period='Y', include_estimates=False)
+        df_cash = get_finance_from_fnguide(stock.symbol, 'cash', period='Y', include_estimates=False)
 
-        if not pd.to_numeric(df_y["PER(배)"].str.replace(",", ""), errors="coerce").iloc[-1] < 10:
+        if not (pd.to_numeric(df_cash['영업활동으로인한현금흐름'].str.replace(",", ""), errors="coerce")[-3:] > 0).all():
             return
-        if not pd.to_numeric(df_q["ROE(%)"].str.replace(",", ""), errors="coerce").iloc[-1] > 10:
+
+        try:
+            if not (pd.to_numeric(df_highlight['매출액'].str.replace(",", ""), errors="coerce")[-3:] > 0).all():
+                return
+            if not (pd.to_numeric(df_highlight['매출액'].str.replace(",", ""), errors="coerce").diff()[-2:] > 0).all():
+                return
+        except Exception as e:
+            pass
+
+        if not (pd.to_numeric(df_highlight['영업이익'].str.replace(",", ""), errors="coerce").diff()[-2:] > 0).all():
             return
-        if not pd.to_numeric(df_q["ROA(%)"].str.replace(",", ""), errors="coerce").iloc[-1] > 10:
+        if not (pd.to_numeric(df_highlight['당기순이익'].str.replace(",", ""), errors="coerce").diff()[-2:] > 0).all():
             return
-        if not pd.to_numeric(df_q["부채비율(%)"].str.replace(",", ""), errors="coerce").iloc[-1] < 100:
+
+        # if not summary_dict["ROE"] > 10:
+        #     return
+        # if not summary_dict["ROA"] > 10:
+        #     return
+        if not summary_dict["부채비율"] < 200:
             return
-        if not pd.to_numeric(df_q["배당수익률(%)"].str.replace(",", ""), errors="coerce").iloc[-1] > 2:
-            return
-        if not (10 < pd.to_numeric(df_q["현금배당성향(%)"].str.replace(",", ""), errors="coerce").iloc[-1] < 70):
-            return
-        if not (pd.to_numeric(df_y["매출액"].str.replace(",", ""), errors="coerce").diff()[-3:] > 0).all():
-            return
-        if not (pd.to_numeric(df_y["영업이익"].str.replace(",", ""), errors="coerce").diff()[-3:] > 0).all():
-            return
-        if not (pd.to_numeric(df_y["EPS(원)"].str.replace(",", ""), errors="coerce").diff()[-3:] > 0).all():
+        if not summary_dict["배당수익률"] >= 2:
             return
 
         data_to_insert.append({'email': user, 'symbol': stock})
@@ -94,7 +101,7 @@ def update_subscription_stock():
     data_to_insert = []
     user = Account.objects.get(email='cabs0814@naver.com')
 
-    with ThreadPoolExecutor(max_workers=os.cpu_count() // 3) as executor:
+    with ThreadPoolExecutor(max_workers=os.cpu_count()) as executor:
         futures = [executor.submit(update_subscription_process, stock, user, data_to_insert) for stock in Stock.objects.all()]
 
         for future in futures:

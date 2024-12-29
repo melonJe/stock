@@ -55,7 +55,7 @@ def html_table_to_dataframe_for_fnguide(table, include_estimates=False) -> pd.Da
     return df
 
 
-def get_finance_from_fnguide(symbol: str, report='highlight', report_type: str = 'D', period: str = 'Q', include_estimates: bool = False) -> pd.DataFrame:
+def get_finance_from_fnguide(symbol: str, report='highlight', report_type: str = 'D', period: str = 'Y', include_estimates: bool = False) -> pd.DataFrame:
     """
     FnGuide에서 제공하는 메인 페이지 및 재무제표 페이지를 크롤링하여
     report 파라미터(쉼표로 구분된 문자열)에 따라
@@ -182,13 +182,31 @@ def get_financial_summary_for_update_stock(symbol: str, report_type: str = 'D', 
     result["ROE"] = financial_summary.get("ROE(%)", None)
     result["부채비율"] = financial_summary.get("부채비율(%)", None)
 
+    for key, value in result.items():
+        if value in ["", "-", None]:
+            result[key] = float('-inf')
+        else:
+            result[key] = float(re.search(r'-?\d*\.?\d*', value.replace(',', '')).group())
+
     return result
 
 
 if __name__ == "__main__":
     # 사용 예시
     symbol_code = "005930"  # 삼성전자
+    df_y = get_finance_from_fnguide(symbol_code, 'highlight', report_type='D', period='Y', include_estimates=False)
+    print(df_y)
+    print(df_y['당기순이익'].str.replace(",", ""))
+    print((pd.to_numeric(df_y['당기순이익'].str.replace(",", ""), errors="coerce").diff()[-2:] > 0))
 
-    summary_dict = get_financial_summary_for_update_stock(symbol_code)
-    summary_dict = {key: float(re.search(r'([1-9]{1}\d{0,1}|0{1})(\.{1}\d{0,2})?', value).group()) for key, value in summary_dict.items()}
-    print("[종합 요약 정보]\n", summary_dict)
+    # # (1) 재무상태표만 확인하기
+    # df_state = get_finance_from_fnguide(symbol_code, report="state", report_type='D', period='Q')
+    # print("[재무상태표]\n", df_state.head(), "\n")
+    #
+    # # (2) 하이라이트 + 현금흐름표
+    # df_highlight_cash = get_finance_from_fnguide(symbol_code, report="highlight,cash", report_type='D', period='Q')
+    # print("[하이라이트 + 현금흐름표]\n", df_highlight_cash.head(), "\n")
+
+    # (3) 종합 요약 정보
+    # summary_dict = get_financial_summary_for_update_stock(symbol_code)
+    # print("[종합 요약 정보]\n", summary_dict)
