@@ -26,7 +26,7 @@ def start():
 
     scheduler.add_job(
         data_handler.add_stock,
-        trigger=CronTrigger(day=1, hour=0),
+        trigger=CronTrigger(day_of_week="sun", hour=0),
         id="add_stock",
         max_instances=1,
         replace_existing=True,
