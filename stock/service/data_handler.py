@@ -64,23 +64,23 @@ def update_subscription_process(stock, user, data_to_insert):
         df_q = get_financial_summary(stock.symbol, report_type='B', period='Q', include_estimates=False)
         df_y = get_financial_summary(stock.symbol, report_type='B', period='Y', include_estimates=False)
 
-        # if not pd.to_numeric(df_y["PER(배)"].str.replace(",", ""), errors="coerce").iloc[-1] < 10:
-        #     continue
-        # if not pd.to_numeric(df_q["ROE(%)"].str.replace(",", ""), errors="coerce").iloc[-1] > 10:
-        #     return
-        # if not pd.to_numeric(df_q["ROA(%)"].str.replace(",", ""), errors="coerce").iloc[-1] > 10:
-        #     return
+        if not pd.to_numeric(df_y["PER(배)"].str.replace(",", ""), errors="coerce").iloc[-1] < 10:
+            return
+        if not pd.to_numeric(df_q["ROE(%)"].str.replace(",", ""), errors="coerce").iloc[-1] > 10:
+            return
+        if not pd.to_numeric(df_q["ROA(%)"].str.replace(",", ""), errors="coerce").iloc[-1] > 10:
+            return
         if not pd.to_numeric(df_q["부채비율(%)"].str.replace(",", ""), errors="coerce").iloc[-1] < 100:
             return
         if not pd.to_numeric(df_q["배당수익률(%)"].str.replace(",", ""), errors="coerce").iloc[-1] > 2:
             return
-        # if not (10 < pd.to_numeric(df_q["현금배당성향(%)"].str.replace(",", ""), errors="coerce").iloc[-1] < 70):
-        #     return
-        # if not (pd.to_numeric(df_y["매출액"].str.replace(",", ""), errors="coerce").diff()[1:] > 0).all():
-        #     return
-        # if not (pd.to_numeric(df_y["영업이익"].str.replace(",", ""), errors="coerce").diff()[1:] > 0).all():
-        #     return
-        if not (pd.to_numeric(df_y["EPS(원)"].str.replace(",", ""), errors="coerce").diff()[1:] > 0).all():
+        if not (10 < pd.to_numeric(df_q["현금배당성향(%)"].str.replace(",", ""), errors="coerce").iloc[-1] < 70):
+            return
+        if not (pd.to_numeric(df_y["매출액"].str.replace(",", ""), errors="coerce").diff()[-3:] > 0).all():
+            return
+        if not (pd.to_numeric(df_y["영업이익"].str.replace(",", ""), errors="coerce").diff()[-3:] > 0).all():
+            return
+        if not (pd.to_numeric(df_y["EPS(원)"].str.replace(",", ""), errors="coerce").diff()[-3:] > 0).all():
             return
 
         data_to_insert.append({'email': user, 'symbol': stock})
