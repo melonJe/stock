@@ -71,10 +71,10 @@ def select_buy_stocks() -> dict:
             if not (current_close < lower_bb + (abs(upper_bb - lower_bb) * 0.05)):
                 continue
 
-            lowest_20 = df.iloc[-20:-1]['MA20'].min()
-            # if not (0 <= (current_close - lowest_20) / lowest_20 * 100 <= 5):
-            if not (current_close > lowest_20):
-                continue
+            # lowest_20 = df.iloc[-20:-1]['MA20'].min()
+            # # if not (0 <= (current_close - lowest_20) / lowest_20 * 100 <= 5):
+            # if not (current_close > lowest_20):
+            #     continue
 
             df['EMA_short'] = df['close'].ewm(span=short_window, adjust=False).mean()
             df['EMA_long'] = df['close'].ewm(span=long_window, adjust=False).mean()
