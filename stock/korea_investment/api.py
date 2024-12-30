@@ -106,7 +106,6 @@ class KoreaInvestmentAPI:
     def _send_order(self, path: str, headers, payload):
         """주문 요청을 보내고 응답을 처리합니다."""
         if int(payload.get("ORD_QTY", '0')) == 0:
-            logging.info(f"주문 수량: 0\n{payload}")
             return False
 
         response = self._post_request(path, payload, headers)
