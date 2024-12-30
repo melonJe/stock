@@ -8,11 +8,14 @@ from time import sleep
 import numpy as np
 import pandas as pd
 from django.db.models import Q
+from ta.momentum import rsi
+from ta.trend import adx
 from ta.volatility import AverageTrueRange
+from ta.volume import ChaikinMoneyFlowIndicator
 
 from stock.discord import discord
 from stock.korea_investment.api import KoreaInvestmentAPI
-from stock.models import Subscription, PriceHistory, StopLoss, Blacklist
+from stock.models import PriceHistory, StopLoss, Subscription, Blacklist
 from .data_handler import stop_loss_insert, add_stock_price
 from .. import setting_env
 
@@ -51,53 +54,39 @@ def select_buy_stocks() -> dict:
     result = dict()
     try:
         stocks = set(x['symbol'] for x in Subscription.objects.exclude(Q(symbol__in=Blacklist.objects.values_list('symbol', flat=True))).select_related("symbol").values('symbol'))
-        # stocks = set(x['symbol'] for x in Stock.objects.select_related("symbol").values('symbol'))
+        buy = dict()
+        sieve = dict()
         for symbol in stocks:
-            df = pd.DataFrame(PriceHistory.objects.filter(date__range=[datetime.now() - timedelta(days=365), datetime.now()], symbol=symbol).order_by('date').values())
-            if len(df) < 120:
+            df = pd.DataFrame(PriceHistory.objects.filter(date__range=[datetime.now() - timedelta(days=600), datetime.now()], symbol=symbol).order_by('date').values())
+            if len(df) < 300:
                 continue
 
-            short_window = 12
-            long_window = 26
-            signal_window = 9
-
-            df['MA20'] = df['close'].rolling(window=20).mean()
-            df['STD20'] = df['close'].rolling(window=20).std()
-            df['Upper_BB'] = df['MA20'] + (df['STD20'] * 2)
-            df['Lower_BB'] = df['MA20'] - (df['STD20'] * 2)
-            upper_bb = df.iloc[-1]['Upper_BB']
-            lower_bb = df.iloc[-1]['Lower_BB']
-            current_close = df.iloc[-1]['close']
-            if not (current_close < lower_bb + (abs(upper_bb - lower_bb) * 0.05)):
+            df['ma20'] = df['close'].rolling(window=20).mean()
+            latest_days = df[-10:]
+            if not np.all(latest_days['ma20'] < latest_days['close']):
                 continue
 
-            # lowest_20 = df.iloc[-20:-1]['MA20'].min()
-            # # if not (0 <= (current_close - lowest_20) / lowest_20 * 100 <= 5):
-            # if not (current_close > lowest_20):
-            #     continue
-
-            df['EMA_short'] = df['close'].ewm(span=short_window, adjust=False).mean()
-            df['EMA_long'] = df['close'].ewm(span=long_window, adjust=False).mean()
-            df['MACD'] = df['EMA_short'] - df['EMA_long']
-            df['Signal'] = df['MACD'].ewm(span=signal_window, adjust=False).mean()
-            if not (df.iloc[-2]['MACD'] < df.iloc[-2]['Signal']) and (df.iloc[-1]['MACD'] > df.iloc[-1]['Signal']):
+            df['RSI'] = rsi(df['close'], window=9)
+            if df.iloc[-1]['RSI'] > 70:
                 continue
 
-            price_diff = df['close'].diff()  # 종가 차이 계산
-            obv_change = np.select(
-                [price_diff > 0, price_diff < 0, price_diff == 0],
-                [df['volume'], -df['volume'], 0]  # 상승, 하락, 동일
-            )
-            df['OBV'] = obv_change.cumsum()
-            df['OBV'] = df['OBV'].astype('float64')
-            if not (df.iloc[-1]['OBV'] > df.iloc[-2]['OBV']):
+            df['ADX'] = adx(df['high'], df['low'], df['close'], window=14)
+            if df.iloc[-1]['ADX'] < 25:
                 continue
 
-            df['ATR5'] = AverageTrueRange(high=df['high'].astype('float64'), low=df['low'].astype('float64'), close=df['close'].astype('float64'), window=5).average_true_range()
-            df['ATR10'] = AverageTrueRange(high=df['high'].astype('float64'), low=df['low'].astype('float64'), close=df['close'].astype('float64'), window=10).average_true_range()
-            df['ATR20'] = AverageTrueRange(high=df['high'].astype('float64'), low=df['low'].astype('float64'), close=df['close'].astype('float64'), window=20).average_true_range()
-            atr = max(df.iloc[-1]['ATR5'], df.iloc[-1]['ATR10'], df.iloc[-1]['ATR20'])
-            result[symbol] = min(100000000 // (100 * atr), np.min(df['volume'][-5:]) // 100)
+            df['CMF'] = ChaikinMoneyFlowIndicator(high=df['high'].astype('float64'), low=df['low'].astype('float64'), close=df['close'].astype('float64'), volume=df['volume'].astype('float64'), window=10).chaikin_money_flow()
+            if np.all(df.iloc[-5:]['CMF'] > 0.1):
+                df['ATR5'] = AverageTrueRange(high=df['high'].astype('float64'), low=df['low'].astype('float64'), close=df['close'].astype('float64'), window=5).average_true_range()
+                df['ATR10'] = AverageTrueRange(high=df['high'].astype('float64'), low=df['low'].astype('float64'), close=df['close'].astype('float64'), window=10).average_true_range()
+                df['ATR20'] = AverageTrueRange(high=df['high'].astype('float64'), low=df['low'].astype('float64'), close=df['close'].astype('float64'), window=20).average_true_range()
+                atr = max(df.iloc[-1]['ATR5'], df.iloc[-1]['ATR10'], df.iloc[-1]['ATR20'])
+                if atr / df.iloc[-1]['close'] > 0.05:
+                    continue
+                volume = min(100000000 // (100 * atr), np.min(df['volume'][-5:]) // 100)
+                buy[symbol] = volume
+                sieve[symbol] = df.iloc[-1]['CMF']
+        for x in list(dict(sorted(sieve.items(), key=lambda item: item[1], reverse=True)).keys()):
+            result[x] = buy[x]
     except Exception as e:
         traceback.print_exc()
         logging.error(f"Error occurred: {e}")
@@ -150,9 +139,9 @@ def trading_buy(ki_api: KoreaInvestmentAPI):
         try:
             price_last = PriceHistory.objects.filter(date__range=[datetime.now() - timedelta(days=5), datetime.now()], symbol=symbol).order_by('date').last()
             order_queue = {
-                price_last.low: int(volume * volume_index * 0.6),
-                price_refine((price_last.high + price_last.low) // 2): int(volume * volume_index * 0.4),
-                price_last.high: int(volume * volume_index * 0.2)
+                price_last.low: int(volume * volume_index * (1 / 2)),
+                price_refine((price_last.high + price_last.low) // 2): int(volume * volume_index * (1 / 3)),
+                price_last.high: int(volume * volume_index * (1 / 6))
             }
             for price, vol in order_queue:
                 ki_api.buy_reserve(symbol=symbol, price=price, volume=vol, end_date=end_date)
