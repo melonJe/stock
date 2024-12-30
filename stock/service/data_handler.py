@@ -85,6 +85,8 @@ def update_subscription_process(stock, user, data_to_insert):
         #     return
         # if not summary_dict["ROA"] > 10:
         #     return
+        # if not summary_dict["PER"] * summary_dict["PBR"] <= 22.5:
+        #     return
         if not summary_dict["부채비율"] < 200:
             return
         if not summary_dict["배당수익률"] >= 2:
