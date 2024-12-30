@@ -51,6 +51,7 @@ def select_buy_stocks() -> dict:
     result = dict()
     try:
         stocks = set(x['symbol'] for x in Subscription.objects.exclude(Q(symbol__in=Blacklist.objects.values_list('symbol', flat=True))).select_related("symbol").values('symbol'))
+        # stocks = set(x['symbol'] for x in Stock.objects.select_related("symbol").values('symbol'))
         for symbol in stocks:
             df = pd.DataFrame(PriceHistory.objects.filter(date__range=[datetime.now() - timedelta(days=365), datetime.now()], symbol=symbol).order_by('date').values())
             if len(df) < 200:
@@ -60,45 +61,42 @@ def select_buy_stocks() -> dict:
             long_window = 26
             signal_window = 9
 
-            df['EMA_short'] = df['close'].ewm(span=short_window, adjust=False).mean()
-            df['EMA_long'] = df['close'].ewm(span=long_window, adjust=False).mean()
-            df['MACD'] = df['EMA_short'] - df['EMA_long']
-            df['Signal'] = df['MACD'].ewm(span=signal_window, adjust=False).mean()
-
-            price_diff = df['close'].diff()  # 종가 차이 계산
-            obv_change = np.select(
-                [price_diff > 0, price_diff < 0, price_diff == 0],
-                [df['volume'], -df['volume'], 0]  # 상승, 하락, 동일
-            )
-
-            df['OBV'] = obv_change.cumsum()
-            df['OBV'] = df['OBV'].astype('float64')
-
-            lookback = 20
-
-            df['Lowest_20'] = df['low'].rolling(window=lookback).min()
-            df['Highest_20'] = df['high'].rolling(window=lookback).max()
-
             df['MA20'] = df['close'].rolling(window=20).mean()
             df['STD20'] = df['close'].rolling(window=20).std()
             df['Upper_BB'] = df['MA20'] + (df['STD20'] * 2)
             df['Lower_BB'] = df['MA20'] - (df['STD20'] * 2)
-
-            if not (df.iloc[-2]['MACD'] < df.iloc[-2]['Signal']) and (df.iloc[-1]['MACD'] > df.iloc[-1]['Signal']):
-                continue
-
-            if not (df.iloc[-1]['OBV'] > df.iloc[-2]['OBV']):
+            upper_bb = df.iloc[-1]['Upper_BB']
+            lower_bb = df.iloc[-1]['Lower_BB']
+            current_close = df.iloc[-1]['close']
+            if not (current_close < lower_bb + (abs(upper_bb - lower_bb) * 0.05)):
                 continue
 
             lowest_20 = df.iloc[-20:-1]['MA20'].min()
             if not (0 <= (df.iloc[-1]['close'] - lowest_20) / lowest_20 * 100 <= 5):
                 continue
 
+            df['EMA_short'] = df['close'].ewm(span=short_window, adjust=False).mean()
+            df['EMA_long'] = df['close'].ewm(span=long_window, adjust=False).mean()
+            df['MACD'] = df['EMA_short'] - df['EMA_long']
+            df['Signal'] = df['MACD'].ewm(span=signal_window, adjust=False).mean()
+            if not (df.iloc[-2]['MACD'] < df.iloc[-2]['Signal']) and (df.iloc[-1]['MACD'] > df.iloc[-1]['Signal']):
+                continue
+
+            price_diff = df['close'].diff()  # 종가 차이 계산
+            obv_change = np.select(
+                [price_diff > 0, price_diff < 0, price_diff == 0],
+                [df['volume'], -df['volume'], 0]  # 상승, 하락, 동일
+            )
+            df['OBV'] = obv_change.cumsum()
+            df['OBV'] = df['OBV'].astype('float64')
+            if not (df.iloc[-1]['OBV'] > df.iloc[-2]['OBV']):
+                continue
+
             df['ATR5'] = AverageTrueRange(high=df['high'].astype('float64'), low=df['low'].astype('float64'), close=df['close'].astype('float64'), window=5).average_true_range()
             df['ATR10'] = AverageTrueRange(high=df['high'].astype('float64'), low=df['low'].astype('float64'), close=df['close'].astype('float64'), window=10).average_true_range()
             df['ATR20'] = AverageTrueRange(high=df['high'].astype('float64'), low=df['low'].astype('float64'), close=df['close'].astype('float64'), window=20).average_true_range()
             atr = max(df.iloc[-1]['ATR5'], df.iloc[-1]['ATR10'], df.iloc[-1]['ATR20'])
-            result[symbol] = {'price': df.iloc[-1]['close'], 'volume': min((100000000 // (100 * atr)), int(np.min(df['volume'][-5:]) / 100))}
+            result[symbol] = min(100000000 // (100 * atr), np.min(df['volume'][-5:]) // 100)
     except Exception as e:
         traceback.print_exc()
         logging.error(f"Error occurred: {e}")
@@ -111,6 +109,7 @@ def select_sell_stocks(ki_api: KoreaInvestmentAPI) -> list:
         stocks = ki_api.get_owned_stock_info()
         for stock in stocks:
             df = pd.DataFrame(PriceHistory.objects.filter(date__range=[datetime.now() - timedelta(days=365), datetime.now()], symbol=stock.pdno).order_by('date').values())
+            condition = []
             if len(df) < 200:
                 continue
 
@@ -118,17 +117,16 @@ def select_sell_stocks(ki_api: KoreaInvestmentAPI) -> list:
             df['STD20'] = df['close'].rolling(window=20).std()
             df['Upper_BB'] = df['MA20'] + (df['STD20'] * 2)
             df['Lower_BB'] = df['MA20'] - (df['STD20'] * 2)
-
-            current_close = df.iloc[-1]['close']
-            highest_20 = df.iloc[-20:-1]['MA20'].min()
-            if not (0 <= (highest_20 - current_close) / highest_20 * 100 <= 5):
-                continue
-
             upper_bb = df.iloc[-1]['Upper_BB']
-            if not (current_close > upper_bb):
-                continue
+            lower_bb = df.iloc[-1]['Lower_BB']
+            current_close = df.iloc[-1]['close']
+            condition.append(current_close > upper_bb - (abs(upper_bb - lower_bb) * 0.05))
 
-            result.append(stock.pdno)
+            highest_20 = df.iloc[-20:-1]['MA20'].max()
+            condition.append(0 <= (highest_20 - current_close) / highest_20 * 100 <= 5)
+
+            if any(condition):
+                result.append(stock.pdno)
     except Exception as e:
         traceback.print_exc()
         logging.error(f"Error occurred: {e}")
@@ -138,20 +136,27 @@ def select_sell_stocks(ki_api: KoreaInvestmentAPI) -> list:
 def trading_buy(ki_api: KoreaInvestmentAPI):
     buy = select_buy_stocks()
     try:
-        end_date = ki_api.get_nth_open_day(5)
+        end_date = ki_api.get_nth_open_day(3)
     except Exception as e:
         traceback.print_exc()
         logging.error(f"Error occurred while getting nth open day: {e}")
         return
 
     money = 0
-    volume_index = 0.001
+    volume_index = 0.002
 
-    for symbol, item in buy.items():
+    for symbol, volume in buy.items():
         try:
-            stock = ki_api.get_owned_stock_info(symbol)
-            ki_api.buy_reserve(symbol=symbol, price=item["price"], volume=item["volume"], end_date=end_date)
-            money += item["price"] * item["volume"]
+            price_last = PriceHistory.objects.filter(date__range=[datetime.now() - timedelta(days=5), datetime.now()], symbol=symbol).order_by('date').last()
+            order_queue = {
+                price_last.low: int(volume * volume_index * 0.6),
+                price_refine((price_last.high + price_last.low) // 2): int(volume * volume_index * 0.4),
+                price_last.high: int(volume * volume_index * 0.2)
+            }
+            for price, vol in order_queue:
+                ki_api.buy_reserve(symbol=symbol, price=price, volume=vol, end_date=end_date)
+                money += price * vol
+
         except Exception as e:
             traceback.print_exc()
             logging.error(f"Error occurred while executing trades for symbol {symbol}: {e}")
