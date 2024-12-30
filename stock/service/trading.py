@@ -54,7 +54,7 @@ def select_buy_stocks() -> dict:
         # stocks = set(x['symbol'] for x in Stock.objects.select_related("symbol").values('symbol'))
         for symbol in stocks:
             df = pd.DataFrame(PriceHistory.objects.filter(date__range=[datetime.now() - timedelta(days=365), datetime.now()], symbol=symbol).order_by('date').values())
-            if len(df) < 200:
+            if len(df) < 120:
                 continue
 
             short_window = 12
@@ -72,7 +72,8 @@ def select_buy_stocks() -> dict:
                 continue
 
             lowest_20 = df.iloc[-20:-1]['MA20'].min()
-            if not (0 <= (df.iloc[-1]['close'] - lowest_20) / lowest_20 * 100 <= 5):
+            # if not (0 <= (current_close - lowest_20) / lowest_20 * 100 <= 5):
+            if not (current_close > lowest_20):
                 continue
 
             df['EMA_short'] = df['close'].ewm(span=short_window, adjust=False).mean()
