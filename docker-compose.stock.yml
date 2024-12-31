@@ -28,6 +28,8 @@ services:
       - .env
     volumes:
       - ./logs_stock:/app/logs
+      - /etc/localtime:/etc/localtime:ro
+      - /etc/timezone:/etc/timezone:ro
     environment:
       - TZ=Asia/Seoul
     depends_on:

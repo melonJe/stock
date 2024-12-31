@@ -138,32 +138,21 @@ def trading_buy(ki_api: KoreaInvestmentAPI):
     for symbol, volume in buy.items():
         try:
             stock = ki_api.get_owned_stock_info(symbol)
-            df = pd.DataFrame(PriceHistory.objects.filter(date__range=[datetime.now() - timedelta(days=200), datetime.now()], symbol=symbol).order_by('date').values())
+            price_last = PriceHistory.objects.filter(date__range=[datetime.now() - timedelta(days=20), datetime.now()], symbol=symbol).order_by('date').last()
 
-            if df.empty:
-                logging.error(f"No price history found for symbol: {symbol}")
-                continue
-            elif len(df) < 100:
-                logging.error(f"Not enough price history for symbol: {symbol}")
-                continue
+            stop_loss_insert(symbol, price_last.close * 0.9)
 
-            df['ma5'] = df['close'].rolling(window=5).mean()
-            df['ma10'] = df['close'].rolling(window=10).mean()
-            df['ma20'] = df['close'].rolling(window=20).mean()
-            df['ma60'] = df['close'].rolling(window=60).mean()
-            last_row = df.iloc[-1]
-
-            stop_loss_insert(symbol, df.iloc[-1]['ma60'])
-            for idx, price in enumerate(price_refine(price) for price in [last_row['ma5'], last_row['ma10'], last_row['ma20']]):
+            order_queue = {
+                price_last.low: int(volume * volume_index * (1 / 2)),
+                price_refine((price_last.high + price_last.low) // 2): int(volume * volume_index * (1 / 3)),
+                price_last.high: int(volume * volume_index * (1 / 6))
+            }
+            for price, vol in order_queue:
+                if stock and price > float(stock.pchs_avg_pric) * 0.975:
+                    continue
                 try:
-                    if price > df.iloc[-1]['ma60'] * 1.05:
-                        continue
-
-                    if stock and price > float(stock.pchs_avg_pric) * 0.975:
-                        continue
-
-                    ki_api.buy_reserve(symbol=symbol, price=price, volume=int(volume * volume_index * (idx * 2 + 1)) + 1, end_date=end_date)
-                    money += price * (int(volume * volume_index * (idx * 2 + 1)) + 1)
+                    ki_api.buy_reserve(symbol=symbol, price=price, volume=vol, end_date=end_date)
+                    money += price * vol
                 except Exception as e:
                     traceback.print_exc()
                     logging.error(f"Error occurred while executing trades for symbol {symbol}: {e}")
