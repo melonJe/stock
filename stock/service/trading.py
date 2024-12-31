@@ -57,13 +57,19 @@ def select_buy_stocks() -> dict:
         buy = dict()
         sieve = dict()
         for symbol in stocks:
-            df = pd.DataFrame(PriceHistory.objects.filter(date__range=[datetime.now() - timedelta(days=600), datetime.now()], symbol=symbol).order_by('date').values())
-            if len(df) < 300:
+            df = pd.DataFrame(PriceHistory.objects.filter(date__range=[datetime.now() - timedelta(days=365), datetime.now()], symbol=symbol).order_by('date').values())
+            if len(df) < 200:
                 continue
 
+            df['ma120'] = df['close'].rolling(window=120).mean()
+            df['ma60'] = df['close'].rolling(window=60).mean()
             df['ma20'] = df['close'].rolling(window=20).mean()
             latest_days = df[-10:]
-            if not np.all(latest_days['ma20'] < latest_days['close']):
+            if not (
+                    np.all(latest_days['ma120'] <= latest_days['ma60']) and
+                    np.all(latest_days['ma60'] <= latest_days['ma20']) and
+                    np.all(latest_days['ma20'] <= latest_days['close'])
+            ):
                 continue
 
             df['RSI'] = rsi(df['close'], window=9)
@@ -123,8 +129,7 @@ def select_sell_stocks(ki_api: KoreaInvestmentAPI) -> list:
     return result
 
 
-def trading_buy(ki_api: KoreaInvestmentAPI):
-    buy = select_buy_stocks()
+def trading_buy(ki_api: KoreaInvestmentAPI, buy):
     try:
         end_date = ki_api.get_nth_open_day(3)
     except Exception as e:
@@ -147,7 +152,7 @@ def trading_buy(ki_api: KoreaInvestmentAPI):
                 price_refine((price_last.high + price_last.low) // 2): int(volume * volume_index * (1 / 3)),
                 price_last.high: int(volume * volume_index * (1 / 6))
             }
-            for price, vol in order_queue:
+            for price, vol in order_queue.items():
                 if stock and price > float(stock.pchs_avg_pric) * 0.975:
                     continue
                 try:
