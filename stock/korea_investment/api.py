@@ -39,7 +39,8 @@ class KoreaInvestmentAPI:
         auth_header = {
             "Content-Type": "application/json",
             "appkey": self.app_key,
-            "appsecret": self.app_secret}
+            "appsecret": self.app_secret
+        }
         auth_payload = {
             "grant_type": "client_credentials",
             "appkey": self.app_key,
