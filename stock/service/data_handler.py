@@ -71,22 +71,22 @@ def update_subscription_process(stock, user, data_to_insert):
         try:
             if not (pd.to_numeric(df_highlight['매출액'].str.replace(",", ""), errors="coerce")[-3:] > 0).all():
                 return
-            if not (pd.to_numeric(df_highlight['매출액'].str.replace(",", ""), errors="coerce").diff()[-2:] > 0).all():
+            if not (pd.to_numeric(df_highlight['매출액'].str.replace(",", ""), errors="coerce").diff()[-2:] >= 0).all():
                 return
         except Exception as e:
             pass
 
-        if not (pd.to_numeric(df_highlight['영업이익'].str.replace(",", ""), errors="coerce").diff()[-2:] > 0).all():
+        if not (pd.to_numeric(df_highlight['영업이익'].str.replace(",", ""), errors="coerce").diff()[-1:] >= 0).all():
             return
-        if not (pd.to_numeric(df_highlight['당기순이익'].str.replace(",", ""), errors="coerce").diff()[-2:] > 0).all():
+        if not (pd.to_numeric(df_highlight['당기순이익'].str.replace(",", ""), errors="coerce").diff()[-1:] >= 0).all():
             return
 
         # if not summary_dict["ROE"] > 10:
         #     return
         # if not summary_dict["ROA"] > 10:
         #     return
-        # if not summary_dict["PER"] * summary_dict["PBR"] <= 22.5:
-        #     return
+        if not summary_dict["PER"] * summary_dict["PBR"] <= 22.5:
+            return
         if not summary_dict["부채비율"] < 200:
             return
         if not summary_dict["배당수익률"] >= 2:
