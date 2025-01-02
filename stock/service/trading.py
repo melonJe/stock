@@ -92,7 +92,7 @@ def select_buy_stocks() -> dict:
                 atr = max(df.iloc[-1]['ATR5'], df.iloc[-1]['ATR10'], df.iloc[-1]['ATR20'])
                 if atr / df.iloc[-1]['close'] > 0.05:
                     continue
-                volume = min(100000000 // (100 * atr), np.min(df['volume'][-5:]) // 100)
+                volume = int(min(10000000 // atr, np.average(df['volume'][-20:]) // (atr ** (1 / 2))))
                 buy[symbol] = volume
                 sieve[symbol] = df.iloc[-1]['CMF']
         for x in list(dict(sorted(sieve.items(), key=lambda item: item[1], reverse=True)).keys()):
@@ -191,7 +191,6 @@ def trading_buy(ki_api: KoreaInvestmentAPI, buy):
         return
 
     money = 0
-    volume_index = 0.002
 
     for symbol, volume in buy.items():
         try:
@@ -201,9 +200,9 @@ def trading_buy(ki_api: KoreaInvestmentAPI, buy):
             stop_loss_insert(symbol, price_last.close * 0.9)
 
             order_queue = {
-                price_last.low: int(volume * volume_index * (1 / 2)),
-                price_refine((price_last.high + price_last.low) // 2): int(volume * volume_index * (1 / 3)),
-                price_last.high: int(volume * volume_index * (1 / 6))
+                price_last.low: int(volume * (1 / 2)),
+                price_refine((price_last.high + price_last.low) // 2): int(volume * (1 / 3)),
+                price_last.high: int(volume * (1 / 6))
             }
             for price, vol in order_queue.items():
                 if stock and price > float(stock.pchs_avg_pric) * 0.975:
