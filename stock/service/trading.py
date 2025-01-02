@@ -55,11 +55,9 @@ def validate_and_adjust_volume(stock, requested_volume):
 
 
 def select_buy_stocks() -> dict:
-    result = dict()
+    buy_levels = dict()
     try:
         stocks = set(x['symbol'] for x in Subscription.objects.exclude(Q(symbol__in=Blacklist.objects.values_list('symbol', flat=True))).select_related("symbol").values('symbol'))
-        buy = dict()
-        sieve = dict()
         for symbol in stocks:
             df = pd.DataFrame(PriceHistory.objects.filter(date__range=[datetime.now() - timedelta(days=365), datetime.now()], symbol=symbol).order_by('date').values())
             if len(df) < 200:
@@ -93,14 +91,16 @@ def select_buy_stocks() -> dict:
                 if atr / df.iloc[-1]['close'] > 0.05:
                     continue
                 volume = int(min(10000000 // atr, np.average(df['volume'][-20:]) // (atr ** (1 / 2))))
-                buy[symbol] = volume
-                sieve[symbol] = df.iloc[-1]['CMF']
-        for x in list(dict(sorted(sieve.items(), key=lambda item: item[1], reverse=True)).keys()):
-            result[x] = buy[x]
+                buy_levels[symbol] = {
+                    price_refine(df.iloc[-1]['ma120']): volume // 10 * 4,
+                    price_refine(df.iloc[-1]['ma60']): volume // 10 * 3,
+                    price_refine(df.iloc[-1]['ma20']): volume // 10 * 2,
+                    price_refine(df.iloc[-1]['close']): volume // 10 * 1
+                }
     except Exception as e:
         traceback.print_exc()
         logging.error(f"Error occurred: {e}")
-    return result
+    return buy_levels
 
 
 def select_sell_stocks(ki_api: KoreaInvestmentAPI) -> dict:
@@ -182,7 +182,7 @@ def select_sell_stocks(ki_api: KoreaInvestmentAPI) -> dict:
     return sell_candidates
 
 
-def trading_buy(ki_api: KoreaInvestmentAPI, buy):
+def trading_buy(ki_api: KoreaInvestmentAPI, buy_levels):
     try:
         end_date = ki_api.get_nth_open_day(3)
     except Exception as e:
@@ -192,28 +192,19 @@ def trading_buy(ki_api: KoreaInvestmentAPI, buy):
 
     money = 0
 
-    for symbol, volume in buy.items():
+    for symbol, levels in buy_levels.items():
         try:
             stock = ki_api.get_owned_stock_info(symbol)
-            price_last = PriceHistory.objects.filter(date__range=[datetime.now() - timedelta(days=20), datetime.now()], symbol=symbol).order_by('date').last()
-
-            stop_loss_insert(symbol, price_last.close * 0.9)
-
-            order_queue = {
-                price_last.low: int(volume * (1 / 2)),
-                price_refine((price_last.high + price_last.low) // 2): int(volume * (1 / 3)),
-                price_last.high: int(volume * (1 / 6))
-            }
-            for price, vol in order_queue.items():
+            stop_loss_insert(symbol, min(levels.key()) * 0.95)
+            for price, volume in levels.items():
                 if stock and price > float(stock.pchs_avg_pric) * 0.975:
                     continue
                 try:
-                    ki_api.buy_reserve(symbol=symbol, price=price, volume=vol, end_date=end_date)
-                    money += price * vol
+                    ki_api.buy_reserve(symbol=symbol, price=price, volume=volume, end_date=end_date)
+                    money += price * volume
                 except Exception as e:
                     traceback.print_exc()
                     logging.error(f"Error occurred while executing trades for symbol {symbol}: {e}")
-
         except Exception as e:
             traceback.print_exc()
             logging.error(f"Error occurred while processing symbol {symbol}: {e}")
