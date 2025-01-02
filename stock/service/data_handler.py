@@ -74,7 +74,7 @@ def update_subscription_process(stock, user, data_to_insert):
             if not (pd.to_numeric(df_highlight['매출액'].str.replace(",", ""), errors="coerce").diff()[-2:] >= 0).all():
                 return
         except Exception as e:
-            pass
+            raise ValueError(f"not find 매출액")
 
         if not (pd.to_numeric(df_highlight['영업이익'].str.replace(",", ""), errors="coerce").diff()[-1:] >= 0).all():
             return
