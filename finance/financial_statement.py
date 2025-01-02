@@ -60,8 +60,8 @@ def get_finance_from_fnguide(symbol: str, report='highlight', report_type: str =
     - cash      : 현금흐름표
     를 조회 후 하나의 DataFrame으로 병합(return).
     """
-
     # 파라미터 유효성 검사
+    report_type, period = report_type.upper(), period.upper()
     if report_type not in ['D', 'B']:
         raise ValueError(
             f"Invalid value for parameter 'report_type': {report_type}. "
