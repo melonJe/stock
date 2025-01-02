@@ -195,7 +195,7 @@ def trading_buy(ki_api: KoreaInvestmentAPI, buy_levels):
     for symbol, levels in buy_levels.items():
         try:
             stock = ki_api.get_owned_stock_info(symbol)
-            stop_loss_insert(symbol, min(levels.key()) * 0.95)
+            stop_loss_insert(symbol, min(levels.keys()) * 0.95)
             for price, volume in levels.items():
                 if stock and price > float(stock.pchs_avg_pric) * 0.975:
                     continue
