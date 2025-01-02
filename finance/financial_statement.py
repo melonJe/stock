@@ -8,7 +8,7 @@ from bs4 import BeautifulSoup
 pd.set_option('display.max_columns', None)
 
 
-def html_table_to_dataframe_for_fnguide(table, include_estimates=False) -> pd.DataFrame:
+def html_table_to_dataframe_for_fnguide(table) -> pd.DataFrame:
     """
     FnGuide 재무제표 테이블(HTML)을 받아 DataFrame으로 변환해주는 함수
     """
@@ -20,7 +20,7 @@ def html_table_to_dataframe_for_fnguide(table, include_estimates=False) -> pd.Da
     thead_ths = table.select_one('thead').select("th", {"scope": "col"})
     for th in thead_ths:
         txt = th.get_text(strip=True)
-        match = re.search(r'(\d{4}/\d{2}(\(E\)|)|전년동기(\(%\)|))', txt)
+        match = re.search(r'\d{4}\/\d{2}(\(E\))?', txt)
         if match:
             index.append(match.group())
 
@@ -43,15 +43,10 @@ def html_table_to_dataframe_for_fnguide(table, include_estimates=False) -> pd.Da
             if column:
                 key = column
                 values = [td.get_text(strip=True) for td in tr.select("td")]
-                # 헤더로 인식된 index 길이에 맞춰 리스트 뒤에서부터 잘라 매핑
-                data[key] = values[-len(index):]
+                # 헤더로 인식된 index 길이에 맞춰잘라 매핑
+                data[key] = values[:len(index)]
 
     df = pd.DataFrame(data, index=index)
-
-    # 추정치(E)가 포함된 항목 제거(옵션)
-    if not include_estimates:
-        df = df[~df.index.str.contains(r'\(E\)')]
-
     return df
 
 
@@ -101,7 +96,7 @@ def get_finance_from_fnguide(symbol: str, report='highlight', report_type: str =
         highlight_div_id = f"highlight_{report_type}_{period}"
         table_highlight = soup_main.select_one(f"div#{highlight_div_id} table")
         if table_highlight:
-            df_list.append(html_table_to_dataframe_for_fnguide(table_highlight, include_estimates))
+            df_list.append(html_table_to_dataframe_for_fnguide(table_highlight))
         else:
             raise ValueError(f"Unable to find highlight table with id: {highlight_div_id}")
 
@@ -130,7 +125,7 @@ def get_finance_from_fnguide(symbol: str, report='highlight', report_type: str =
             table_selector = f"div#{div_key}{period} table"
             table = soup_finance.select_one(table_selector)
             if table:
-                df_list.append(html_table_to_dataframe_for_fnguide(table, include_estimates))
+                df_list.append(html_table_to_dataframe_for_fnguide(table))
             else:
                 raise ValueError(f"Unable to find {key} table (selector: {table_selector}).")
 
@@ -145,6 +140,12 @@ def get_finance_from_fnguide(symbol: str, report='highlight', report_type: str =
         )
     else:
         merged_df = pd.DataFrame()
+
+    # 추정치(E)가 포함된 항목 제거(옵션)
+    if not include_estimates:
+        merged_df = merged_df[~merged_df.index.str.contains(r'\(E\)')]
+    if period == 'Y':
+        merged_df = merged_df[merged_df.index.str.contains(r'\d{4}/12(?:\(E\))?')]
 
     return merged_df
 
@@ -194,19 +195,18 @@ def get_financial_summary_for_update_stock(symbol: str, report_type: str = 'D', 
 if __name__ == "__main__":
     # 사용 예시
     symbol_code = "005930"  # 삼성전자
-    df_y = get_finance_from_fnguide(symbol_code, 'highlight', report_type='D', period='Y', include_estimates=False)
-    print(df_y)
-    print(df_y['당기순이익'].str.replace(",", ""))
-    print((pd.to_numeric(df_y['당기순이익'].str.replace(",", ""), errors="coerce").diff()[-2:] > 0))
-
+    # # (0) 하이라이트
+    # df_y = get_finance_from_fnguide(symbol_code, 'highlight', report_type='D', period='Y', include_estimates=False)
+    # print("[하이라이트]\n", df_y.head(), "\n")
+    #
     # # (1) 재무상태표만 확인하기
-    # df_state = get_finance_from_fnguide(symbol_code, report="state", report_type='D', period='Q')
+    # df_state = get_finance_from_fnguide(symbol_code, report="income", report_type='D', period='Y', include_estimates=False)
     # print("[재무상태표]\n", df_state.head(), "\n")
     #
-    # # (2) 하이라이트 + 현금흐름표
-    # df_highlight_cash = get_finance_from_fnguide(symbol_code, report="highlight,cash", report_type='D', period='Q')
-    # print("[하이라이트 + 현금흐름표]\n", df_highlight_cash.head(), "\n")
-
-    # (3) 종합 요약 정보
+    # (2) 하이라이트 + 현금흐름표
+    df_highlight_cash = get_finance_from_fnguide(symbol_code, report="highlight,cash", report_type='D', period='Q')
+    print("[하이라이트 + 현금흐름표]\n", df_highlight_cash.head(), "\n")
+    #
+    # # (3) 종합 요약 정보
     # summary_dict = get_financial_summary_for_update_stock(symbol_code)
     # print("[종합 요약 정보]\n", summary_dict)
