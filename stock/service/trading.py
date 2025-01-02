@@ -90,7 +90,7 @@ def select_buy_stocks() -> dict:
                 atr = max(df.iloc[-1]['ATR5'], df.iloc[-1]['ATR10'], df.iloc[-1]['ATR20'])
                 if atr / df.iloc[-1]['close'] > 0.05:
                     continue
-                volume = int(min(10000000 // atr, np.average(df['volume'][-20:]) // (atr ** (1 / 2))))
+                volume = int(min(10000 // atr, np.average(df['volume'][-20:]) // (atr ** (1 / 2))))
                 buy_levels[symbol] = {
                     price_refine(df.iloc[-1]['ma120']): volume // 10 * 4,
                     price_refine(df.iloc[-1]['ma60']): volume // 10 * 3,
