@@ -1,6 +1,6 @@
 import logging
 import os
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from datetime import timedelta
 from urllib.parse import parse_qs, urlparse
@@ -153,18 +153,43 @@ def add_stock_price(symbol: str = None, start_date: str = None, end_date: str = 
     if start_date is None:
         start_date = datetime.now().strftime('%Y-%m-%d')
 
+    # 특정 종목만 처리할 경우
     if symbol:
         add_price_for_symbol(symbol, start_date, end_date)
     else:
-        for stock in Stock.objects.all():
-            add_price_for_symbol(stock.symbol, start_date, end_date)
+        # 전체 종목 조회
+        stocks = Stock.objects.all()
+
+        # ThreadPoolExecutor로 스레드 풀 생성
+        with ThreadPoolExecutor(max_workers=os.cpu_count()) as executor:
+            futures = []
+            for stock in stocks:
+                # 각 종목에 대해 add_price_for_symbol 함수를 스레드로 제출
+                futures.append(
+                    executor.submit(add_price_for_symbol, stock.symbol, start_date, end_date)
+                )
+
+            # 모든 작업이 완료될 때까지 대기하며 에러 확인
+            for future in as_completed(futures):
+                try:
+                    future.result()
+                except Exception as e:
+                    logging.error(f"에러 발생: {e}")
 
 
 def add_price_for_symbol(symbol: str, start_date: str, end_date: str = None):
     try:
-        df_krx = FinanceDataReader.DataReader(symbol=f'NAVER:{symbol}', start=start_date, end=end_date)
+        # FinanceDataReader로 데이터 가져오기
+        df_krx = FinanceDataReader.DataReader(
+            symbol=f'NAVER:{symbol}',
+            start=start_date,
+            end=end_date
+        )
+
         if df_krx.empty:
             return
+
+        # DB에 넣을 자료 생성
         data_to_insert = [
             {
                 'symbol': get_stock(symbol=symbol),
@@ -177,6 +202,14 @@ def add_price_for_symbol(symbol: str, start_date: str, end_date: str = None):
             }
             for idx, row in df_krx.iterrows()
         ]
-        bulk_insert(PriceHistory, data_to_insert, True, ['symbol', 'date'], ['open', 'high', 'close', 'low', 'volume'])
+
+        # bulk_insert로 일괄 삽입
+        bulk_insert(
+            PriceHistory,
+            data_to_insert,
+            ignore_conflicts=True,
+            update_conflicts=['open', 'high', 'close', 'low', 'volume'],
+            unique_fields=['symbol', 'date']
+        )
     except Exception as e:
         logging.error(f"Error processing symbol {symbol}: {e}")

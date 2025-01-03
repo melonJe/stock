@@ -8,7 +8,7 @@ from time import sleep
 
 import numpy as np
 import pandas as pd
-from django.db.models import Q, Sum
+from django.db.models import Sum
 from ta.momentum import RSIIndicator
 from ta.momentum import rsi
 from ta.trend import ADXIndicator, SMAIndicator
@@ -19,7 +19,7 @@ from ta.volume import ChaikinMoneyFlowIndicator
 
 from stock.discord import discord
 from stock.korea_investment.api import KoreaInvestmentAPI
-from stock.models import PriceHistory, StopLoss, Subscription, Blacklist, SellQueue, Stock, Account
+from stock.models import PriceHistory, StopLoss, SellQueue, Stock, Account
 from .data_handler import stop_loss_insert, add_stock_price
 from .. import setting_env
 
@@ -57,7 +57,8 @@ def validate_and_adjust_volume(stock, requested_volume):
 def select_buy_stocks() -> dict:
     buy_levels = dict()
     try:
-        stocks = set(x['symbol'] for x in Subscription.objects.exclude(Q(symbol__in=Blacklist.objects.values_list('symbol', flat=True))).select_related("symbol").values('symbol'))
+        # stocks = set(x['symbol'] for x in Subscription.objects.exclude(Q(symbol__in=Blacklist.objects.values_list('symbol', flat=True))).select_related("symbol").values('symbol'))
+        stocks = set(x['symbol'] for x in Stock.objects.select_related("symbol").values('symbol'))
         for symbol in stocks:
             df = pd.DataFrame(PriceHistory.objects.filter(date__range=[datetime.now() - timedelta(days=365), datetime.now()], symbol=symbol).order_by('date').values())
             if len(df) < 200:
