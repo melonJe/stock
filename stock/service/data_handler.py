@@ -62,8 +62,8 @@ def get_stock(symbol: str):
 def update_subscription_process(stock, user, data_to_insert):
     try:
         summary_dict = get_financial_summary_for_update_stock(stock.symbol)
-        df_highlight = get_finance_from_fnguide(stock.symbol, 'highlight', period='Y', include_estimates=False)
-        df_cash = get_finance_from_fnguide(stock.symbol, 'cash', period='Y', include_estimates=False)
+        df_highlight = get_finance_from_fnguide(stock.symbol, 'highlight', period='Q', include_estimates=False)
+        df_cash = get_finance_from_fnguide(stock.symbol, 'cash', period='Q', include_estimates=False)
 
         if not (pd.to_numeric(df_cash['영업활동으로인한현금흐름'].str.replace(",", ""), errors="coerce")[-3:] > 0).all():
             return
