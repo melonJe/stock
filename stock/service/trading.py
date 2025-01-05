@@ -17,8 +17,8 @@ from ta.volume import ChaikinMoneyFlowIndicator
 
 from stock.discord import discord
 from stock.korea_investment.api import KoreaInvestmentAPI
-from stock.models import PriceHistory, StopLoss, Subscription, Blacklist
-from .data_handler import stop_loss_insert, add_stock_price
+from stock.models import PriceHistory, StopLoss, Subscription, Blacklist, Stock
+from .data_handler import stop_loss_insert, insert_stock_price, get_price_history_table, get_stock_symbol_type
 from .. import setting_env
 
 
@@ -45,13 +45,22 @@ def price_refine(price: int, number: int = 0) -> int:
     return int(price)
 
 
-def select_buy_stocks() -> dict:
+def select_buy_stocks(country: str) -> dict:
     buy_levels = dict()
+    table = get_price_history_table(country)
     try:
-        stocks = set(x['symbol'] for x in Subscription.objects.exclude(Q(symbol__in=Blacklist.objects.values_list('symbol', flat=True))).select_related("symbol").values('symbol'))
+        stocks = set(
+            x['symbol']
+            for x in Subscription.objects
+            .exclude(Q(symbol__in=Blacklist.objects.values_list('symbol', flat=True)))
+            .filter(symbol__country="KOR")
+            .select_related("symbol")
+            .values("symbol")
+        )
         # stocks = set(x['symbol'] for x in Stock.objects.exclude(Q(symbol__in=Blacklist.objects.values_list('symbol', flat=True))).select_related("symbol").values('symbol'))
         for symbol in stocks:
-            df = pd.DataFrame(PriceHistory.objects.filter(date__range=[datetime.now() - timedelta(days=365), datetime.now()], symbol=symbol).order_by('date').values())
+            stock = Stock.objects.filter(symbol=symbol).first()
+            df = pd.DataFrame(table.objects.filter(date__range=[datetime.now() - timedelta(days=365), datetime.now()], symbol=symbol).order_by('date').values())
             if len(df) < 200:
                 continue
 
@@ -84,10 +93,10 @@ def select_buy_stocks() -> dict:
                     continue
                 volume = int(min(10000 // atr, np.average(df['volume'][-20:]) // (atr ** (1 / 2))))
                 buy_levels[symbol] = {
-                    price_refine(df.iloc[-1]['ma120']): volume // 10 * 4,
-                    price_refine(df.iloc[-1]['ma60']): volume // 10 * 3,
-                    price_refine(df.iloc[-1]['ma20']): volume // 10 * 2,
-                    price_refine(df.iloc[-1]['close']): volume // 10 * 1
+                    df.iloc[-1]['ma120']: volume // 10 * 4,
+                    df.iloc[-1]['ma60']: volume // 10 * 3,
+                    df.iloc[-1]['ma20']: volume // 10 * 2,
+                    df.iloc[-1]['close']: volume // 10 * 1
                 }
     except Exception as e:
         traceback.print_exc()
@@ -153,8 +162,9 @@ def trading_buy(ki_api: KoreaInvestmentAPI, buy_levels):
                 if stock and price > float(stock.pchs_avg_pric) * 0.975:
                     continue
                 try:
-                    ki_api.buy_reserve(symbol=symbol, price=price, volume=volume, end_date=end_date)
-                    money += price * volume
+                    if get_stock_symbol_type(symbol) == "KOR":
+                        ki_api.buy_reserve(symbol=symbol, price=price_refine(price), volume=volume, end_date=end_date)
+                        money += price * volume
                 except Exception as e:
                     traceback.print_exc()
                     logging.error(f"Error occurred while executing trades for symbol {symbol}: {e}")
@@ -215,10 +225,19 @@ def korea_investment_trading():
     stop_loss = threading.Thread(target=stop_loss_notify, args=(ki_api,))
     stop_loss.start()
 
+    while datetime.now().time() < time(10, 30, 30):
+        sleep(1 * 60)
+
+    insert_stock_price(start_date=datetime.now().strftime('%Y-%m-%d'), end_date=datetime.now().strftime('%Y-%m-%d'), country="USA")
+    usa_stock = select_buy_stocks(country="USA")
+    logging.info(f"usa_stock: {usa_stock}")
+    buy = threading.Thread(target=trading_buy, args=(ki_api, usa_stock,))
+    buy.start()
+
     while datetime.now().time() < time(15, 35, 30):
         sleep(1 * 60)
 
-    add_stock_price(start_date=datetime.now().strftime('%Y-%m-%d'), end_date=datetime.now().strftime('%Y-%m-%d'))
+    insert_stock_price(start_date=datetime.now().strftime('%Y-%m-%d'), end_date=datetime.now().strftime('%Y-%m-%d'), country="KOR")
     for stock in ki_api.get_owned_stock_info():
         stop_loss_insert(stock.pdno, float(stock.pchs_avg_pric))
 
@@ -228,6 +247,6 @@ def korea_investment_trading():
     sell_stock = select_sell_stocks(ki_api)
     sell = threading.Thread(target=trading_sell, args=(ki_api, sell_stock,))
     sell.start()
-    buy_stock = select_buy_stocks()
+    buy_stock = select_buy_stocks(country="KOR")
     buy = threading.Thread(target=trading_buy, args=(ki_api, buy_stock,))
     buy.start()

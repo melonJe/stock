@@ -12,10 +12,10 @@ from stock.service.trading import korea_investment_trading
 def start():
     scheduler = BackgroundScheduler(misfire_grace_time=3600, coalesce=True, timezone=settings.TIME_ZONE)
     # ki_api = KoreaInvestmentAPI(app_key=setting_env.APP_KEY, app_secret=setting_env.APP_SECRET, account_number=setting_env.ACCOUNT_NUMBER, account_code=setting_env.ACCOUNT_CODE)
-    # data_handler.add_stock_price(start_date=(datetime.now() - timedelta(days=600)).strftime('%Y-%m-%d'), end_date=datetime.now().strftime('%Y-%m-%d'))
-    # trading_buy(ki_api=ki_api, buy_levels=select_buy_stocks())
+    # data_handler.insert_stock_price(start_date="2020-01-01", end_date=datetime.now().strftime('%Y-%m-%d'))
+    # trading_buy(ki_api=ki_api, buy_levels=select_buy_stocks(country="USA"))
     # trading_sell(ki_api=ki_api)
-    # print(select_buy_stocks())
+    # print(select_buy_stocks(country="USA"))
     # print(select_sell_stocks(ki_api))
 
     if not setting_env.SIMULATE:
@@ -36,19 +36,19 @@ def start():
         )
 
         scheduler.add_job(
-            data_handler.add_stock_price,
+            data_handler.insert_stock_price,
             trigger=CronTrigger(day_of_week="sat"),
             kwargs={'start_date': (datetime.now() - timedelta(days=7)).strftime('%Y-%m-%d'), 'end_date': datetime.now().strftime('%Y-%m-%d')},
-            id="add_stock_price_1week",
+            id="insert_stock_price_1week",
             max_instances=1,
             replace_existing=True,
         )
 
         scheduler.add_job(
-            data_handler.add_stock_price,
+            data_handler.insert_stock_price,
             trigger=CronTrigger(day_of_week="mon-fri", hour=18, minute=0, second=0),
             kwargs={'start_date': datetime.now().strftime('%Y-%m-%d'), 'end_date': datetime.now().strftime('%Y-%m-%d')},
-            id="add_stock_price_1day",
+            id="insert_stock_price_1day",
             max_instances=1,
             replace_existing=True,
         )

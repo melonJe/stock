@@ -3,7 +3,7 @@ import logging
 import requests
 
 
-def bulk_insert(model_class, data: list, update_conflicts: bool, unique_fields: list, update_fields: list = None):
+def bulk_upsert(model_class, data: list, update_conflicts: bool, unique_fields: list, update_fields: list = None):
     try:
         model_class.objects.bulk_create(
             [model_class(**vals) for vals in data],

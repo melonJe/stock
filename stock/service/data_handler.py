@@ -1,8 +1,10 @@
 import logging
 import os
+import re
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from datetime import timedelta
+from typing import Optional, Type
 from urllib.parse import parse_qs, urlparse
 
 import FinanceDataReader
@@ -10,12 +12,13 @@ import pandas as pd
 import requests
 from bs4 import BeautifulSoup
 from django.core.exceptions import ObjectDoesNotExist
+from django.db import models
 from ta.volatility import AverageTrueRange
 
 from finance.financial_statement import get_financial_summary_for_update_stock, get_finance_from_fnguide
-from stock.models import Stock
+from stock.models import Stock, PriceHistoryUs
 from stock.models import Subscription, Blacklist, PriceHistory, StopLoss, Account
-from stock.service.utils import bulk_insert
+from stock.service.utils import bulk_upsert
 
 
 def get_company_name(symbol: str):
@@ -34,6 +37,27 @@ def get_company_name(symbol: str):
         return None
 
 
+def get_stock_symbol_type(symbol: str):
+    if re.match(r'(\d{6}|\d{5}[a-zA-Z]?)', symbol):
+        return "KOR"
+    elif re.match(r'([[a-zA-Z]\s?\.?)*', symbol):
+        return "USA"
+    else:
+        return ""
+
+
+def get_price_history_table(country: str):
+    country = country.upper()
+    mapping = {
+        'KOR': PriceHistory,
+        'USA': PriceHistoryUs,
+    }
+    try:
+        return mapping[country]
+    except KeyError:
+        raise ValueError(f"Unsupported country code: {country}")
+
+
 def insert_stock(symbol: str, company_name: str = None):
     # 이미 존재하는 주식인지 확인
     existing_stock = Stock.objects.filter(symbol=symbol).first()
@@ -46,9 +70,8 @@ def insert_stock(symbol: str, company_name: str = None):
         company_name = get_company_name(symbol)
 
     # 새 주식 객체 생성 및 저장
-    new_stock = Stock(symbol=symbol, company_name=company_name)
+    new_stock = Stock(symbol=symbol, company_name=company_name, country=get_stock_symbol_type(symbol))
     new_stock.save()
-    add_stock_price(symbol=symbol, start_date=(datetime.now() - timedelta(days=45)).strftime("%Y-%m-%d"), end_date=datetime.now().strftime("%Y-%m-%d"))
     return new_stock
 
 
@@ -126,7 +149,7 @@ def update_blacklist():
         symbol = symbol.union(parse_qs(urlparse(x['href']).query)['code'][0] for x in elements)
     data_to_insert = [{'symbol': x, 'date': datetime.now().strftime('%Y-%m-%d')} for x in symbol]
     if data_to_insert:
-        bulk_insert(Blacklist, data_to_insert, True, ['symbol'], ['date'])
+        bulk_upsert(Blacklist, data_to_insert, True, ['symbol'], ['date'])
     Blacklist.objects.filter(date__lt=(datetime.now() - timedelta(days=30)).strftime('%Y-%m-%d')).delete()
 
 
@@ -141,33 +164,53 @@ def stop_loss_insert(symbol: str, pchs_avg_pric: float):
 
 
 def add_stock():
-    df_krx = FinanceDataReader.StockListing('KRX')
-    try:
-        for symbol, company_name in [[item['Code'], item['Name']] for item in df_krx.to_dict('records')]:
-            insert_stock(symbol, company_name)
-    except Exception as e:
-        logging.error(f"데이터 로딩 중 오류 발생: {e}")
+    exchanges = [
+        {'name': 'KRX', 'symbol_field': 'Code', 'name_field': 'Name'},
+        {'name': 'S&P500', 'symbol_field': 'Symbol', 'name_field': 'Name'},
+        {'name': 'NASDAQ', 'symbol_field': 'Symbol', 'name_field': 'Name'},
+        {'name': 'NYSE', 'symbol_field': 'Symbol', 'name_field': 'Name'},
+    ]
+
+    for exchange in exchanges:
+        try:
+            logging.info(f"Fetching stock listing for {exchange['name']}")
+            df_stocks = FinanceDataReader.StockListing(exchange['name'])
+            stock_data = [
+                (item[exchange['symbol_field']], item[exchange['name_field']])
+                for item in df_stocks.to_dict('records')
+            ]
+            for symbol, company_name in stock_data:
+                insert_stock(symbol, company_name)
+            logging.info(f"Completed processing for {exchange['name']}")
+        except Exception as e:
+            logging.error(f"Error occurred while processing {exchange['name']}: {e}")
 
 
-def add_stock_price(symbol: str = None, start_date: str = None, end_date: str = None):
-    if start_date is None:
-        start_date = datetime.now().strftime('%Y-%m-%d')
+def insert_stock_price(symbol: Optional[str] = None, start_date: Optional[str] = None, end_date: Optional[str] = None, country: Optional[str] = None):
+    """
+    주어진 테이블에 특정 국가의 주식 가격 데이터를 추가합니다.
 
-    # 특정 종목만 처리할 경우
+    :param symbol: 특정 주식 심볼 (없을 경우 모든 주식 처리).
+    :param start_date: 시작 날짜 (YYYY-MM-DD 형식).
+    :param end_date: 종료 날짜 (YYYY-MM-DD 형식).
+    :param country: 주식의 국가 정보.
+    """
+
     if symbol:
-        add_price_for_symbol(symbol, start_date, end_date)
+        add_price_for_symbol(get_price_history_table(get_stock_symbol_type(symbol)), symbol, start_date, end_date)
     else:
         # 전체 종목 조회
-        stocks = Stock.objects.all()
+        if country:
+            stocks = Stock.objects.filter(symbol=symbol)
+        else:
+            stocks = Stock.objects.all()
 
         # ThreadPoolExecutor로 스레드 풀 생성
         with ThreadPoolExecutor(max_workers=os.cpu_count()) as executor:
-            futures = []
-            for stock in stocks:
-                # 각 종목에 대해 add_price_for_symbol 함수를 스레드로 제출
-                futures.append(
-                    executor.submit(add_price_for_symbol, stock.symbol, start_date, end_date)
-                )
+            futures = [
+                executor.submit(add_price_for_symbol, get_price_history_table(stock.country), stock.symbol, start_date, end_date)
+                for stock in stocks
+            ]
 
             # 모든 작업이 완료될 때까지 대기하며 에러 확인
             for future in as_completed(futures):
@@ -177,16 +220,27 @@ def add_stock_price(symbol: str = None, start_date: str = None, end_date: str = 
                     logging.error(f"에러 발생: {e}")
 
 
-def add_price_for_symbol(symbol: str, start_date: str, end_date: str = None):
+def add_price_for_symbol(model_class: Type[models.Model], symbol: str, start_date: str, end_date: Optional[str]):
+    """
+    특정 국가의 주식 심볼에 대한 가격 데이터를 가져와 주어진 테이블에 삽입합니다.
+
+    :param model_class: The Django model class to insert data into.
+    :param symbol: 주식 심볼.
+    :param start_date: 시작 날짜 (YYYY-MM-DD 형식).
+    :param end_date: 종료 날짜 (YYYY-MM-DD 형식).
+    """
     try:
-        # FinanceDataReader로 데이터 가져오기
-        df_krx = FinanceDataReader.DataReader(
-            symbol=f'NAVER:{symbol}',
+        if not model_class:
+            logging.info(f"model_class에 대한 데이터가 없습니다. {symbol}")
+
+        df = FinanceDataReader.DataReader(
+            symbol=symbol,
             start=start_date,
             end=end_date
         )
 
-        if df_krx.empty:
+        if df.empty:
+            logging.info(f"{symbol}에 대한 데이터가 없습니다.")
             return
 
         # DB에 넣을 자료 생성
@@ -200,16 +254,16 @@ def add_price_for_symbol(symbol: str, start_date: str, end_date: str = None):
                 'low': row['Low'],
                 'volume': row['Volume']
             }
-            for idx, row in df_krx.iterrows()
+            for idx, row in df.iterrows()
         ]
 
-        # bulk_insert로 일괄 삽입
-        bulk_insert(
-            PriceHistory,
+        # bulk_upsert로 일괄 삽입
+        bulk_upsert(
+            model_class,
             data_to_insert,
-            ignore_conflicts=True,
-            update_conflicts=['open', 'high', 'close', 'low', 'volume'],
-            unique_fields=['symbol', 'date']
+            update_conflicts=True,
+            unique_fields=['symbol', 'date'],
+            update_fields=['open', 'high', 'close', 'low', 'volume'],
         )
     except Exception as e:
-        logging.error(f"Error processing symbol {symbol}: {e}")
+        logging.error(f"심볼 {symbol} 처리 중 에러 발생: {e}")
