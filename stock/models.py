@@ -22,6 +22,7 @@ class Account(BaseModel):
 class Stock(BaseModel):
     symbol = models.CharField(primary_key=True)
     company_name = models.CharField()
+    country = models.CharField()
 
     class Meta:
         db_table = 'stock'
@@ -82,17 +83,8 @@ class StopLoss(BaseModel):
         app_label = 'stock_db'
 
 
-class StockUs(BaseModel):
-    symbol = models.CharField(primary_key=True)
-    company_name = models.CharField()
-
-    class Meta:
-        db_table = 'stock_us'
-        app_label = 'stock_db'
-
-
 class PriceHistoryUs(BaseModel):
-    symbol = models.ForeignKey(StockUs, models.DO_NOTHING, db_column='symbol')
+    symbol = models.ForeignKey(Stock, models.DO_NOTHING, db_column='symbol')
     date = models.DateField()
     open = models.DecimalField(max_digits=10, decimal_places=4)
     high = models.DecimalField(max_digits=10, decimal_places=4)
