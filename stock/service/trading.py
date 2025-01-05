@@ -217,22 +217,21 @@ def stop_loss_notify(ki_api: KoreaInvestmentAPI):
         sleep(1 * 60)
 
 
-def korea_investment_trading():
+def investment_trading():
     ki_api = KoreaInvestmentAPI(app_key=setting_env.APP_KEY, app_secret=setting_env.APP_SECRET, account_number=setting_env.ACCOUNT_NUMBER, account_code=setting_env.ACCOUNT_CODE)
+
+    insert_stock_price(start_date=datetime.now().strftime('%Y-%m-%d'), end_date=datetime.now().strftime('%Y-%m-%d'), country="USA")
     if ki_api.check_holiday(datetime.now().strftime("%Y%m%d")):
         logging.info(f'{datetime.now()} 휴장일')
         return
-    stop_loss = threading.Thread(target=stop_loss_notify, args=(ki_api,))
-    stop_loss.start()
 
-    while datetime.now().time() < time(10, 30, 30):
-        sleep(1 * 60)
-
-    insert_stock_price(start_date=datetime.now().strftime('%Y-%m-%d'), end_date=datetime.now().strftime('%Y-%m-%d'), country="USA")
     usa_stock = select_buy_stocks(country="USA")
     logging.info(f"usa_stock: {usa_stock}")
-    buy = threading.Thread(target=trading_buy, args=(ki_api, usa_stock,))
-    buy.start()
+    usa_buy = threading.Thread(target=trading_buy, args=(ki_api, usa_stock,))
+    usa_buy.start()
+
+    stop_loss = threading.Thread(target=stop_loss_notify, args=(ki_api,))
+    stop_loss.start()
 
     while datetime.now().time() < time(15, 35, 30):
         sleep(1 * 60)
