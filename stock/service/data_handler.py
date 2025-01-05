@@ -38,6 +38,10 @@ def get_company_name(symbol: str):
 
 
 def get_stock_symbol_type(symbol: str):
+    # try:
+    #     return Stock.objects.get(symbol=symbol).country
+    # except Exception:
+    #     pass
     if re.match(r'(\d{6}|\d{5}[a-zA-Z]?)', symbol):
         return "KOR"
     elif re.match(r'([[a-zA-Z]\s?\.?)*', symbol):
@@ -154,7 +158,7 @@ def update_blacklist():
 
 
 def stop_loss_insert(symbol: str, pchs_avg_pric: float):
-    df = pd.DataFrame(PriceHistory.objects.filter(date__range=[datetime.now() - timedelta(days=550), datetime.now()], symbol=symbol).order_by('date').values())
+    df = pd.DataFrame(get_price_history_table(get_stock_symbol_type(symbol)).objects.filter(date__range=[datetime.now() - timedelta(days=550), datetime.now()], symbol=symbol).order_by('date').values())
     df['ATR5'] = AverageTrueRange(high=df['high'].astype('float64'), low=df['low'].astype('float64'), close=df['close'].astype('float64'), window=5).average_true_range()
     df['ATR10'] = AverageTrueRange(high=df['high'].astype('float64'), low=df['low'].astype('float64'), close=df['close'].astype('float64'), window=10).average_true_range()
     df['ATR20'] = AverageTrueRange(high=df['high'].astype('float64'), low=df['low'].astype('float64'), close=df['close'].astype('float64'), window=20).average_true_range()

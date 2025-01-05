@@ -17,7 +17,7 @@ from ta.volume import ChaikinMoneyFlowIndicator
 
 from stock.discord import discord
 from stock.korea_investment.api import KoreaInvestmentAPI
-from stock.models import PriceHistory, StopLoss, Subscription, Blacklist, Stock
+from stock.models import StopLoss, Subscription, Blacklist
 from .data_handler import stop_loss_insert, insert_stock_price, get_price_history_table, get_stock_symbol_type
 from .. import setting_env
 
@@ -59,7 +59,6 @@ def select_buy_stocks(country: str) -> dict:
         )
         # stocks = set(x['symbol'] for x in Stock.objects.exclude(Q(symbol__in=Blacklist.objects.values_list('symbol', flat=True))).select_related("symbol").values('symbol'))
         for symbol in stocks:
-            stock = Stock.objects.filter(symbol=symbol).first()
             df = pd.DataFrame(table.objects.filter(date__range=[datetime.now() - timedelta(days=365), datetime.now()], symbol=symbol).order_by('date').values())
             if len(df) < 200:
                 continue
@@ -109,7 +108,7 @@ def select_sell_stocks(ki_api: KoreaInvestmentAPI) -> dict:
     sell_levels = {}
     for stock in stocks:
         try:
-            df = pd.DataFrame(PriceHistory.objects.filter(date__range=[datetime.now() - timedelta(days=365), datetime.now()], symbol=stock.pdno).order_by('date').values())
+            df = pd.DataFrame(get_price_history_table(get_stock_symbol_type(stock.pdno)).objects.filter(date__range=[datetime.now() - timedelta(days=365), datetime.now()], symbol=stock.pdno).order_by('date').values())
             # 날짜순 정렬
             if len(df) < 60:
                 continue
@@ -201,8 +200,9 @@ def stop_loss_notify(ki_api: KoreaInvestmentAPI):
             try:
                 if item.pdno in alert:
                     continue
-                stock = StopLoss.objects.filter(symbol=item.pdno).first()
-                if not stock:
+                try:
+                    stock = StopLoss.objects.get(symbol=item.pdno)
+                except Exception:
                     stop_loss_insert(item.pdno, float(item.pchs_avg_pric))
                     continue
                 if stock.price < int(item.prpr):
