@@ -13,9 +13,9 @@ def start():
     scheduler = BackgroundScheduler(misfire_grace_time=3600, coalesce=True, timezone=settings.TIME_ZONE)
     # ki_api = KoreaInvestmentAPI(app_key=setting_env.APP_KEY, app_secret=setting_env.APP_SECRET, account_number=setting_env.ACCOUNT_NUMBER, account_code=setting_env.ACCOUNT_CODE)
     # data_handler.insert_stock_price(start_date="2020-01-01", end_date=datetime.now().strftime('%Y-%m-%d'))
-    # trading_buy(ki_api=ki_api, buy_levels=select_buy_stocks(country="USA"))
+    # trading_buy(ki_api=ki_api, buy_levels=select_buy_stocks(country="KOR"))
     # trading_sell(ki_api=ki_api)
-    # print(select_buy_stocks(country="USA"))
+    # print(select_buy_stocks(country="KOR"))
     # print(select_sell_stocks(ki_api))
     # data_handler.insert_stock_price(start_date=(datetime.now() - timedelta(days=5)).strftime('%Y-%m-%d'), end_date=datetime.now().strftime('%Y-%m-%d'), country='USA')
 

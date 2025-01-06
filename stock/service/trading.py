@@ -16,7 +16,7 @@ from ta.volume import ChaikinMoneyFlowIndicator
 
 from stock.discord import discord
 from stock.korea_investment.api import KoreaInvestmentAPI
-from stock.models import StopLoss, Subscription, Blacklist
+from stock.models import StopLoss, Blacklist, Stock
 from .data_handler import stop_loss_insert, insert_stock_price, get_price_history_table, get_stock_symbol_type
 from .. import setting_env
 
@@ -48,15 +48,21 @@ def select_buy_stocks(country: str) -> dict:
     buy_levels = dict()
     table = get_price_history_table(country)
     try:
+        # stocks = set(
+        #     x['symbol']
+        #     for x in Subscription.objects
+        #     .exclude(Q(symbol__in=Blacklist.objects.values_list('symbol', flat=True)))
+        #     .filter(symbol__country="KOR")
+        #     .select_related("symbol")
+        #     .values("symbol")
+        # )
         stocks = set(
             x['symbol']
-            for x in Subscription.objects
+            for x in Stock.objects
             .exclude(Q(symbol__in=Blacklist.objects.values_list('symbol', flat=True)))
-            .filter(symbol__country="KOR")
             .select_related("symbol")
-            .values("symbol")
+            .values('symbol')
         )
-        # stocks = set(x['symbol'] for x in Stock.objects.exclude(Q(symbol__in=Blacklist.objects.values_list('symbol', flat=True))).select_related("symbol").values('symbol'))
         for symbol in stocks:
             df = pd.DataFrame(table.objects.filter(date__range=[datetime.now() - timedelta(days=365), datetime.now()], symbol=symbol).order_by('date').values())
             if len(df) < 200:
@@ -129,8 +135,6 @@ def select_sell_stocks(ki_api: KoreaInvestmentAPI) -> dict:
             if df.iloc[-1]['RSI'] > 20:
                 continue
 
-            atr = df.iloc[-10]['ATR']
-            volume = int(min(10000 // atr, np.average(df['volume'][-20:]) // (atr ** (1 / 2))))
             sell_levels[stock.pdno] = {
                 df.iloc[-1]['high']: int(stock.ord_psbl_qty) // 12,
                 df.iloc[-1]['close']: int(stock.ord_psbl_qty) // 3,
