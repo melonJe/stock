@@ -209,7 +209,7 @@ def insert_stock_price(symbol: Optional[str] = None, start_date: Optional[str] =
             stocks = Stock.objects.filter(symbol=symbol)
         else:
             stocks = Stock.objects.all()
-        logging.info("insert_stock_price")
+
         # ThreadPoolExecutor로 스레드 풀 생성
         with ThreadPoolExecutor(max_workers=os.cpu_count()) as executor:
             futures = [
