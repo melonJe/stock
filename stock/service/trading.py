@@ -11,7 +11,6 @@ import pandas as pd
 from django.db.models import Q
 from ta.momentum import rsi
 from ta.trend import adx
-# TA 라이브러리 설치 필요: pip install ta
 from ta.volatility import AverageTrueRange
 from ta.volume import ChaikinMoneyFlowIndicator
 
@@ -220,7 +219,7 @@ def stop_loss_notify(ki_api: KoreaInvestmentAPI):
 def investment_trading():
     ki_api = KoreaInvestmentAPI(app_key=setting_env.APP_KEY, app_secret=setting_env.APP_SECRET, account_number=setting_env.ACCOUNT_NUMBER, account_code=setting_env.ACCOUNT_CODE)
 
-    insert_stock_price(start_date=datetime.now().strftime('%Y-%m-%d'), end_date=datetime.now().strftime('%Y-%m-%d'), country="USA")
+    insert_stock_price(start_date=(datetime.now() - timedelta(days=5)).strftime('%Y-%m-%d'), end_date=datetime.now().strftime('%Y-%m-%d'), country='USA')
     if ki_api.check_holiday(datetime.now().strftime("%Y%m%d")):
         logging.info(f'{datetime.now()} 휴장일')
         return

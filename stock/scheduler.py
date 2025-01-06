@@ -17,6 +17,7 @@ def start():
     # trading_sell(ki_api=ki_api)
     # print(select_buy_stocks(country="USA"))
     # print(select_sell_stocks(ki_api))
+    # data_handler.insert_stock_price(start_date=(datetime.now() - timedelta(days=5)).strftime('%Y-%m-%d'), end_date=datetime.now().strftime('%Y-%m-%d'), country='USA')
 
     if not setting_env.SIMULATE:
         scheduler.add_job(

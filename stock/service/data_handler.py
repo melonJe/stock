@@ -1,6 +1,7 @@
 import logging
 import os
 import re
+import traceback
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from datetime import timedelta
@@ -208,7 +209,7 @@ def insert_stock_price(symbol: Optional[str] = None, start_date: Optional[str] =
             stocks = Stock.objects.filter(symbol=symbol)
         else:
             stocks = Stock.objects.all()
-
+        logging.info("insert_stock_price")
         # ThreadPoolExecutor로 스레드 풀 생성
         with ThreadPoolExecutor(max_workers=os.cpu_count()) as executor:
             futures = [
@@ -270,4 +271,4 @@ def add_price_for_symbol(model_class: Type[models.Model], symbol: str, start_dat
             update_fields=['open', 'high', 'close', 'low', 'volume'],
         )
     except Exception as e:
-        logging.error(f"심볼 {symbol} 처리 중 에러 발생: {e}")
+        logging.error(f"add_price_for_symbol 처리 중 에러 발생 {symbol} : {traceback.format_exc()}")
