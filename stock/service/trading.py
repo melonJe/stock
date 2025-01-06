@@ -236,9 +236,9 @@ def investment_trading():
         return
 
     usa_stock = select_buy_stocks(country="USA")
-    logging.info(f"usa_stock: {usa_stock}")
-    usa_buy = threading.Thread(target=trading_buy, args=(ki_api, usa_stock,))
-    usa_buy.start()
+    discord.send_message(f"usa_stock: {usa_stock}")
+    # usa_buy = threading.Thread(target=trading_buy, args=(ki_api, usa_stock,))
+    # usa_buy.start()
 
     stop_loss = threading.Thread(target=stop_loss_notify, args=(ki_api,))
     stop_loss.start()
