@@ -16,6 +16,7 @@ from stock.dto.holiday_dto import HolidayResponseDTO, HolidayRequestDTO
 from stock.dto.stock_trade_dto import StockTradeListRequestDTO, StockTradeListResponseDTO
 from stock.korea_investment.country_config import COUNTRY_CONFIG_ORDER
 from stock.korea_investment.operations import find_nth_open_day
+from stock.service.data_handler import get_stock_symbol_type
 
 
 class KoreaInvestmentAPI:
@@ -284,13 +285,18 @@ class KoreaInvestmentAPI:
             discord.error_message("Null response received from API for account info.")
             return None
 
-    def get_owned_stock_info(self, stock: str = None) -> Union[List[StockResponseDTO], StockResponseDTO, None]:
+    def get_owned_stock_info(self, symbol: str = None) -> Union[List[StockResponseDTO], StockResponseDTO, None]:
         """
         Retrieve owned stock information.
 
-        :param stock: Specific stock symbol to filter. If None, return all.
+        :param symbol: Specific stock symbol to filter. If None, return all.
         :return: List of StockResponseDTO objects, a single StockResponseDTO, or None if failed.
         """
+        if not get_stock_symbol_type(symbol) == "KOR":
+            return None
+
+        # TODO 외국 주식 보유 량 return code 추가
+
         headers = self._add_tr_id_to_headers("TTC8434R")
         params = InquireBalanceRequestDTO(
             cano=self._account_number,
@@ -308,9 +314,9 @@ class KoreaInvestmentAPI:
             stock_data = response_data.get("output1", [])
             response_list = [StockResponseDTO(**item) for item in stock_data]
 
-            if stock:
+            if symbol:
                 for item in response_list:
-                    if item.pdno == stock:
+                    if item.pdno == symbol:
                         return item
                 return None
             else:

@@ -158,15 +158,22 @@ def trading_buy(ki_api: KoreaInvestmentAPI, buy_levels):
 
     for symbol, levels in buy_levels.items():
         try:
+            country = get_stock_symbol_type(symbol)
             stock = ki_api.get_owned_stock_info(symbol)
             stop_loss_insert(symbol, min(levels.keys()) * 0.95)
             for price, volume in levels.items():
                 if stock and price > float(stock.pchs_avg_pric) * 0.975:
                     continue
                 try:
-                    if get_stock_symbol_type(symbol) == "KOR":
-                        ki_api.buy_reserve(symbol=symbol, price=price_refine(price), volume=volume, end_date=end_date)
+                    if country == "KOR":
+                        price = price_refine(price)
+                        ki_api.buy_reserve(symbol=symbol, price=price, volume=volume, end_date=end_date)
                         money += price * volume
+                    elif country == "USA":
+                        price = round(price, 2)
+                        logging.info(f'{stock.prdt_name} price: {price}, volume: {volume}')
+                        # money += price * volume
+
                 except Exception as e:
                     traceback.print_exc()
                     logging.error(f"Error occurred while executing trades for symbol {symbol}: {e}")
