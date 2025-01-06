@@ -52,7 +52,7 @@ def select_buy_stocks(country: str) -> dict:
         #     x['symbol']
         #     for x in Subscription.objects
         #     .exclude(Q(symbol__in=Blacklist.objects.values_list('symbol', flat=True)))
-        #     .filter(symbol__country="KOR")
+        #     .filter(symbol__country=country)
         #     .select_related("symbol")
         #     .values("symbol")
         # )
@@ -60,6 +60,7 @@ def select_buy_stocks(country: str) -> dict:
             x['symbol']
             for x in Stock.objects
             .exclude(Q(symbol__in=Blacklist.objects.values_list('symbol', flat=True)))
+            .filter(symbol__country=country)
             .select_related("symbol")
             .values('symbol')
         )
@@ -96,6 +97,8 @@ def select_buy_stocks(country: str) -> dict:
                 if atr / df.iloc[-1]['close'] > 0.05:
                     continue
                 volume = int(min(10000 // atr, np.average(df['volume'][-20:]) // (atr ** (1 / 2))))
+                if country == "USA":
+                    volume //= 100
                 buy_levels[symbol] = {
                     df.iloc[-1]['ma120']: volume // 10 * 4,
                     df.iloc[-1]['ma60']: volume // 10 * 3,
