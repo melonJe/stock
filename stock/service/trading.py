@@ -8,7 +8,6 @@ from time import sleep
 
 import numpy as np
 import pandas as pd
-from django.db.models import Q
 from ta.momentum import rsi
 from ta.trend import adx
 from ta.volatility import AverageTrueRange
@@ -16,7 +15,7 @@ from ta.volume import ChaikinMoneyFlowIndicator
 
 from stock.discord import discord
 from stock.korea_investment.api import KoreaInvestmentAPI
-from stock.models import StopLoss, Blacklist, Stock
+from stock.models import Blacklist, Stock, StopLoss
 from .data_handler import stop_loss_insert, insert_stock_price, get_price_history_table, get_stock_symbol_type
 from .. import setting_env
 
@@ -44,28 +43,23 @@ def price_refine(price: int, number: int = 0) -> int:
     return int(price)
 
 
-def select_buy_stocks(country: str) -> dict:
+async def select_buy_stocks(country: str) -> dict:
     buy_levels = dict()
     table = get_price_history_table(country)
-    # stocks = set(
-    #     x['symbol']
-    #     for x in Subscription.objects
-    #     .exclude(Q(symbol__in=Blacklist.objects.values_list('symbol', flat=True)))
-    #     .filter(symbol__country=country)
-    #     .select_related("symbol")
-    #     .values("symbol")
-    # )
-    stocks = set(
-        x['symbol']
-        for x in Stock.objects
-        .exclude(Q(symbol__in=Blacklist.objects.values_list('symbol', flat=True)))
-        .filter(country=country)
-        .select_related("symbol")
-        .values('symbol')
+
+    blacklist_symbols = await Blacklist.all().values_list("symbol", flat=True)
+    stocks_query = (
+        await Stock.filter(
+            country=country,
+            # symbol__in=sub_symbols,  # Subscription의 symbol과 일치하는 항목 포함
+        )
+        .exclude(symbol__in=blacklist_symbols)  # Blacklist의 symbol 제외
+        .values("symbol")  # 딕셔너리 형태로 반환
     )
+    stocks = set(row['symbol'] for row in stocks_query)
     for symbol in stocks:
         try:
-            df = pd.DataFrame(table.objects.filter(date__range=[datetime.now() - timedelta(days=365), datetime.now()], symbol=symbol).order_by('date').values())
+            df = pd.DataFrame(table.filter(date__range=[datetime.now() - timedelta(days=365), datetime.now()], symbol=symbol).order_by('date').values())
             if len(df) < 200:
                 continue
 
@@ -117,7 +111,7 @@ def select_sell_stocks(ki_api: KoreaInvestmentAPI) -> dict:
     sell_levels = {}
     for stock in stocks:
         try:
-            df = pd.DataFrame(get_price_history_table(get_stock_symbol_type(stock.pdno)).objects.filter(date__range=[datetime.now() - timedelta(days=365), datetime.now()], symbol=stock.pdno).order_by('date').values())
+            df = pd.DataFrame(get_price_history_table(get_stock_symbol_type(stock.pdno)).filter(date__range=[datetime.now() - timedelta(days=365), datetime.now()], symbol=stock.pdno).order_by('date').values())
             # 날짜순 정렬
             if len(df) < 60:
                 continue
@@ -215,7 +209,7 @@ def stop_loss_notify(ki_api: KoreaInvestmentAPI):
                 if item.pdno in alert:
                     continue
                 try:
-                    stock = StopLoss.objects.get(symbol=item.pdno)
+                    stock = StopLoss.filter(symbol=item.pdno)
                 except Exception:
                     stop_loss_insert(item.pdno, float(item.pchs_avg_pric))
                     continue
@@ -263,3 +257,6 @@ def investment_trading():
     buy_stock = select_buy_stocks(country="KOR")
     buy = threading.Thread(target=trading_buy, args=(ki_api, buy_stock,))
     buy.start()
+
+
+select_buy_stocks("KOR")

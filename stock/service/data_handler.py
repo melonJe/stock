@@ -11,15 +11,13 @@ from urllib.parse import parse_qs, urlparse
 import FinanceDataReader
 import pandas as pd
 import requests
+import tortoise
 from bs4 import BeautifulSoup
-from django.core.exceptions import ObjectDoesNotExist
-from django.db import models
 from ta.volatility import AverageTrueRange
 
-from finance.financial_statement import get_financial_summary_for_update_stock, get_finance_from_fnguide
+from stock.finance.financial_statement import get_financial_summary_for_update_stock, get_finance_from_fnguide
 from stock.models import Stock, PriceHistoryUs
 from stock.models import Subscription, Blacklist, PriceHistory, StopLoss, Account
-from stock.service.utils import bulk_upsert
 
 
 def get_company_name(symbol: str):
@@ -40,7 +38,7 @@ def get_company_name(symbol: str):
 
 def get_stock_symbol_type(symbol: str):
     # try:
-    #     return Stock.objects.get(symbol=symbol).country
+    #     return Stock.get(symbol=symbol).country
     # except Exception:
     #     pass
     if re.match(r'(\d{6}|\d{5}[a-zA-Z]?)', symbol):
@@ -65,7 +63,7 @@ def get_price_history_table(country: str):
 
 def insert_stock(symbol: str, company_name: str = None):
     # 이미 존재하는 주식인지 확인
-    existing_stock = Stock.objects.filter(symbol=symbol).first()
+    existing_stock = Stock.filter(symbol=symbol).first()
     if existing_stock:
         logging.error(f"Error: A stock with symbol '{symbol}' already exists.")
         return existing_stock
@@ -82,8 +80,8 @@ def insert_stock(symbol: str, company_name: str = None):
 
 def get_stock(symbol: str):
     try:
-        return Stock.objects.get(symbol=symbol)
-    except ObjectDoesNotExist:
+        return Stock.get(symbol=symbol)
+    except Exception as e:
         return insert_stock(symbol=symbol)
 
 
@@ -127,12 +125,12 @@ def update_subscription_process(stock, user, data_to_insert):
 
 def update_subscription_stock():
     logging.info(f'{datetime.now()} update_subscription_stock 시작')
-    Subscription.objects.filter(email='cabs0814@naver.com').delete()
+    Subscription.filter(email='cabs0814@naver.com').delete()
     data_to_insert = []
-    user = Account.objects.get(email='cabs0814@naver.com')
+    user = Account.get(email='cabs0814@naver.com')
 
     with ThreadPoolExecutor(max_workers=os.cpu_count()) as executor:
-        futures = [executor.submit(update_subscription_process, stock, user, data_to_insert) for stock in Stock.objects.all()]
+        futures = [executor.submit(update_subscription_process, stock, user, data_to_insert) for stock in Stock.all()]
 
         for future in futures:
             future.result()  # Ensure any raised exceptions are handled
@@ -140,7 +138,7 @@ def update_subscription_stock():
     if data_to_insert:
         data_to_insert = [Subscription(**vals) for vals in data_to_insert]
         logging.info(f"{len(data_to_insert)}개 주식")
-        Subscription.objects.bulk_create(data_to_insert)
+        Subscription.bulk_create(data_to_insert)
 
 
 def update_blacklist():
@@ -155,17 +153,17 @@ def update_blacklist():
     data_to_insert = [{'symbol': x, 'date': datetime.now().strftime('%Y-%m-%d')} for x in symbol]
     if data_to_insert:
         bulk_upsert(Blacklist, data_to_insert, True, ['symbol'], ['date'])
-    Blacklist.objects.filter(date__lt=(datetime.now() - timedelta(days=30)).strftime('%Y-%m-%d')).delete()
+    Blacklist.filter(date__lt=(datetime.now() - timedelta(days=30)).strftime('%Y-%m-%d')).delete()
 
 
 def stop_loss_insert(symbol: str, pchs_avg_pric: float):
-    df = pd.DataFrame(get_price_history_table(get_stock_symbol_type(symbol)).objects.filter(date__range=[datetime.now() - timedelta(days=550), datetime.now()], symbol=symbol).order_by('date').values())
+    df = pd.DataFrame(get_price_history_table(get_stock_symbol_type(symbol)).filter(date__range=[datetime.now() - timedelta(days=550), datetime.now()], symbol=symbol).order_by('date').values())
     df['ATR5'] = AverageTrueRange(high=df['high'].astype('float64'), low=df['low'].astype('float64'), close=df['close'].astype('float64'), window=5).average_true_range()
     df['ATR10'] = AverageTrueRange(high=df['high'].astype('float64'), low=df['low'].astype('float64'), close=df['close'].astype('float64'), window=10).average_true_range()
     df['ATR20'] = AverageTrueRange(high=df['high'].astype('float64'), low=df['low'].astype('float64'), close=df['close'].astype('float64'), window=20).average_true_range()
     atr = max(df.iloc[-1]['ATR5'], df.iloc[-1]['ATR10'], df.iloc[-1]['ATR20'])  # 주가 변동성 체크
     stop_loss = pchs_avg_pric - 1.2 * atr  # 20일(보통), 60일(필수) 손절선
-    StopLoss.objects.bulk_create([StopLoss(symbol=get_stock(symbol=symbol), price=stop_loss)], update_conflicts=True, unique_fields=['symbol'], update_fields=['price'])
+    StopLoss.bulk_create([StopLoss(symbol=get_stock(symbol=symbol), price=stop_loss)], update_conflicts=True, unique_fields=['symbol'], update_fields=['price'])
 
 
 def add_stock():
@@ -206,9 +204,9 @@ def insert_stock_price(symbol: Optional[str] = None, start_date: Optional[str] =
     else:
         # 전체 종목 조회
         if country:
-            stocks = Stock.objects.filter(symbol=symbol)
+            stocks = Stock.get(Stock.country == country)
         else:
-            stocks = Stock.objects.all()
+            stocks = Stock.get()
 
         # ThreadPoolExecutor로 스레드 풀 생성
         with ThreadPoolExecutor(max_workers=os.cpu_count()) as executor:
@@ -225,11 +223,11 @@ def insert_stock_price(symbol: Optional[str] = None, start_date: Optional[str] =
                     logging.error(f"에러 발생: {e}")
 
 
-def add_price_for_symbol(model_class: Type[models.Model], symbol: str, start_date: str, end_date: Optional[str]):
+def add_price_for_symbol(model_class: Type[tortoise.models.ModelMeta], symbol: str, start_date: str, end_date: Optional[str]):
     """
     특정 국가의 주식 심볼에 대한 가격 데이터를 가져와 주어진 테이블에 삽입합니다.
 
-    :param model_class: The Django model class to insert data into.
+    :param model_class: DB table 정보
     :param symbol: 주식 심볼.
     :param start_date: 시작 날짜 (YYYY-MM-DD 형식).
     :param end_date: 종료 날짜 (YYYY-MM-DD 형식).

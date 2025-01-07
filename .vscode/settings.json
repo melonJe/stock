@@ -3,6 +3,5 @@
   "editor.formatOnSave": false,
   "editor.formatOnPaste": false,
   "pylint.args": [
-    "--load-plugins=pylint_django"
   ]
 }
