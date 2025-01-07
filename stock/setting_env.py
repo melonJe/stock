@@ -9,6 +9,7 @@
 
 import logging
 import os
+
 from dotenv import load_dotenv
 
 # 로깅 설정
@@ -16,6 +17,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 load_dotenv()  # .env 파일에서 환경 변수를 로드
+
 
 def get_env(key, default=None):
     """
@@ -36,6 +38,7 @@ def get_env(key, default=None):
         raise ValueError(f"환경 변수 {key}가 설정되지 않았습니다.")
     return value
 
+
 # 환경 변수 읽기 및 기본값 설정
 DB_HOST = get_env("DB_HOST", "stock_db")
 DB_PORT = int(get_env("DB_PORT", "5432"))
@@ -46,10 +49,6 @@ DB_PASS = get_env("DB_PASS")
 # 디스코드 메시지 설정
 DISCORD_MESSAGE_URL = get_env("DISCORD_MESSAGE_URL")
 DISCORD_ERROR_URL = get_env("DISCORD_ERROR_URL")
-
-# Django 비밀키 및 디버그 모드
-DJANGO_SECRET_KEY = get_env("DJANGO_SECRET_KEY")
-DEBUG_MODE = get_env("DEBUG_MODE", "False").lower() in ['true', 't']
 
 # API 키와 시뮬레이션 모드
 APP_KEY = get_env("APP_KEY")

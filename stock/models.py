@@ -1,111 +1,150 @@
-from django.db import models
+from tortoise import fields
+from tortoise.models import Model
 
 
-class BaseModel(models.Model):
-    objects = models.Manager()
-
-    class Meta:
-        abstract = True
-        managed = True
-
-
-class Account(BaseModel):
-    email = models.CharField(primary_key=True)
-    pass_hash = models.BinaryField()
-    pass_salt = models.BinaryField()
+class Account(Model):
+    email = fields.CharField(pk=True, max_length=255)
+    pass_hash = fields.BinaryField()
+    pass_salt = fields.BinaryField()
 
     class Meta:
-        db_table = 'account'
-        app_label = 'stock_db'
+        table = "account"
 
 
-class Stock(BaseModel):
-    symbol = models.CharField(primary_key=True)
-    company_name = models.CharField()
-    country = models.CharField()
-
-    class Meta:
-        db_table = 'stock'
-        app_label = 'stock_db'
-
-
-class BuyQueue(BaseModel):
-    email = models.ForeignKey(Account, models.DO_NOTHING, db_column='email')
-    symbol = models.ForeignKey(Stock, models.DO_NOTHING, db_column='symbol')
-    volume = models.IntegerField()
+class Stock(Model):
+    symbol = fields.CharField(pk=True, max_length=255)
+    company_name = fields.CharField(max_length=255)
+    country = fields.CharField(max_length=255)
 
     class Meta:
-        db_table = 'buy_queue'
-        app_label = 'stock_db'
-        unique_together = (('email', 'symbol'),)
+        table = "stock"
 
 
-class PriceHistory(BaseModel):
-    symbol = models.ForeignKey(Stock, models.DO_NOTHING, db_column='symbol')
-    date = models.DateField()
-    open = models.IntegerField()
-    high = models.IntegerField()
-    close = models.IntegerField()
-    low = models.IntegerField()
-    volume = models.IntegerField()
-
-    class Meta:
-        db_table = 'price_history'
-        app_label = 'stock_db'
-        unique_together = (('symbol', 'date'),)
-
-
-class Subscription(BaseModel):
-    email = models.ForeignKey(Account, models.DO_NOTHING, db_column='email')
-    symbol = models.ForeignKey(Stock, models.DO_NOTHING, db_column='symbol')
+class BuyQueue(Model):
+    email = fields.ForeignKeyField(
+        "models.Account",
+        related_name="buy_queues",
+        to_field="email",
+        on_delete=fields.NO_ACTION,  # Django의 NO_ACTION 대신
+        source_field="email"
+    )
+    symbol = fields.ForeignKeyField(
+        "models.Stock",
+        related_name="buy_queues",
+        to_field="symbol",
+        on_delete=fields.NO_ACTION,
+        source_field="symbol"
+    )
+    volume = fields.IntField()
 
     class Meta:
-        db_table = 'subscription'
-        app_label = 'stock_db'
-        unique_together = (('email', 'symbol'),)
+        table = "buy_queue"
+        unique_together = (("email", "symbol"),)
 
 
-class Blacklist(BaseModel):
-    symbol = models.CharField(primary_key=True)
-    date = models.DateField(db_column='record_date')
-
-    class Meta:
-        db_table = 'blacklist'
-        app_label = 'stock_db'
-
-
-class StopLoss(BaseModel):
-    symbol = models.ForeignKey(Stock, models.DO_NOTHING, db_column='symbol', primary_key=True)
-    price = models.IntegerField()
-
-    class Meta:
-        db_table = 'stop_loss'
-        app_label = 'stock_db'
-
-
-class PriceHistoryUs(BaseModel):
-    symbol = models.ForeignKey(Stock, models.DO_NOTHING, db_column='symbol')
-    date = models.DateField()
-    open = models.DecimalField(max_digits=10, decimal_places=4)
-    high = models.DecimalField(max_digits=10, decimal_places=4)
-    close = models.DecimalField(max_digits=10, decimal_places=4)
-    low = models.DecimalField(max_digits=10, decimal_places=4)
-    volume = models.IntegerField()
+class PriceHistory(Model):
+    symbol = fields.ForeignKeyField(
+        "models.Stock",
+        related_name="price_histories",
+        to_field="symbol",
+        on_delete=fields.NO_ACTION,
+        source_field="symbol"
+    )
+    date = fields.DateField()
+    open = fields.IntField()
+    high = fields.IntField()
+    close = fields.IntField()
+    low = fields.IntField()
+    volume = fields.IntField()
 
     class Meta:
-        db_table = 'price_history_us'
-        app_label = 'stock_db'
-        unique_together = (('symbol', 'date'),)
+        table = "price_history"
+        unique_together = (("symbol", "date"),)
 
 
-class SellQueue(BaseModel):
-    email = models.ForeignKey(Account, on_delete=models.DO_NOTHING, db_column='email')
-    symbol = models.ForeignKey(Stock, on_delete=models.DO_NOTHING, db_column='symbol')
-    volume = models.IntegerField()
-    id = models.BigAutoField(primary_key=True)
-    price = models.IntegerField()
+class Subscription(Model):
+    email = fields.ForeignKeyField(
+        "models.Account",
+        related_name="subscriptions",
+        to_field="email",
+        on_delete=fields.NO_ACTION,
+        source_field="email"
+    )
+    symbol = fields.ForeignKeyField(
+        "models.Stock",
+        related_name="subscriptions",
+        to_field="symbol",
+        on_delete=fields.NO_ACTION,
+        source_field="symbol"
+    )
 
     class Meta:
-        db_table = 'sell_queue'
-        app_label = 'stock_db'
-        unique_together = (('symbol', 'email', 'price'),)
+        table = "subscription"
+        unique_together = (("email", "symbol"),)
+
+
+class Blacklist(Model):
+    symbol = fields.CharField(pk=True, max_length=255)
+    date = fields.DateField(source_field="record_date")
+
+    class Meta:
+        table = "blacklist"
+
+
+class StopLoss(Model):
+    # symbol을 PK로 지정
+    symbol = fields.ForeignKeyField(
+        "models.Stock",
+        pk=True,
+        to_field="symbol",
+        on_delete=fields.NO_ACTION,
+        source_field="symbol"
+    )
+    price = fields.IntField()
+
+    class Meta:
+        table = "stop_loss"
+
+
+class PriceHistoryUs(Model):
+    symbol = fields.ForeignKeyField(
+        "models.Stock",
+        related_name="price_histories_us",
+        to_field="symbol",
+        on_delete=fields.NO_ACTION,
+        source_field="symbol"
+    )
+    date = fields.DateField()
+    open = fields.DecimalField(max_digits=10, decimal_places=4)
+    high = fields.DecimalField(max_digits=10, decimal_places=4)
+    close = fields.DecimalField(max_digits=10, decimal_places=4)
+    low = fields.DecimalField(max_digits=10, decimal_places=4)
+    volume = fields.IntField()
+
+    class Meta:
+        table = "price_history_us"
+        unique_together = (("symbol", "date"),)
+
+
+class SellQueue(Model):
+    id = fields.BigIntField(pk=True)
+    email = fields.ForeignKeyField(
+        "models.Account",
+        related_name="sell_queues",
+        to_field="email",
+        on_delete=fields.NO_ACTION,
+        source_field="email"
+    )
+    symbol = fields.ForeignKeyField(
+        "models.Stock",
+        related_name="sell_queues",
+        to_field="symbol",
+        on_delete=fields.NO_ACTION,
+        source_field="symbol"
+    )
+    volume = fields.IntField()
+    price = fields.IntField()
+
+    class Meta:
+        table = "sell_queue"
+        unique_together = (("symbol", "email", "price"),)
