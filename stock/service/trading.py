@@ -47,24 +47,24 @@ def price_refine(price: int, number: int = 0) -> int:
 def select_buy_stocks(country: str) -> dict:
     buy_levels = dict()
     table = get_price_history_table(country)
-    try:
-        # stocks = set(
-        #     x['symbol']
-        #     for x in Subscription.objects
-        #     .exclude(Q(symbol__in=Blacklist.objects.values_list('symbol', flat=True)))
-        #     .filter(symbol__country=country)
-        #     .select_related("symbol")
-        #     .values("symbol")
-        # )
-        stocks = set(
-            x['symbol']
-            for x in Stock.objects
-            .exclude(Q(symbol__in=Blacklist.objects.values_list('symbol', flat=True)))
-            .filter(symbol__country=country)
-            .select_related("symbol")
-            .values('symbol')
-        )
-        for symbol in stocks:
+    # stocks = set(
+    #     x['symbol']
+    #     for x in Subscription.objects
+    #     .exclude(Q(symbol__in=Blacklist.objects.values_list('symbol', flat=True)))
+    #     .filter(symbol__country=country)
+    #     .select_related("symbol")
+    #     .values("symbol")
+    # )
+    stocks = set(
+        x['symbol']
+        for x in Stock.objects
+        .exclude(Q(symbol__in=Blacklist.objects.values_list('symbol', flat=True)))
+        .filter(country=country)
+        .select_related("symbol")
+        .values('symbol')
+    )
+    for symbol in stocks:
+        try:
             df = pd.DataFrame(table.objects.filter(date__range=[datetime.now() - timedelta(days=365), datetime.now()], symbol=symbol).order_by('date').values())
             if len(df) < 200:
                 continue
@@ -105,9 +105,9 @@ def select_buy_stocks(country: str) -> dict:
                     df.iloc[-1]['ma20']: volume // 10 * 2,
                     df.iloc[-1]['close']: volume // 10 * 1
                 }
-    except Exception as e:
-        traceback.print_exc()
-        logging.error(f"Error occurred: {e}")
+        except Exception as e:
+            traceback.print_exc()
+            logging.error(f"Error occurred: {e}")
     return buy_levels
 
 
