@@ -84,6 +84,7 @@ def select_buy_stocks(country: str) -> dict:
             if df.iloc[-1]['RSI'] > 70:
                 continue
 
+            df[['high', 'low', 'close']] = df[['high', 'low', 'close']].apply(pd.to_numeric, errors='coerce')
             df['ADX'] = adx(df['high'], df['low'], df['close'], window=14)
             if df.iloc[-1]['ADX'] < 25:
                 continue
