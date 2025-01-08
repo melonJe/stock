@@ -17,7 +17,7 @@ from apis.korea_investment import KoreaInvestmentAPI
 from config import setting_env
 from data import database
 from data.models import Blacklist, Stock, StopLoss, Subscription
-from services.data_handler import stop_loss_insert, insert_stock_price, get_price_history_table, get_stock_symbol_type
+from services.stock_data import stop_loss_insert, insert_stock_price, get_price_history_table, get_stock_symbol_type
 from stock import discord
 from utils.operations import price_refine
 
@@ -212,12 +212,11 @@ def investment_trading():
         logging.info(f'{datetime.now()} 휴장일')
         return
 
-    usa_stock = asyncio.run(select_buy_stocks(country="USA"))
-    discord.send_message(f"usa_stock: {usa_stock}")
+    # usa_stock = asyncio.run(select_buy_stocks(country="USA"))
+    # discord.send_message(f"usa_stock: {usa_stock}")
     # usa_buy = threading.Thread(target=trading_buy, args=(ki_api, usa_stock,))
     # usa_buy.start()
 
-    # TODO asyncio 해야 될 수도
     stop_loss = threading.Thread(target=stop_loss_notify, args=(ki_api,))
     stop_loss.start()
 
@@ -241,8 +240,8 @@ def investment_trading():
 
 if __name__ == "__main__":
     asyncio.run(database.init())
-    ki_api = KoreaInvestmentAPI(app_key=setting_env.APP_KEY, app_secret=setting_env.APP_SECRET, account_number=setting_env.ACCOUNT_NUMBER, account_code=setting_env.ACCOUNT_CODE)
+    # ki_api = KoreaInvestmentAPI(app_key=setting_env.APP_KEY, app_secret=setting_env.APP_SECRET, account_number=setting_env.ACCOUNT_NUMBER, account_code=setting_env.ACCOUNT_CODE)
     # print(asyncio.run(select_buy_stocks(country="KOR")))
     # print(asyncio.run(select_sell_stocks(ki_api)))
-    trading_buy(korea_investment=ki_api, buy_levels=asyncio.run(select_buy_stocks(country="KOR")))
+    # trading_buy(korea_investment=ki_api, buy_levels=asyncio.run(select_buy_stocks(country="KOR")))
     # trading_sell(korea_investment=ki_api, sell_levels=asyncio.run(select_sell_stocks(korea_investment=ki_api)))

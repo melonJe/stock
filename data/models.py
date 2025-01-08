@@ -148,3 +148,7 @@ class SellQueue(Model):
     class Meta:
         table = "sell_queue"
         unique_together = (("symbol", "email", "price"),)
+
+
+if __name__ == "__main__":
+    print(type(SellQueue))

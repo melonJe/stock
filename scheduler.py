@@ -1,11 +1,10 @@
-import asyncio
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
 
-import services.data_handler as data_handler
+import services.stock_data as data_handler
 from config import setting_env
 from data import database
 from services.trading import investment_trading
@@ -75,7 +74,7 @@ if __name__ == "__main__":
 
 @asynccontextmanager
 async def lifespan(app):
-    asyncio.run(database.init())
+    await database.init()
     start()
     yield
     print("lifespan finished")
