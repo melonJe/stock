@@ -15,9 +15,9 @@ import tortoise
 from bs4 import BeautifulSoup
 from ta.volatility import AverageTrueRange
 
-from stock.finance.financial_statement import get_financial_summary_for_update_stock, get_finance_from_fnguide
-from stock.models import Stock, PriceHistoryUs
-from stock.models import Subscription, Blacklist, PriceHistory, StopLoss, Account
+from data.models import Stock, PriceHistoryUs
+from data.models import Subscription, Blacklist, PriceHistory, StopLoss, Account
+from services.financial_statement import get_financial_summary_for_update_stock, get_finance_from_fnguide
 
 
 def get_company_name(symbol: str):
