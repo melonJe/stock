@@ -1,11 +1,14 @@
+import asyncio
+from contextlib import asynccontextmanager
 from datetime import datetime, timedelta
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
 
-import stock.service.data_handler as data_handler
-from stock import setting_env
-from stock.service.trading import investment_trading
+import services.data_handler as data_handler
+from config import setting_env
+from data import database
+from services.trading import investment_trading
 
 
 def start():
@@ -68,3 +71,11 @@ if __name__ == "__main__":
     # print(select_buy_stocks(country="KOR"))
     # print(select_sell_stocks(ki_api))
     data_handler.insert_stock_price(start_date=(datetime.now() - timedelta(days=5)).strftime('%Y-%m-%d'), end_date=datetime.now().strftime('%Y-%m-%d'), country='USA')
+
+
+@asynccontextmanager
+async def lifespan(app):
+    asyncio.run(database.init())
+    start()
+    yield
+    print("lifespan finished")

@@ -1,6 +1,6 @@
-from tortoise import Tortoise, run_async
+from tortoise import Tortoise
 
-from stock import setting_env
+from config import setting_env
 
 
 async def init():
@@ -11,6 +11,3 @@ async def init():
         db_url=f'asyncpg://{setting_env.DB_USER}:{setting_env.DB_PASS}@{setting_env.DB_HOST}:{setting_env.DB_PORT}/{setting_env.DB_NAME}',
         modules={'models': ['stock.models']}
     )
-
-
-run_async(init())

@@ -9,14 +9,13 @@ from typing import Optional
 
 import requests
 
-from stock import setting_env
-from stock.discord import discord
-from stock.dto.account_dto import InquireBalanceRequestDTO, AccountResponseDTO, StockResponseDTO
-from stock.dto.holiday_dto import HolidayResponseDTO, HolidayRequestDTO
-from stock.dto.stock_trade_dto import StockTradeListRequestDTO, StockTradeListResponseDTO
-from stock.korea_investment.country_config import COUNTRY_CONFIG_ORDER
-from stock.korea_investment.operations import find_nth_open_day
-from stock.service.data_handler import get_stock_symbol_type
+from config import setting_env
+from config.country_config import COUNTRY_CONFIG_ORDER
+from data.dto.account_dto import InquireBalanceRequestDTO, AccountResponseDTO, StockResponseDTO
+from data.dto.holiday_dto import HolidayResponseDTO, HolidayRequestDTO
+from data.dto.stock_trade_dto import StockTradeListRequestDTO, StockTradeListResponseDTO
+from stock import discord
+from utils.operations import find_nth_open_day
 
 
 class KoreaInvestmentAPI:
@@ -285,17 +284,23 @@ class KoreaInvestmentAPI:
             discord.error_message("Null response received from API for account info.")
             return None
 
-    def get_owned_stock_info(self, symbol: str = None) -> Union[List[StockResponseDTO], StockResponseDTO, None]:
+    def get_owned_stock_info(self, country: str = None, symbol: str = None) -> Union[List[StockResponseDTO], StockResponseDTO, None]:
+        if not country:
+            # TODO 해외, 국내 합쳐서 return
+            return self.get_korea_owned_stock_info(symbol)
+        elif country == 'KOR':
+            return self.get_korea_owned_stock_info(symbol)
+        else:
+            # TODO 외국 주식일 경우
+            pass
+
+    def get_korea_owned_stock_info(self, symbol: str = None) -> Union[List[StockResponseDTO], StockResponseDTO, None]:
         """
         Retrieve owned stock information.
 
         :param symbol: Specific stock symbol to filter. If None, return all.
         :return: List of StockResponseDTO objects, a single StockResponseDTO, or None if failed.
         """
-        if not get_stock_symbol_type(symbol) == "KOR":
-            return None
-
-        # TODO 외국 주식 보유 량 return code 추가
 
         headers = self._add_tr_id_to_headers("TTC8434R")
         params = InquireBalanceRequestDTO(
