@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import os
 import re
@@ -5,7 +6,7 @@ import traceback
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from datetime import timedelta
-from typing import Optional, Type
+from typing import Optional
 from urllib.parse import parse_qs, urlparse
 
 import FinanceDataReader
@@ -15,6 +16,7 @@ import tortoise
 from bs4 import BeautifulSoup
 from ta.volatility import AverageTrueRange
 
+from data import database
 from data.models import Stock, PriceHistoryUs
 from data.models import Subscription, Blacklist, PriceHistory, StopLoss, Account
 from services.financial_statement import get_financial_summary_for_update_stock, get_finance_from_fnguide
@@ -85,63 +87,52 @@ def get_stock(symbol: str):
         return insert_stock(symbol=symbol)
 
 
-def update_subscription_process(stock, user, data_to_insert):
-    try:
-        summary_dict = get_financial_summary_for_update_stock(stock.symbol)
-        df_highlight = get_finance_from_fnguide(stock.symbol, 'highlight', period='Q', include_estimates=False)
-        df_cash = get_finance_from_fnguide(stock.symbol, 'cash', period='Q', include_estimates=False)
-
-        if not (pd.to_numeric(df_cash['영업활동으로인한현금흐름'].str.replace(",", ""), errors="coerce")[-3:] > 0).all():
-            return
-
-        try:
-            if not (pd.to_numeric(df_highlight['매출액'].str.replace(",", ""), errors="coerce")[-3:] > 0).all():
-                return
-            if not (pd.to_numeric(df_highlight['매출액'].str.replace(",", ""), errors="coerce").diff()[-2:] >= 0).all():
-                return
-        except Exception as e:
-            raise ValueError(f"not find 매출액")
-
-        if not (pd.to_numeric(df_highlight['영업이익'].str.replace(",", ""), errors="coerce").diff()[-1:] >= 0).all():
-            return
-        if not (pd.to_numeric(df_highlight['당기순이익'].str.replace(",", ""), errors="coerce").diff()[-1:] >= 0).all():
-            return
-
-        # if not summary_dict["ROE"] > 10:
-        #     return
-        # if not summary_dict["ROA"] > 10:
-        #     return
-        if not summary_dict["PER"] * summary_dict["PBR"] <= 22.5:
-            return
-        if not summary_dict["부채비율"] < 200:
-            return
-        if not summary_dict["배당수익률"] >= 2:
-            return
-
-        data_to_insert.append({'email': user, 'symbol': stock})
-    except Exception as e:
-        pass
-
-
-def update_subscription_stock():
+async def update_subscription_stock():
     logging.info(f'{datetime.now()} update_subscription_stock 시작')
-    Subscription.filter(email='cabs0814@naver.com').delete()
+    await Subscription.filter(email='cabs0814@naver.com').delete()
     data_to_insert = []
     user = Account.get(email='cabs0814@naver.com')
 
-    with ThreadPoolExecutor(max_workers=os.cpu_count()) as executor:
-        futures = [executor.submit(update_subscription_process, stock, user, data_to_insert) for stock in Stock.all()]
+    for stock in await Stock.all():
+        try:
+            summary_dict = get_financial_summary_for_update_stock(stock.symbol)
+            df_highlight = get_finance_from_fnguide(stock.symbol, 'highlight', period='Q', include_estimates=False)
+            df_cash = get_finance_from_fnguide(stock.symbol, 'cash', period='Q', include_estimates=False)
 
-        for future in futures:
-            future.result()  # Ensure any raised exceptions are handled
+            if not (pd.to_numeric(df_cash['영업활동으로인한현금흐름'].str.replace(",", ""), errors="coerce")[-3:] > 0).all():
+                return
 
-    if data_to_insert:
-        data_to_insert = [Subscription(**vals) for vals in data_to_insert]
-        logging.info(f"{len(data_to_insert)}개 주식")
-        Subscription.bulk_create(data_to_insert)
+            try:
+                if not (pd.to_numeric(df_highlight['매출액'].str.replace(",", ""), errors="coerce")[-3:] > 0).all():
+                    return
+                if not (pd.to_numeric(df_highlight['매출액'].str.replace(",", ""), errors="coerce").diff()[-2:] >= 0).all():
+                    return
+            except Exception as e:
+                raise ValueError(f"not find 매출액")
+
+            if not (pd.to_numeric(df_highlight['영업이익'].str.replace(",", ""), errors="coerce").diff()[-1:] >= 0).all():
+                return
+            if not (pd.to_numeric(df_highlight['당기순이익'].str.replace(",", ""), errors="coerce").diff()[-1:] >= 0).all():
+                return
+
+            # if not summary_dict["ROE"] > 10:
+            #     return
+            # if not summary_dict["ROA"] > 10:
+            #     return
+            if not summary_dict["PER"] * summary_dict["PBR"] <= 22.5:
+                return
+            if not summary_dict["부채비율"] < 200:
+                return
+            if not summary_dict["배당수익률"] >= 2:
+                return
+
+            await Subscription.create(email=user, symbol=stock)
+        except Exception as e:
+            logging.error(f"update_subscription_stock 처리 중 에러 발생 {stock.symbol} : {traceback.format_exc()}")
+            pass
 
 
-def update_blacklist():
+async def update_blacklist():
     urls = ('https://finance.naver.com/sise/management.naver', 'https://finance.naver.com/sise/trading_halt.naver', 'https://finance.naver.com/sise/investment_alert.naver?type=caution',
             'https://finance.naver.com/sise/investment_alert.naver?type=warning', 'https://finance.naver.com/sise/investment_alert.naver?type=risk')
     symbol = set()
@@ -151,9 +142,21 @@ def update_blacklist():
         elements = soup.select('a.tltle')
         symbol = symbol.union(parse_qs(urlparse(x['href']).query)['code'][0] for x in elements)
     data_to_insert = [{'symbol': x, 'date': datetime.now().strftime('%Y-%m-%d')} for x in symbol]
-    if data_to_insert:
-        bulk_upsert(Blacklist, data_to_insert, True, ['symbol'], ['date'])
-    Blacklist.filter(date__lt=(datetime.now() - timedelta(days=30)).strftime('%Y-%m-%d')).delete()
+    for row in data_to_insert:
+        defaults = {
+            "open": row["open"],
+            "high": row["high"],
+            "close": row["close"],
+            "low": row["low"],
+            "volume": row["volume"],
+        }
+
+        await Blacklist.update_or_create(
+            defaults=defaults,
+            symbol=row["symbol"],
+            date=row["date"]
+        )
+    await Blacklist.filter(date__lt=(datetime.now() - timedelta(days=30)).strftime('%Y-%m-%d')).delete()
 
 
 def stop_loss_insert(symbol: str, pchs_avg_pric: float):
@@ -163,7 +166,7 @@ def stop_loss_insert(symbol: str, pchs_avg_pric: float):
     df['ATR20'] = AverageTrueRange(high=df['high'].astype('float64'), low=df['low'].astype('float64'), close=df['close'].astype('float64'), window=20).average_true_range()
     atr = max(df.iloc[-1]['ATR5'], df.iloc[-1]['ATR10'], df.iloc[-1]['ATR20'])  # 주가 변동성 체크
     stop_loss = pchs_avg_pric - 1.2 * atr  # 20일(보통), 60일(필수) 손절선
-    StopLoss.bulk_create([StopLoss(symbol=get_stock(symbol=symbol), price=stop_loss)], update_conflicts=True, unique_fields=['symbol'], update_fields=['price'])
+    StopLoss.update_or_create(defaults={'price': stop_loss}, symbol=symbol)
 
 
 def add_stock():
@@ -189,7 +192,7 @@ def add_stock():
             logging.error(f"Error occurred while processing {exchange['name']}: {e}")
 
 
-def insert_stock_price(symbol: Optional[str] = None, start_date: Optional[str] = None, end_date: Optional[str] = None, country: Optional[str] = None):
+async def insert_stock_price(symbol: Optional[str] = None, start_date: Optional[str] = None, end_date: Optional[str] = None, country: Optional[str] = None):
     """
     주어진 테이블에 특정 국가의 주식 가격 데이터를 추가합니다.
 
@@ -200,13 +203,10 @@ def insert_stock_price(symbol: Optional[str] = None, start_date: Optional[str] =
     """
 
     if symbol:
-        add_price_for_symbol(get_price_history_table(get_stock_symbol_type(symbol)), symbol, start_date, end_date)
+        await add_price_for_symbol(get_price_history_table(get_stock_symbol_type(symbol)), symbol, start_date, end_date)
     else:
         # 전체 종목 조회
-        if country:
-            stocks = Stock.get(Stock.country == country)
-        else:
-            stocks = Stock.get()
+        stocks = await Stock.all()
 
         # ThreadPoolExecutor로 스레드 풀 생성
         with ThreadPoolExecutor(max_workers=os.cpu_count()) as executor:
@@ -223,7 +223,7 @@ def insert_stock_price(symbol: Optional[str] = None, start_date: Optional[str] =
                     logging.error(f"에러 발생: {e}")
 
 
-def add_price_for_symbol(model_class: Type[tortoise.models.ModelMeta], symbol: str, start_date: str, end_date: Optional[str]):
+async def add_price_for_symbol(model_class: tortoise.models.Model, symbol: str, start_date: str, end_date: Optional[str]):
     """
     특정 국가의 주식 심볼에 대한 가격 데이터를 가져와 주어진 테이블에 삽입합니다.
 
@@ -260,13 +260,24 @@ def add_price_for_symbol(model_class: Type[tortoise.models.ModelMeta], symbol: s
             for idx, row in df.iterrows()
         ]
 
-        # bulk_upsert로 일괄 삽입
-        bulk_upsert(
-            model_class,
-            data_to_insert,
-            update_conflicts=True,
-            unique_fields=['symbol', 'date'],
-            update_fields=['open', 'high', 'close', 'low', 'volume'],
-        )
+        for row in data_to_insert:
+            defaults = {
+                "open": row["open"],
+                "high": row["high"],
+                "close": row["close"],
+                "low": row["low"],
+                "volume": row["volume"],
+            }
+
+            await model_class.update_or_create(
+                defaults=defaults,
+                symbol=row["symbol"],
+                date=row["date"]
+            )
     except Exception as e:
         logging.error(f"add_price_for_symbol 처리 중 에러 발생 {symbol} : {traceback.format_exc()}")
+
+
+if __name__ == "__main__":
+    asyncio.run(database.init())
+    # ki_api = KoreaInvestmentAPI(app_key=setting_env.APP_KEY, app_secret=setting_env.APP_SECRET, account_number=setting_env.ACCOUNT_NUMBER, account_code=setting_env.ACCOUNT_CODE)

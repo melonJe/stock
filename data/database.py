@@ -9,5 +9,5 @@ async def init():
     #  which contain models from "app.models"
     await Tortoise.init(
         db_url=f'asyncpg://{setting_env.DB_USER}:{setting_env.DB_PASS}@{setting_env.DB_HOST}:{setting_env.DB_PORT}/{setting_env.DB_NAME}',
-        modules={'models': ['stock.models']}
+        modules={'models': ['data.models']}
     )
