@@ -2,7 +2,7 @@ import logging
 
 import requests
 
-from stock import setting_env
+from config import setting_env
 
 
 def send_message(content):

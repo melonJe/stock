@@ -207,8 +207,8 @@ def add_price_for_symbol(symbol: str, start_date: str, end_date: str = None):
         bulk_insert(
             PriceHistory,
             data_to_insert,
-            update_conflicts=True,
-            update_fields=['open', 'high', 'close', 'low', 'volume'],
+            ignore_conflicts=True,
+            update_conflicts=['open', 'high', 'close', 'low', 'volume'],
             unique_fields=['symbol', 'date']
         )
     except Exception as e:

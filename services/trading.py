@@ -1,5 +1,5 @@
+import asyncio
 import logging
-import math
 import threading
 import traceback
 from datetime import datetime, timedelta
@@ -8,50 +8,38 @@ from time import sleep
 
 import numpy as np
 import pandas as pd
-from django.db.models import Q
 from ta.momentum import rsi
 from ta.trend import adx
-# TA 라이브러리 설치 필요: pip install ta
 from ta.volatility import AverageTrueRange
 from ta.volume import ChaikinMoneyFlowIndicator
 
-from stock.discord import discord
-from stock.korea_investment.api import KoreaInvestmentAPI
-from stock.models import PriceHistory, StopLoss, Subscription, Blacklist
-from .data_handler import stop_loss_insert, add_stock_price
-from .. import setting_env
+from apis.korea_investment import KoreaInvestmentAPI
+from config import setting_env
+from data import database
+from data.models import Blacklist, Stock, StopLoss, Subscription
+from services.stock_data import stop_loss_insert, insert_stock_price, get_price_history_table, get_stock_symbol_type
+from stock import discord
+from utils.operations import price_refine
 
 
-def price_refine(price: int, number: int = 0) -> int:
-    PRICE_LEVELS = [(2000, 1), (5000, 5), (20000, 10), (50000, 50), (200000, 100), (500000, 500), (float('inf'), 1000)]
-
-    if number == 0:
-        for level_price, adjustment in PRICE_LEVELS:
-            if price < level_price or level_price == float('inf'):
-                return round(price / adjustment) * adjustment
-
-    increase = number > 0
-    number_of_adjustments = abs(number)
-
-    for _ in range(number_of_adjustments):
-        for level_price, adjustment in PRICE_LEVELS:
-            if (increase and price < level_price) or level_price == float('inf'):
-                price = (math.trunc(price / adjustment) + 1) * adjustment
-                break
-            elif (not increase and price <= level_price) or level_price == float('inf'):
-                price = (math.ceil(price / adjustment) - 1) * adjustment
-                break
-
-    return int(price)
-
-
-def select_buy_stocks() -> dict:
+async def select_buy_stocks(country: str) -> dict:
     buy_levels = dict()
-    try:
-        stocks = set(x['symbol'] for x in Subscription.objects.exclude(Q(symbol__in=Blacklist.objects.values_list('symbol', flat=True))).select_related("symbol").values('symbol'))
-        # stocks = set(x['symbol'] for x in Stock.objects.exclude(Q(symbol__in=Blacklist.objects.values_list('symbol', flat=True))).select_related("symbol").values('symbol'))
-        for symbol in stocks:
-            df = pd.DataFrame(PriceHistory.objects.filter(date__range=[datetime.now() - timedelta(days=365), datetime.now()], symbol=symbol).order_by('date').values())
+    table = get_price_history_table(country)
+
+    blacklist_symbols = await Blacklist.all().values_list("symbol", flat=True)
+    sub_symbols = await Subscription.all().values_list("symbol_id", flat=True)
+    stocks_query = (
+        await Stock.filter(
+            country=country,
+            symbol__in=sub_symbols,  # Subscription의 symbol과 일치하는 항목 포함
+        )
+        .exclude(symbol__in=blacklist_symbols)  # Blacklist의 symbol 제외
+        .values("symbol")  # 딕셔너리 형태로 반환
+    )
+    stocks = set(row['symbol'] for row in stocks_query)
+    for symbol in stocks:
+        try:
+            df = pd.DataFrame(await table.filter(date__range=[datetime.now() - timedelta(days=365), datetime.now()], symbol=symbol).order_by('date').values())
             if len(df) < 200:
                 continue
 
@@ -70,6 +58,7 @@ def select_buy_stocks() -> dict:
             if df.iloc[-1]['RSI'] > 70:
                 continue
 
+            df[['high', 'low', 'close']] = df[['high', 'low', 'close']].apply(pd.to_numeric, errors='coerce')
             df['ADX'] = adx(df['high'], df['low'], df['close'], window=14)
             if df.iloc[-1]['ADX'] < 25:
                 continue
@@ -83,26 +72,27 @@ def select_buy_stocks() -> dict:
                 if atr / df.iloc[-1]['close'] > 0.05:
                     continue
                 volume = int(min(10000 // atr, np.average(df['volume'][-20:]) // (atr ** (1 / 2))))
+                if country == "USA":
+                    volume //= 100
                 buy_levels[symbol] = {
-                    price_refine(df.iloc[-1]['ma120']): volume // 10 * 4,
-                    price_refine(df.iloc[-1]['ma60']): volume // 10 * 3,
-                    price_refine(df.iloc[-1]['ma20']): volume // 10 * 2,
-                    price_refine(df.iloc[-1]['close']): volume // 10 * 1
+                    df.iloc[-1]['ma120']: volume // 10 * 4,
+                    df.iloc[-1]['ma60']: volume // 10 * 3,
+                    df.iloc[-1]['ma20']: volume // 10 * 2,
+                    df.iloc[-1]['close']: volume // 10 * 1
                 }
-    except Exception as e:
-        traceback.print_exc()
-        logging.error(f"Error occurred: {e}")
+        except Exception as e:
+            traceback.print_exc()
+            logging.error(f"Error occurred: {e}")
     return buy_levels
 
 
-def select_sell_stocks(ki_api: KoreaInvestmentAPI) -> dict:
-    stocks = ki_api.get_owned_stock_info()
+async def select_sell_stocks(korea_investment: KoreaInvestmentAPI) -> dict:
+    owned_stocks = korea_investment.get_owned_stock_info(country='KOR')
     sell_levels = {}
-    for stock in stocks:
+    for stock in owned_stocks:
         try:
-            df = pd.DataFrame(PriceHistory.objects.filter(date__range=[datetime.now() - timedelta(days=365), datetime.now()], symbol=stock.pdno).order_by('date').values())
-            # 날짜순 정렬
-            if len(df) < 60:
+            df = pd.DataFrame(await get_price_history_table(get_stock_symbol_type(stock.pdno)).filter(date__range=[datetime.now() - timedelta(days=365), datetime.now()], symbol=stock.pdno).order_by('date').values())
+            if len(df) < 200:
                 continue
 
             df['MA20'] = df['close'].rolling(20).mean()
@@ -122,8 +112,6 @@ def select_sell_stocks(ki_api: KoreaInvestmentAPI) -> dict:
             if df.iloc[-1]['RSI'] > 20:
                 continue
 
-            atr = df.iloc[-10]['ATR']
-            volume = int(min(10000 // atr, np.average(df['volume'][-20:]) // (atr ** (1 / 2))))
             sell_levels[stock.pdno] = {
                 df.iloc[-1]['high']: int(stock.ord_psbl_qty) // 12,
                 df.iloc[-1]['close']: int(stock.ord_psbl_qty) // 3,
@@ -135,9 +123,9 @@ def select_sell_stocks(ki_api: KoreaInvestmentAPI) -> dict:
     return sell_levels
 
 
-def trading_buy(ki_api: KoreaInvestmentAPI, buy_levels):
+def trading_buy(korea_investment: KoreaInvestmentAPI, buy_levels):
     try:
-        end_date = ki_api.get_nth_open_day(3)
+        end_date = korea_investment.get_nth_open_day(3)
     except Exception as e:
         traceback.print_exc()
         logging.error(f"Error occurred while getting nth open day: {e}")
@@ -147,14 +135,22 @@ def trading_buy(ki_api: KoreaInvestmentAPI, buy_levels):
 
     for symbol, levels in buy_levels.items():
         try:
-            stock = ki_api.get_owned_stock_info(symbol)
+            country = get_stock_symbol_type(symbol)
+            stock = korea_investment.get_owned_stock_info(symbol=symbol)
             stop_loss_insert(symbol, min(levels.keys()) * 0.95)
             for price, volume in levels.items():
                 if stock and price > float(stock.pchs_avg_pric) * 0.975:
                     continue
                 try:
-                    ki_api.buy_reserve(symbol=symbol, price=price, volume=volume, end_date=end_date)
-                    money += price * volume
+                    if country == "KOR":
+                        price = price_refine(price)
+                        korea_investment.buy_reserve(symbol=symbol, price=price, volume=volume, end_date=end_date)
+                        money += price * volume
+                    elif country == "USA":
+                        price = round(price, 2)
+                        logging.info(f'{stock.prdt_name} price: {price}, volume: {volume}')
+                        # money += price * volume
+
                 except Exception as e:
                     traceback.print_exc()
                     logging.error(f"Error occurred while executing trades for symbol {symbol}: {e}")
@@ -170,29 +166,30 @@ def trading_buy(ki_api: KoreaInvestmentAPI, buy_levels):
             logging.error(f"Error occurred while sending message to Discord: {e}")
 
 
-def trading_sell(ki_api: KoreaInvestmentAPI, sell_levels):
-    end_date = ki_api.get_nth_open_day(3)
+def trading_sell(korea_investment: KoreaInvestmentAPI, sell_levels):
+    end_date = korea_investment.get_nth_open_day(3)
     for symbol, levels in sell_levels.items():
-        stock = ki_api.get_owned_stock_info(symbol)
+        stock = korea_investment.get_owned_stock_info(symbol=symbol)
         if not stock:
             discord.send_message(f'Not held a stock {stock.prdt_name}')
             continue
         for price, volume in levels.items():
             if price < float(stock.pchs_avg_pric):
                 price = price_refine(int(float(stock.pchs_avg_pric)), 3)
-            ki_api.sell_reserve(symbol=symbol, price=price, volume=volume, end_date=end_date)
+            korea_investment.sell_reserve(symbol=symbol, price=price, volume=volume, end_date=end_date)
 
 
-def stop_loss_notify(ki_api: KoreaInvestmentAPI):
+def stop_loss_notify(korea_investment: KoreaInvestmentAPI):
     alert = set()
     while datetime.now().time() < time(15, 30, 00):
-        owned_stock = ki_api.get_owned_stock_info()
-        for item in owned_stock:
+        owned_stocks = korea_investment.get_owned_stock_info()
+        for item in owned_stocks:
             try:
                 if item.pdno in alert:
                     continue
-                stock = StopLoss.objects.filter(symbol=item.pdno).first()
-                if not stock:
+                try:
+                    stock = StopLoss.filter(symbol=item.pdno)
+                except Exception:
                     stop_loss_insert(item.pdno, float(item.pchs_avg_pric))
                     continue
                 if stock.price < int(item.prpr):
@@ -207,27 +204,44 @@ def stop_loss_notify(ki_api: KoreaInvestmentAPI):
         sleep(1 * 60)
 
 
-def korea_investment_trading():
+def investment_trading():
     ki_api = KoreaInvestmentAPI(app_key=setting_env.APP_KEY, app_secret=setting_env.APP_SECRET, account_number=setting_env.ACCOUNT_NUMBER, account_code=setting_env.ACCOUNT_CODE)
+
+    insert_stock_price(start_date=(datetime.now() - timedelta(days=5)).strftime('%Y-%m-%d'), end_date=datetime.now().strftime('%Y-%m-%d'), country='USA')
     if ki_api.check_holiday(datetime.now().strftime("%Y%m%d")):
         logging.info(f'{datetime.now()} 휴장일')
         return
+
+    # usa_stock = asyncio.run(select_buy_stocks(country="USA"))
+    # discord.send_message(f"usa_stock: {usa_stock}")
+    # usa_buy = threading.Thread(target=trading_buy, args=(ki_api, usa_stock,))
+    # usa_buy.start()
+
     stop_loss = threading.Thread(target=stop_loss_notify, args=(ki_api,))
     stop_loss.start()
 
     while datetime.now().time() < time(15, 35, 30):
         sleep(1 * 60)
 
-    add_stock_price(start_date=datetime.now().strftime('%Y-%m-%d'), end_date=datetime.now().strftime('%Y-%m-%d'))
+    insert_stock_price(start_date=datetime.now().strftime('%Y-%m-%d'), end_date=datetime.now().strftime('%Y-%m-%d'), country="KOR")
     for stock in ki_api.get_owned_stock_info():
         stop_loss_insert(stock.pdno, float(stock.pchs_avg_pric))
 
     while datetime.now().time() < time(16, 00, 30):
         sleep(1 * 60)
 
-    sell_stock = select_sell_stocks(ki_api)
+    sell_stock = asyncio.run(select_sell_stocks(ki_api))
     sell = threading.Thread(target=trading_sell, args=(ki_api, sell_stock,))
     sell.start()
-    buy_stock = select_buy_stocks()
+    buy_stock = asyncio.run(select_buy_stocks(country="KOR"))
     buy = threading.Thread(target=trading_buy, args=(ki_api, buy_stock,))
     buy.start()
+
+
+if __name__ == "__main__":
+    asyncio.run(database.init())
+    # ki_api = KoreaInvestmentAPI(app_key=setting_env.APP_KEY, app_secret=setting_env.APP_SECRET, account_number=setting_env.ACCOUNT_NUMBER, account_code=setting_env.ACCOUNT_CODE)
+    # print(asyncio.run(select_buy_stocks(country="KOR")))
+    # print(asyncio.run(select_sell_stocks(ki_api)))
+    # trading_buy(korea_investment=ki_api, buy_levels=asyncio.run(select_buy_stocks(country="KOR")))
+    # trading_sell(korea_investment=ki_api, sell_levels=asyncio.run(select_sell_stocks(korea_investment=ki_api)))
