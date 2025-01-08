@@ -1,22 +1,17 @@
+from contextlib import asynccontextmanager
 from datetime import datetime, timedelta
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
-from django.conf import settings
 
-import stock.service.data_handler as data_handler
-from stock import setting_env
-from stock.service.trading import korea_investment_trading
+import services.stock_data as data_handler
+from config import setting_env
+from data import database
+from services.trading import investment_trading
 
 
 def start():
-    scheduler = BackgroundScheduler(misfire_grace_time=3600, coalesce=True, timezone=settings.TIME_ZONE)
-    # ki_api = KoreaInvestmentAPI(app_key=setting_env.APP_KEY, app_secret=setting_env.APP_SECRET, account_number=setting_env.ACCOUNT_NUMBER, account_code=setting_env.ACCOUNT_CODE)
-    # data_handler.add_stock_price(start_date=(datetime.now() - timedelta(days=600)).strftime('%Y-%m-%d'), end_date=datetime.now().strftime('%Y-%m-%d'))
-    # trading_buy(ki_api=ki_api, buy_levels=select_buy_stocks())
-    # trading_sell(ki_api=ki_api)
-    # print(select_buy_stocks())
-    # print(select_sell_stocks(ki_api))
+    scheduler = BackgroundScheduler(misfire_grace_time=3600, coalesce=True, timezone='Asia/Seoul')
 
     if not setting_env.SIMULATE:
         scheduler.add_job(
@@ -36,19 +31,10 @@ def start():
         )
 
         scheduler.add_job(
-            data_handler.add_stock_price,
-            trigger=CronTrigger(day_of_week="sat"),
-            kwargs={'start_date': (datetime.now() - timedelta(days=7)).strftime('%Y-%m-%d'), 'end_date': datetime.now().strftime('%Y-%m-%d')},
-            id="add_stock_price_1week",
-            max_instances=1,
-            replace_existing=True,
-        )
-
-        scheduler.add_job(
-            data_handler.add_stock_price,
-            trigger=CronTrigger(day_of_week="mon-fri", hour=18, minute=0, second=0),
+            data_handler.insert_stock_price,
+            trigger=CronTrigger(hour=18, minute=0, second=0),
             kwargs={'start_date': datetime.now().strftime('%Y-%m-%d'), 'end_date': datetime.now().strftime('%Y-%m-%d')},
-            id="add_stock_price_1day",
+            id="insert_stock_price_1day",
             max_instances=1,
             replace_existing=True,
         )
@@ -62,9 +48,9 @@ def start():
         )
 
     scheduler.add_job(
-        korea_investment_trading,
+        investment_trading,
         trigger=CronTrigger(day_of_week="mon-fri", hour=8, minute=50, second=0),
-        id="korea_investment_trading",
+        id="investment_trading",
         max_instances=1,
         replace_existing=True,
     )
@@ -73,3 +59,22 @@ def start():
         scheduler.start()
     except KeyboardInterrupt:
         scheduler.shutdown()
+
+
+if __name__ == "__main__":
+    # start()
+    # ki_api = KoreaInvestmentAPI(app_key=setting_env.APP_KEY, app_secret=setting_env.APP_SECRET, account_number=setting_env.ACCOUNT_NUMBER, account_code=setting_env.ACCOUNT_CODE)
+    # data_handler.insert_stock_price(start_date="2020-01-01", end_date=datetime.now().strftime('%Y-%m-%d'))
+    # trading_buy(ki_api=ki_api, buy_levels=select_buy_stocks(country="KOR"))
+    # trading_sell(ki_api=ki_api)
+    # print(select_buy_stocks(country="KOR"))
+    # print(select_sell_stocks(ki_api))
+    data_handler.insert_stock_price(start_date=(datetime.now() - timedelta(days=5)).strftime('%Y-%m-%d'), end_date=datetime.now().strftime('%Y-%m-%d'), country='USA')
+
+
+@asynccontextmanager
+async def lifespan(app):
+    await database.init()
+    start()
+    yield
+    print("lifespan finished")
