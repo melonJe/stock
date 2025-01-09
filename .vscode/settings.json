@@ -1,7 +1,0 @@
-{
-  "editor.defaultFormatter": "ms-python.black-formatter",
-  "editor.formatOnSave": false,
-  "editor.formatOnPaste": false,
-  "pylint.args": [
-  ]
-}

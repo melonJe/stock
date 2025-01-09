@@ -1,154 +1,111 @@
-from tortoise import fields
-from tortoise.models import Model
+import datetime
+
+from peewee import *
+
+from config import setting_env
+
+db = PostgresqlDatabase(database=setting_env.DB_NAME, user=setting_env.DB_USER, password=setting_env.DB_PASS, host=setting_env.DB_HOST, port=setting_env.DB_PORT)
 
 
 class Account(Model):
-    email = fields.CharField(pk=True, max_length=255)
-    pass_hash = fields.BinaryField()
-    pass_salt = fields.BinaryField()
+    email = CharField(max_length=320, primary_key=True)
+    pass_hash = BlobField()
+    pass_salt = BlobField()
 
     class Meta:
-        table = "account"
-
-
-class Stock(Model):
-    symbol = fields.CharField(pk=True, max_length=255)
-    company_name = fields.CharField(max_length=255)
-    country = fields.CharField(max_length=255)
-
-    class Meta:
-        table = "stock"
-
-
-class BuyQueue(Model):
-    email = fields.ForeignKeyField(
-        "models.Account",
-        related_name="buy_queues",
-        to_field="email",
-        on_delete=fields.NO_ACTION,  # Django의 NO_ACTION 대신
-        source_field="email"
-    )
-    symbol = fields.ForeignKeyField(
-        "models.Stock",
-        related_name="buy_queues",
-        to_field="symbol",
-        on_delete=fields.NO_ACTION,
-        source_field="symbol"
-    )
-    volume = fields.IntField()
-
-    class Meta:
-        table = "buy_queue"
-        unique_together = (("email", "symbol"),)
-
-
-class PriceHistory(Model):
-    symbol = fields.ForeignKeyField(
-        "models.Stock",
-        related_name="price_histories",
-        to_field="symbol",
-        on_delete=fields.NO_ACTION,
-        source_field="symbol"
-    )
-    date = fields.DateField()
-    open = fields.IntField()
-    high = fields.IntField()
-    close = fields.IntField()
-    low = fields.IntField()
-    volume = fields.IntField()
-
-    class Meta:
-        table = "price_history"
-        unique_together = (("symbol", "date"),)
-
-
-class Subscription(Model):
-    email = fields.ForeignKeyField(
-        "models.Account",
-        related_name="subscriptions",
-        to_field="email",
-        on_delete=fields.NO_ACTION,
-        source_field="email"
-    )
-    symbol = fields.ForeignKeyField(
-        "models.Stock",
-        related_name="subscriptions",
-        to_field="symbol",
-        on_delete=fields.NO_ACTION,
-        source_field="symbol"
-    )
-
-    class Meta:
-        table = "subscription"
-        unique_together = (("email", "symbol"),)
+        database = db
+        table_name = 'account'
 
 
 class Blacklist(Model):
-    symbol = fields.CharField(pk=True, max_length=255)
-    date = fields.DateField(source_field="record_date")
+    symbol = CharField(primary_key=True)
+    record_date = DateField(default=datetime.datetime.now)
 
     class Meta:
-        table = "blacklist"
+        database = db
+        table_name = 'blacklist'
+
+
+class Stock(Model):
+    symbol = CharField(primary_key=True)
+    company_name = CharField()
+    country = CharField(null=True)
+
+    class Meta:
+        database = db
+        table_name = 'stock'
 
 
 class StopLoss(Model):
-    # symbol을 PK로 지정
-    symbol = fields.ForeignKeyField(
-        "models.Stock",
-        pk=True,
-        to_field="symbol",
-        on_delete=fields.NO_ACTION,
-        source_field="symbol"
-    )
-    price = fields.IntField()
+    symbol = CharField(primary_key=True)
+    price = IntegerField()
 
     class Meta:
-        table = "stop_loss"
+        database = db
+        table_name = 'stop_loss'
 
 
-class PriceHistoryUs(Model):
-    symbol = fields.ForeignKeyField(
-        "models.Stock",
-        related_name="price_histories_us",
-        to_field="symbol",
-        on_delete=fields.NO_ACTION,
-        source_field="symbol"
-    )
-    date = fields.DateField()
-    open = fields.DecimalField(max_digits=10, decimal_places=4)
-    high = fields.DecimalField(max_digits=10, decimal_places=4)
-    close = fields.DecimalField(max_digits=10, decimal_places=4)
-    low = fields.DecimalField(max_digits=10, decimal_places=4)
-    volume = fields.IntField()
+class PriceHistory(Model):
+    id = BigAutoField(primary_key=True)
+    symbol = CharField()
+    date = DateField()
+    open = IntegerField()
+    high = IntegerField()
+    close = IntegerField()
+    low = IntegerField()
+    volume = IntegerField()
 
     class Meta:
-        table = "price_history_us"
-        unique_together = (("symbol", "date"),)
+        database = db
+        table_name = 'price_history'
+        indexes = (
+            (('symbol', 'date'), True),
+        )
+
+
+class PriceHistoryUS(Model):
+    id = BigAutoField(primary_key=True)
+    symbol = CharField()
+    date = DateField()
+    open = DecimalField(max_digits=10, decimal_places=4, null=True)
+    high = DecimalField(max_digits=10, decimal_places=4, null=True)
+    close = DecimalField(max_digits=10, decimal_places=4, null=True)
+    low = DecimalField(max_digits=10, decimal_places=4, null=True)
+    volume = BigIntegerField(null=True)
+
+    class Meta:
+        database = db
+        table_name = 'price_history_us'
+        indexes = (
+            (('symbol', 'date'), True),
+        )
 
 
 class SellQueue(Model):
-    id = fields.BigIntField(pk=True)
-    email = fields.ForeignKeyField(
-        "models.Account",
-        related_name="sell_queues",
-        to_field="email",
-        on_delete=fields.NO_ACTION,
-        source_field="email"
-    )
-    symbol = fields.ForeignKeyField(
-        "models.Stock",
-        related_name="sell_queues",
-        to_field="symbol",
-        on_delete=fields.NO_ACTION,
-        source_field="symbol"
-    )
-    volume = fields.IntField()
-    price = fields.IntField()
+    email = CharField(max_length=320)
+    symbol = CharField()
+    volume = IntegerField()
+    id = BigAutoField(primary_key=True)
+    price = IntegerField()
 
     class Meta:
-        table = "sell_queue"
-        unique_together = (("symbol", "email", "price"),)
+        database = db
+        table_name = 'sell_queue'
 
 
-if __name__ == "__main__":
-    print(type(SellQueue))
+class Subscription(Model):
+    email = CharField(max_length=320)
+    symbol = CharField()
+    id = BigAutoField(primary_key=True)
+
+    class Meta:
+        database = db
+        table_name = 'subscription'
+        indexes = (
+            (('email', 'symbol'), True),
+        )
+
+
+if __name__ == '__main__':
+    db.connect()
+    print(type(Stock))
