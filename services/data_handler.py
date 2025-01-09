@@ -1,65 +1,67 @@
+import datetime
 import logging
 import os
+import re
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from datetime import datetime
-from datetime import timedelta
-from urllib.parse import parse_qs, urlparse
+from urllib.parse import urlparse, parse_qs
 
 import FinanceDataReader
 import pandas as pd
 import requests
 from bs4 import BeautifulSoup
-from django.core.exceptions import ObjectDoesNotExist
 from ta.volatility import AverageTrueRange
 
-from finance.financial_statement import get_financial_summary_for_update_stock, get_finance_from_fnguide
-from stock.models import Stock
-from stock.models import Subscription, Blacklist, PriceHistory, StopLoss, Account
-from stock.service.utils import bulk_insert
+from data.models import Stock, PriceHistory, PriceHistoryUS, Subscription, Blacklist, StopLoss
+from utils.financial_statement import get_financial_summary_for_update_stock, get_finance_from_fnguide
 
 
 def get_company_name(symbol: str):
     try:
         df_krx = FinanceDataReader.StockListing('KRX')
-        stock_info = df_krx[df_krx['Symbol'] == symbol].to_dict('records').first()
-        if not stock_info:
-            logging.error("No stock found with that symbol.")
-            return None
-        company_name = stock_info.get('Name')
-        if not company_name:
-            return None
-        return company_name
+        return df_krx[df_krx['Code'] == symbol].to_dict('records')[0].get('Name')
     except Exception as e:
         logging.error(f"Failed to fetch stock data: {e}")
         return None
 
 
+def get_country_by_symbol(symbol: str):
+    # try:
+    #     return Stock.get(symbol=symbol).country
+    # except Exception:
+    #     pass
+    if re.match(r'(\d{5}[0-9KLMN])', symbol):
+        return "KOR"
+    elif re.match(r'([[a-zA-Z]\s?\.?)*', symbol):
+        return "USA"
+    else:
+        return ""
+
+
+def get_history_table(country: str):
+    country = country.upper()
+    mapping = {
+        'KOR': PriceHistory,
+        'USA': PriceHistoryUS,
+    }
+    try:
+        return mapping[country]
+    except KeyError:
+        raise ValueError(f"Unsupported country code: {country}")
+
+
 def insert_stock(symbol: str, company_name: str = None):
-    # 이미 존재하는 주식인지 확인
-    existing_stock = Stock.objects.filter(symbol=symbol).first()
+    existing_stock = Stock.get_or_none(Stock.symbol == symbol)
     if existing_stock:
-        logging.error(f"Error: A stock with symbol '{symbol}' already exists.")
         return existing_stock
 
-    # company_name이 제공되었는지 확인
     if not company_name:
         company_name = get_company_name(symbol)
 
-    # 새 주식 객체 생성 및 저장
-    new_stock = Stock(symbol=symbol, company_name=company_name)
-    new_stock.save()
-    add_stock_price(symbol=symbol, start_date=(datetime.now() - timedelta(days=45)).strftime("%Y-%m-%d"), end_date=datetime.now().strftime("%Y-%m-%d"))
+    new_stock = Stock.create(symbol=symbol, company_name=company_name, country=get_country_by_symbol(symbol))
     return new_stock
 
 
-def get_stock(symbol: str):
-    try:
-        return Stock.objects.get(symbol=symbol)
-    except ObjectDoesNotExist:
-        return insert_stock(symbol=symbol)
-
-
-def update_subscription_process(stock, user, data_to_insert):
+def update_subscription_process(stock: Stock, email, data_to_insert):
     try:
         summary_dict = get_financial_summary_for_update_stock(stock.symbol)
         df_highlight = get_finance_from_fnguide(stock.symbol, 'highlight', period='Q', include_estimates=False)
@@ -92,19 +94,19 @@ def update_subscription_process(stock, user, data_to_insert):
         if not summary_dict["배당수익률"] >= 2:
             return
 
-        data_to_insert.append({'email': user, 'symbol': stock})
+        data_to_insert.append({'email': email, 'symbol': stock})
     except Exception as e:
         pass
 
 
 def update_subscription_stock():
-    logging.info(f'{datetime.now()} update_subscription_stock 시작')
-    Subscription.objects.filter(email='cabs0814@naver.com').delete()
+    logging.info(f'{datetime.datetime.now()} update_subscription_stock 시작')
+    email = 'cabs0814@naver.com'
+    Subscription.delete().where(Subscription.email == email)
     data_to_insert = []
-    user = Account.objects.get(email='cabs0814@naver.com')
 
     with ThreadPoolExecutor(max_workers=os.cpu_count()) as executor:
-        futures = [executor.submit(update_subscription_process, stock, user, data_to_insert) for stock in Stock.objects.all()]
+        futures = [executor.submit(update_subscription_process, stock, email, data_to_insert) for stock in Stock.select()]
 
         for future in futures:
             future.result()  # Ensure any raised exceptions are handled
@@ -112,7 +114,7 @@ def update_subscription_stock():
     if data_to_insert:
         data_to_insert = [Subscription(**vals) for vals in data_to_insert]
         logging.info(f"{len(data_to_insert)}개 주식")
-        Subscription.objects.bulk_create(data_to_insert)
+        Subscription.bulk_create(data_to_insert)
 
 
 def update_blacklist():
@@ -124,22 +126,26 @@ def update_blacklist():
         soup = BeautifulSoup(page, "html.parser")
         elements = soup.select('a.tltle')
         symbol = symbol.union(parse_qs(urlparse(x['href']).query)['code'][0] for x in elements)
-    data_to_insert = [{'symbol': x, 'date': datetime.now().strftime('%Y-%m-%d')} for x in symbol]
+    data_to_insert = [{'symbol': x, 'date': datetime.datetime.now().strftime('%Y-%m-%d')} for x in symbol]
     if data_to_insert:
-        bulk_insert(Blacklist, data_to_insert, True, ['symbol'], ['date'])
-    Blacklist.objects.filter(date__lt=(datetime.now() - timedelta(days=30)).strftime('%Y-%m-%d')).delete()
+        Blacklist.bulk_create(data_to_insert)
+    Blacklist.delete().where(Blacklist.record_date < datetime.datetime.now() - datetime.timedelta(days=30)).execute()
 
 
 def stop_loss_insert(symbol: str, pchs_avg_pric: float):
-    df = pd.DataFrame(PriceHistory.objects.filter(date__range=[datetime.now() - timedelta(days=550), datetime.now()], symbol=symbol).order_by('date').values())
+    df = pd.DataFrame(
+        PriceHistory.select()
+        .where(PriceHistory.date.between(datetime.datetime.now() - datetime.timedelta(days=550), datetime.datetime.now())) & (PriceHistory.symbol == symbol)
+        .order_by(PriceHistory.date))
     df['ATR5'] = AverageTrueRange(high=df['high'].astype('float64'), low=df['low'].astype('float64'), close=df['close'].astype('float64'), window=5).average_true_range()
     df['ATR10'] = AverageTrueRange(high=df['high'].astype('float64'), low=df['low'].astype('float64'), close=df['close'].astype('float64'), window=10).average_true_range()
     df['ATR20'] = AverageTrueRange(high=df['high'].astype('float64'), low=df['low'].astype('float64'), close=df['close'].astype('float64'), window=20).average_true_range()
     atr = max(df.iloc[-1]['ATR5'], df.iloc[-1]['ATR10'], df.iloc[-1]['ATR20'])  # 주가 변동성 체크
     stop_loss = pchs_avg_pric - 1.2 * atr  # 20일(보통), 60일(필수) 손절선
-    StopLoss.objects.bulk_create([StopLoss(symbol=get_stock(symbol=symbol), price=stop_loss)], update_conflicts=True, unique_fields=['symbol'], update_fields=['price'])
+    StopLoss.bulk_create([StopLoss(symbol=symbol, price=stop_loss)])
 
 
+#
 def add_stock():
     df_krx = FinanceDataReader.StockListing('KRX')
     try:
@@ -151,14 +157,14 @@ def add_stock():
 
 def add_stock_price(symbol: str = None, start_date: str = None, end_date: str = None):
     if start_date is None:
-        start_date = datetime.now().strftime('%Y-%m-%d')
+        start_date = datetime.datetime.now().strftime('%Y-%m-%d')
 
     # 특정 종목만 처리할 경우
     if symbol:
         add_price_for_symbol(symbol, start_date, end_date)
     else:
         # 전체 종목 조회
-        stocks = Stock.objects.all()
+        stocks = Stock.select()
 
         # ThreadPoolExecutor로 스레드 풀 생성
         with ThreadPoolExecutor(max_workers=os.cpu_count()) as executor:
@@ -192,7 +198,7 @@ def add_price_for_symbol(symbol: str, start_date: str, end_date: str = None):
         # DB에 넣을 자료 생성
         data_to_insert = [
             {
-                'symbol': get_stock(symbol=symbol),
+                'symbol': symbol,
                 'date': idx,
                 'open': row['Open'],
                 'high': row['High'],
@@ -204,12 +210,14 @@ def add_price_for_symbol(symbol: str, start_date: str, end_date: str = None):
         ]
 
         # bulk_insert로 일괄 삽입
-        bulk_insert(
-            PriceHistory,
-            data_to_insert,
-            ignore_conflicts=True,
-            update_conflicts=['open', 'high', 'close', 'low', 'volume'],
-            unique_fields=['symbol', 'date']
-        )
+        PriceHistory.bulk_create(data_to_insert)
     except Exception as e:
         logging.error(f"Error processing symbol {symbol}: {e}")
+
+
+if __name__ == "__main__":
+    datas = (PriceHistory.select()
+             .where(PriceHistory.date.between(datetime.datetime.now() - datetime.timedelta(days=550), datetime.datetime.now()) & (PriceHistory.symbol == "000660"))
+             .order_by(PriceHistory.date))
+    for x in datas:
+        print(x)

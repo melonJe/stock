@@ -4,9 +4,8 @@ from datetime import datetime, timedelta
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
 
-import services.stock_data as data_handler
 from config import setting_env
-from data import database
+from services import data_handler
 from services.trading import investment_trading
 
 
@@ -31,10 +30,10 @@ def start():
         )
 
         scheduler.add_job(
-            data_handler.insert_stock_price,
+            data_handler.add_stock_price,
             trigger=CronTrigger(hour=18, minute=0, second=0),
             kwargs={'start_date': datetime.now().strftime('%Y-%m-%d'), 'end_date': datetime.now().strftime('%Y-%m-%d')},
-            id="insert_stock_price_1day",
+            id="add_stock_price_1day",
             max_instances=1,
             replace_existing=True,
         )
@@ -64,17 +63,16 @@ def start():
 if __name__ == "__main__":
     # start()
     # ki_api = KoreaInvestmentAPI(app_key=setting_env.APP_KEY, app_secret=setting_env.APP_SECRET, account_number=setting_env.ACCOUNT_NUMBER, account_code=setting_env.ACCOUNT_CODE)
-    # data_handler.insert_stock_price(start_date="2020-01-01", end_date=datetime.now().strftime('%Y-%m-%d'))
+    # data_handler.add_stock_price(start_date="2020-01-01", end_date=datetime.now().strftime('%Y-%m-%d'))
     # trading_buy(ki_api=ki_api, buy_levels=select_buy_stocks(country="KOR"))
     # trading_sell(ki_api=ki_api)
     # print(select_buy_stocks(country="KOR"))
     # print(select_sell_stocks(ki_api))
-    data_handler.insert_stock_price(start_date=(datetime.now() - timedelta(days=5)).strftime('%Y-%m-%d'), end_date=datetime.now().strftime('%Y-%m-%d'), country='USA')
+    data_handler.add_stock_price(start_date=(datetime.now() - timedelta(days=5)).strftime('%Y-%m-%d'), end_date=datetime.now().strftime('%Y-%m-%d'))
 
 
 @asynccontextmanager
 async def lifespan(app):
-    await database.init()
     start()
     yield
     print("lifespan finished")

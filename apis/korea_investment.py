@@ -14,7 +14,7 @@ from config.country_config import COUNTRY_CONFIG_ORDER
 from data.dto.account_dto import InquireBalanceRequestDTO, AccountResponseDTO, StockResponseDTO
 from data.dto.holiday_dto import HolidayResponseDTO, HolidayRequestDTO
 from data.dto.stock_trade_dto import StockTradeListRequestDTO, StockTradeListResponseDTO
-from stock import discord
+from utils import discord
 from utils.operations import find_nth_open_day
 
 
@@ -284,15 +284,12 @@ class KoreaInvestmentAPI:
             discord.error_message("Null response received from API for account info.")
             return None
 
-    def get_owned_stock_info(self, country: str = None, symbol: str = None) -> Union[List[StockResponseDTO], StockResponseDTO, None]:
-        if not country:
-            # TODO 해외, 국내 합쳐서 return
-            return self.get_korea_owned_stock_info(symbol)
-        elif country == 'KOR':
-            return self.get_korea_owned_stock_info(symbol)
+    def get_owned_stock_info(self, symbol: str = None) -> Union[List[StockResponseDTO], StockResponseDTO, None]:
+        if not symbol:
+            value = self.get_korea_owned_stock_info(symbol) or self.get_oversea_owned_stock_info(symbol)
+            return value if value else None
         else:
-            # TODO 외국 주식일 경우
-            pass
+            return self.get_korea_owned_stock_info() + self.get_oversea_owned_stock_info()
 
     def get_korea_owned_stock_info(self, symbol: str = None) -> Union[List[StockResponseDTO], StockResponseDTO, None]:
         """
@@ -334,6 +331,10 @@ class KoreaInvestmentAPI:
             logging.error(f"Unexpected error: {e} - response data: {response_data}")
             discord.error_message(f"Unexpected error: {e} - response data: {response_data}")
             return None
+
+    def get_oversea_owned_stock_info(self, symbol: str = None) -> Union[List[StockResponseDTO], StockResponseDTO, None]:
+        # TODO 해외 보유 주식 가져오기
+        return None
 
     def get_domestic_market_holidays(self, date: str) -> Dict[str, HolidayResponseDTO]:
         """
@@ -588,10 +589,3 @@ if __name__ == "__main__":
         account_number=setting_env.ACCOUNT_NUMBER,
         account_code=setting_env.ACCOUNT_CODE
     )
-
-    # 해외 예약 주문 예시
-    api.check_holiday(datetime.now().strftime("%Y%m%d"))
-
-    # 주식 가격 추가 예시
-    # from your_app.models import PriceHistory  # 실제 모델 경로로 변경
-    # insert_stock_price(table=PriceHistory, symbol=None, start_date='2025-01-01', end_date='2025-01-05')
