@@ -22,9 +22,9 @@ def start():
         )
 
         scheduler.add_job(
-            data_handler.add_stock,
+            data_handler.update_stock_listings,
             trigger=CronTrigger(day=1, hour=0),
-            id="add_stock",
+            id="update_stock_listings",
             max_instances=1,
             replace_existing=True,
         )
