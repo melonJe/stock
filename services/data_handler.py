@@ -13,7 +13,6 @@ from bs4 import BeautifulSoup
 from dateutil.relativedelta import relativedelta
 from ta.volatility import AverageTrueRange
 
-from config.country_config import COUNTRY_CONFIG
 from data.models import Stock, PriceHistory, PriceHistoryUS, Subscription, Blacklist, StopLoss
 from utils.data_util import upsert_many
 from utils.financial_statement import get_financial_summary_for_update_stock, get_finance_from_fnguide
@@ -245,7 +244,7 @@ def add_price_for_symbol(symbol: str, start_date: str = None, end_date: str = No
             start_date = (datetime.datetime.now() - relativedelta(months=1)).strftime('%Y-%m-%d') if not start_date else start_date
             end_date = datetime.datetime.now().strftime('%Y-%m-%d') if not end_date else end_date
             df_krx = FinanceDataReader.DataReader(
-                symbol=f'{COUNTRY_CONFIG[country]['symbol_prefix']}{symbol}',
+                symbol=f'NAVER:{symbol}',
                 start=start_date,
                 end=end_date
             )
