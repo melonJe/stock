@@ -34,7 +34,7 @@ def select_buy_stocks(country: str) -> dict:
     stocks = {row.symbol for row in stocks_query}
     for symbol in stocks:
         try:
-            df = pd.DataFrame(table
+            df = pd.DataFrame(table.select()
                               .where(table.date.between(datetime.datetime.now() - datetime.timedelta(days=365), datetime.datetime.now()) & (table.symbol == symbol))
                               .order_by(table.date))
             if len(df) < 200:
@@ -89,7 +89,7 @@ def select_sell_stocks(korea_investment: KoreaInvestmentAPI) -> dict:
     for stock in owned_stocks:
         table = get_history_table(get_country_by_symbol(stock.pdno))
         try:
-            df = pd.DataFrame(table
+            df = pd.DataFrame(table.select()
                               .where(table.date.between(datetime.datetime.now() - datetime.timedelta(days=365), datetime.datetime.now()) & (table.symbol == stock.pdno))
                               .order_by(table.date))
             if len(df) < 200:
@@ -233,9 +233,8 @@ def investment_trading():
 
 
 if __name__ == "__main__":
-    pass
-    # ki_api = KoreaInvestmentAPI(app_key=setting_env.APP_KEY, app_secret=setting_env.APP_SECRET, account_number=setting_env.ACCOUNT_NUMBER, account_code=setting_env.ACCOUNT_CODE)
+    ki_api = KoreaInvestmentAPI(app_key=setting_env.APP_KEY, app_secret=setting_env.APP_SECRET, account_number=setting_env.ACCOUNT_NUMBER, account_code=setting_env.ACCOUNT_CODE)
     # print(select_buy_stocks(country="KOR"))
     # print(select_sell_stocks(ki_api))
-    # trading_buy(korea_investment=ki_api, buy_levels=select_buy_stocks(country="KOR"))
-    # trading_sell(korea_investment=ki_api, sell_levels=select_sell_stocks(korea_investment=ki_api))
+    trading_buy(korea_investment=ki_api, buy_levels=select_buy_stocks(country="KOR"))
+    trading_sell(korea_investment=ki_api, sell_levels=select_sell_stocks(korea_investment=ki_api))
