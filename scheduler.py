@@ -30,15 +30,6 @@ def start():
         )
 
         scheduler.add_job(
-            data_handler.add_stock_price,
-            trigger=CronTrigger(hour=18, minute=0, second=0),
-            kwargs={'start_date': datetime.now().strftime('%Y-%m-%d'), 'end_date': datetime.now().strftime('%Y-%m-%d')},
-            id="add_stock_price_1day",
-            max_instances=1,
-            replace_existing=True,
-        )
-
-        scheduler.add_job(
             data_handler.update_blacklist,
             trigger=CronTrigger(hour=15, minute=30, second=0),
             id="update_blacklist",
