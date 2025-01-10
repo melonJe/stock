@@ -280,4 +280,4 @@ def add_price_for_symbol(symbol: str, start_date: str = None, end_date: str = No
 
 
 if __name__ == "__main__":
-    add_stock_price(start_date=(datetime.datetime.now() - relativedelta(years=2)).strftime('%Y-%m-%d'), end_date=datetime.datetime.now().strftime('%Y-%m-%d'))
+    add_stock_price(start_date=(datetime.datetime.now() - relativedelta(days=2)).strftime('%Y-%m-%d'), end_date=datetime.datetime.now().strftime('%Y-%m-%d'))
