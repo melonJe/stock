@@ -285,11 +285,10 @@ class KoreaInvestmentAPI:
             return None
 
     def get_owned_stock_info(self, symbol: str = None) -> Union[List[StockResponseDTO], StockResponseDTO, None]:
-        if not symbol:
-            value = self.get_korea_owned_stock_info(symbol) or self.get_oversea_owned_stock_info(symbol)
-            return value if value else None
+        if symbol:
+            return self.get_korea_owned_stock_info(symbol)  # self.get_oversea_owned_stock_info(symbol)
         else:
-            return self.get_korea_owned_stock_info() + self.get_oversea_owned_stock_info()
+            return self.get_korea_owned_stock_info()  # + self.get_oversea_owned_stock_info()
 
     def get_korea_owned_stock_info(self, symbol: str = None) -> Union[List[StockResponseDTO], StockResponseDTO, None]:
         """

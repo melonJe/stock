@@ -154,10 +154,11 @@ def update_blacklist():
 
 
 def stop_loss_insert(symbol: str, pchs_avg_pric: float):
-    df = pd.DataFrame(
-        PriceHistory.select()
-        .where(PriceHistory.date.between(datetime.datetime.now() - datetime.timedelta(days=550), datetime.datetime.now())) & (PriceHistory.symbol == symbol)
-        .order_by(PriceHistory.date))
+    df = pd.DataFrame((
+        list((PriceHistory.select()
+              .where(PriceHistory.date.between(datetime.datetime.now() - datetime.timedelta(days=550), datetime.datetime.now()) & (PriceHistory.symbol == symbol))
+              .order_by(PriceHistory.date)).dicts())
+    ))
     df['ATR5'] = AverageTrueRange(high=df['high'].astype('float64'), low=df['low'].astype('float64'), close=df['close'].astype('float64'), window=5).average_true_range()
     df['ATR10'] = AverageTrueRange(high=df['high'].astype('float64'), low=df['low'].astype('float64'), close=df['close'].astype('float64'), window=10).average_true_range()
     df['ATR20'] = AverageTrueRange(high=df['high'].astype('float64'), low=df['low'].astype('float64'), close=df['close'].astype('float64'), window=20).average_true_range()
@@ -278,4 +279,4 @@ def add_price_for_symbol(symbol: str, start_date: str = None, end_date: str = No
 
 
 if __name__ == "__main__":
-    add_stock_price(start_date=(datetime.datetime.now() - relativedelta(days=2)).strftime('%Y-%m-%d'), end_date=datetime.datetime.now().strftime('%Y-%m-%d'))
+    add_stock_price(start_date=(datetime.datetime.now() - relativedelta(years=2)).strftime('%Y-%m-%d'), end_date=datetime.datetime.now().strftime('%Y-%m-%d'))
