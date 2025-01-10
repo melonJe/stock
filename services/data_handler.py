@@ -8,7 +8,6 @@ from urllib.parse import urlparse, parse_qs
 import FinanceDataReader
 import pandas as pd
 import requests
-import yfinance as yf
 from bs4 import BeautifulSoup
 from dateutil.relativedelta import relativedelta
 from ta.volatility import AverageTrueRange
@@ -258,18 +257,18 @@ def add_price_for_symbol(symbol: str, start_date: str = None, end_date: str = No
                  'volume': row['Volume']}
                 for idx, row in df_krx.iterrows()
             ]
-        elif country == "USA":
-            df_krx = yf.Ticker(symbol).history(start=start_date, end=end_date)
-            data_to_insert = [
-                {'symbol': symbol,
-                 'date': idx.strftime('%Y-%m-%d'),
-                 'open': row['Open'].item(),
-                 'high': row['High'].item(),
-                 'close': row['Close'].item(),
-                 'low': row['Low'].item(),
-                 'volume': row['Volume']}
-                for idx, row in df_krx.iterrows()
-            ]
+        # elif country == "USA":
+        #     df_krx = yf.Ticker(symbol).history(start=start_date, end=end_date)
+        #     data_to_insert = [
+        #         {'symbol': symbol,
+        #          'date': idx.strftime('%Y-%m-%d'),
+        #          'open': row['Open'].item(),
+        #          'high': row['High'].item(),
+        #          'close': row['Close'].item(),
+        #          'low': row['Low'].item(),
+        #          'volume': row['Volume']}
+        #         for idx, row in df_krx.iterrows()
+        #     ]
 
         # bulk_insert로 일괄 삽입
         upsert_many(table, data_to_insert, [table.symbol, table.date], ['open', 'high', 'close', 'low', 'volume'])
