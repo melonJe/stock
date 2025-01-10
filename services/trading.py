@@ -187,9 +187,8 @@ def stop_loss_notify(korea_investment: KoreaInvestmentAPI):
             try:
                 if item.pdno in alert:
                     continue
-                try:
-                    stock = StopLoss.filter(symbol=item.pdno)
-                except Exception:
+                stock = StopLoss.get_or_none(StopLoss.symbol == item.pdno)
+                if not stock:
                     stop_loss_insert(item.pdno, float(item.pchs_avg_pric))
                     continue
                 if stock.price < int(item.prpr):
