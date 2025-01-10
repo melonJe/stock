@@ -280,24 +280,4 @@ def add_price_for_symbol(symbol: str, start_date: str = None, end_date: str = No
 
 
 if __name__ == "__main__":
-    add_stock_price(start_date=(datetime.datetime.now() - relativedelta(days=5)).strftime('%Y-%m-%d'), end_date=datetime.datetime.now().strftime('%Y-%m-%d'))
-
-    # start_date = (datetime.datetime.now() - relativedelta(days=0)).strftime('%Y-%m-%d')
-    # end_date = datetime.datetime.now().strftime('%Y-%m-%d')
-    # df_krx = FinanceDataReader.DataReader(
-    #     symbol=f'000660',
-    #     start=start_date,
-    #     end=end_date
-    # )
-    # data_to_insert = [
-    #     {
-    #         'symbol': '000660',
-    #         'date': idx,
-    #         'open': row['Open'],
-    #         'high': row['High'],
-    #         'close': row['Close'],
-    #         'low': row['Low'],
-    #         'volume': row['Volume']
-    #     }
-    #     for idx, row in df_krx.iterrows()]
-    # print(data_to_insert)
+    add_stock_price(start_date=(datetime.datetime.now() - relativedelta(years=2)).strftime('%Y-%m-%d'), end_date=datetime.datetime.now().strftime('%Y-%m-%d'))
