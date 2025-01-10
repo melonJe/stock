@@ -217,15 +217,12 @@ def investment_trading():
     stop_loss = threading.Thread(target=stop_loss_notify, args=(ki_api,))
     stop_loss.start()
 
-    while datetime.datetime.now().time() < time(15, 35, 30):
+    while datetime.datetime.now().time() < time(18, 15, 00):
         sleep(1 * 60)
 
     add_stock_price(start_date=datetime.datetime.now().strftime('%Y-%m-%d'), end_date=datetime.datetime.now().strftime('%Y-%m-%d'))
     for stock in ki_api.get_owned_stock_info():
         stop_loss_insert(stock.pdno, float(stock.pchs_avg_pric))
-
-    while datetime.datetime.now().time() < time(16, 00, 30):
-        sleep(1 * 60)
 
     sell_stock = select_sell_stocks(ki_api)
     sell = threading.Thread(target=trading_sell, args=(ki_api, sell_stock,))
