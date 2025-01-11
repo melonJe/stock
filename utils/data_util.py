@@ -1,7 +1,12 @@
+import datetime
 import logging
+import time
 import traceback
 from typing import Type
 
+import pandas as pd
+import requests
+from dateutil.relativedelta import relativedelta
 from peewee import Model
 
 from data import models
@@ -48,3 +53,84 @@ def upsert_many(model: Type[Model], data: list, conflict_target: list, preserve_
     except Exception as e:
         traceback.print_exc()
         logging.error(f"Upsert many failed for model {model.__name__}: {e}")
+
+
+def get_yahoo_finance_data(symbol, unix_start_date, unix_end_date, interval='1d', retries=5, delay=5):
+    base_url = "https://query1.finance.yahoo.com/v8/finance/chart/"
+    params = {
+        "events": "capitalGain|div|split",
+        "formatted": "true",
+        "includeAdjustedClose": "true",
+        "interval": interval,
+        "period1": unix_start_date,
+        "period2": unix_end_date,
+        "symbol": symbol,
+        "userYfid": "true",
+        "lang": "en-US",
+        "region": "US"
+    }
+
+    headers = {
+        "Accept": "*/*",
+        "Accept-Encoding": "gzip, deflate, br",
+        "Accept-Language": "en-US,en;q=0.9",
+        "Cache-Control": "no-cache",
+        "Connection": "keep-alive",
+        "DNT": "1",
+        "Origin": "https://finance.yahoo.com",
+        "Pragma": "no-cache",
+        "Referer": "https://finance.yahoo.com/",
+        "Sec-Fetch-Dest": "empty",
+        "Sec-Fetch-Mode": "cors",
+        "Sec-Fetch-Site": "same-site",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
+    }
+    for attempt in range(retries):
+        try:
+            response = requests.get(base_url + symbol, params=params, headers=headers)
+            response.raise_for_status()
+
+            data = response.json()
+
+            timestamps = data['chart']['result'][0]['timestamp']
+            indicators = data['chart']['result'][0]['indicators']['quote'][0]
+            close = indicators.get('close', [])
+            open_prices = indicators.get('open', [])
+            high = indicators.get('high', [])
+            low = indicators.get('low', [])
+            volume = indicators.get('volume', [])
+
+            change = [(close[i] - close[i - 1]) / close[i - 1] if i > 0 else 0 for i in range(len(close))]
+
+            df = pd.DataFrame({
+                "Date": pd.to_datetime(timestamps, unit='s'),
+                "Close": close,
+                "Open": open_prices,
+                "High": high,
+                "Low": low,
+                "Volume": volume,
+                "Change": change
+            })
+            df.set_index("Date", inplace=True)
+
+            return df
+
+        except requests.exceptions.RequestException as e:
+            print(f"Attempt {attempt + 1} failed: {symbol}")
+            if attempt < retries - 1:
+                time.sleep(delay)
+            else:
+                print("All retries failed.")
+                return None
+
+
+if __name__ == "__main__":
+    # symbol = "AAPL"
+    # unix_start_date = "1704958797"
+    # unix_end_date = "1736581197"
+    # interval = "1d"
+    #
+    # df = get_yahoo_finance_data(symbol, unix_start_date, unix_end_date, interval)
+    # if df is not None:
+    #     print(df)
+    print(int((datetime.datetime.now() - relativedelta(months=1)).timestamp()))
