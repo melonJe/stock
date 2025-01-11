@@ -153,10 +153,11 @@ def update_blacklist():
 
 
 def stop_loss_insert(symbol: str, pchs_avg_pric: float):
+    table = get_history_table(get_country_by_symbol(symbol))
     df = pd.DataFrame((
-        list((PriceHistory.select()
-              .where(PriceHistory.date.between(datetime.datetime.now() - datetime.timedelta(days=550), datetime.datetime.now()) & (PriceHistory.symbol == symbol))
-              .order_by(PriceHistory.date)).dicts())
+        list((table.select()
+              .where(table.date.between(datetime.datetime.now() - datetime.timedelta(days=550), datetime.datetime.now()) & (table.symbol == symbol))
+              .order_by(table.date)).dicts())
     ))
     df['ATR5'] = AverageTrueRange(high=df['high'].astype('float64'), low=df['low'].astype('float64'), close=df['close'].astype('float64'), window=5).average_true_range()
     df['ATR10'] = AverageTrueRange(high=df['high'].astype('float64'), low=df['low'].astype('float64'), close=df['close'].astype('float64'), window=10).average_true_range()
