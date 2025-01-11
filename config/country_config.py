@@ -26,8 +26,8 @@ COUNTRY_CONFIG_ORDER = {
         "ord_dvsn_buy": "00",
         "ord_dvsn_sell": "00",
         "rvse_cncl_dvsn_cd": "00",
-        "rsvn_ord_rcit_dt": None,
-        "ovrs_rsvn_odno": None
+        "ovrs_rsvn_odno": None,
+        "tr_crcy_cd": "USD"  # 미국달러
     },
     "CHN": {
         "tr_id_buy": "TTTS3013U",
@@ -39,8 +39,8 @@ COUNTRY_CONFIG_ORDER = {
         "ord_dvsn_buy": "00",
         "ord_dvsn_sell": "00",
         "rvse_cncl_dvsn_cd": "00",
-        "rsvn_ord_rcit_dt": "20250105",
-        "ovrs_rsvn_odno": None
+        "ovrs_rsvn_odno": None,
+        "tr_crcy_cd": "CNY"  # 중국위안화
     },
     "HKG": {
         "tr_id_buy": "TTTS3013U",
@@ -52,8 +52,8 @@ COUNTRY_CONFIG_ORDER = {
         "ord_dvsn_buy": "00",
         "ord_dvsn_sell": "00",
         "rvse_cncl_dvsn_cd": "00",
-        "rsvn_ord_rcit_dt": "20250105",
-        "ovrs_rsvn_odno": None
+        "ovrs_rsvn_odno": None,
+        "tr_crcy_cd": "HKD"  # 홍콩달러
     },
     "JPN": {
         "tr_id_buy": "TTTS3013U",
@@ -65,8 +65,8 @@ COUNTRY_CONFIG_ORDER = {
         "ord_dvsn_buy": "00",
         "ord_dvsn_sell": "00",
         "rvse_cncl_dvsn_cd": "00",
-        "rsvn_ord_rcit_dt": "20250105",
-        "ovrs_rsvn_odno": None
+        "ovrs_rsvn_odno": None,
+        "tr_crcy_cd": "JPY"  # 일본엔화
     },
     "VNM": {
         "tr_id_buy": "TTTS3013U",
@@ -78,8 +78,8 @@ COUNTRY_CONFIG_ORDER = {
         "ord_dvsn_buy": "00",
         "ord_dvsn_sell": "00",
         "rvse_cncl_dvsn_cd": "00",
-        "rsvn_ord_rcit_dt": "20250105",
-        "ovrs_rsvn_odno": None
+        "ovrs_rsvn_odno": None,
+        "tr_crcy_cd": "VND"  # 베트남동
     },
     # 필요한 다른 국가 추가...
 }

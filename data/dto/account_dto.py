@@ -46,6 +46,42 @@ class StockResponseDTO:
     stck_loan_unpr: str  # 주식대출단가
 
 
+class OverseesStockResponseDTO:
+    ovrs_pdno: str  # 해외상품번호
+    ovrs_item_name: str  # 해외종목명
+    frcr_evlu_pfls_amt: str  # 외화평가손익금액
+    evlu_pfls_rt: str  # 평가손익율
+    pchs_avg_pric: str  # 매입평균가격
+    ovrs_cblc_qty: str  # 해외잔고수량
+    ord_psbl_qty: str  # 주문가능수량
+    frcr_pchs_amt1: str  # 외화매입금액1
+    ovrs_stck_evlu_amt: str  # 해외주식평가금액
+    now_pric2: str  # 현재가격2
+    tr_crcy_cd: str  # 거래통화코드
+    ovrs_excg_cd: str  # 해외거래소코드
+    loan_type_cd: str  # 대출유형코드
+    loan_dt: str  # 대출일자
+    expd_dt: str  # 만기일자
+    evlu_amt: str  # 평가금액
+    evlu_pfls_amt: str  # 평가손익금액
+    evlu_pfls_rt: str  # 평가손익율
+    bfdy_buy_qty: str  # 전일매수수량
+    bfdy_sll_qty: str  # 전일매도수량
+    thdt_buyqty: str  # 금일매수수량
+    thdt_sll_qty: str  # 금일매도수량
+    hldg_qty: str  # 보유수량
+    prpr: str  # 현재가
+    evlu_erng_rt: str  # 평가수익율
+    loan_amt: str  # 대출금액
+    stln_slng_chgs: str  # 대주매각대금
+    fltt_rt: str  # 등락율
+    bfdy_cprs_icdc: str  # 전일대비증감
+    item_mgna_rt_name: str  # 종목증거금율명
+    grta_rt_name: str  # 보증금율명
+    sbst_pric: str  # 대용가격
+    stck_loan_unpr: str  # 주식대출단가
+
+
 @dataclass
 class AccountResponseDTO:
     dnca_tot_amt: str  # 예수금총금액: 예수금
