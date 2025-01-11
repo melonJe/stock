@@ -300,8 +300,6 @@ class KoreaInvestmentAPI:
         response_data = self._get_request("/uapi/domestic-stock/v1/trading/inquire-balance", params, headers)
 
         if not response_data:
-            logging.warning("Null response received from API for owned stock info.")
-            discord.error_message("Null response received from API for owned stock info.")
             return None
 
         try:
@@ -344,8 +342,6 @@ class KoreaInvestmentAPI:
         response_data = self._get_request('/uapi/overseas-stock/v1/trading/inquire-balance', params, self._add_tr_id_to_headers("TTS3012R", use_prefix=True))
 
         if not response_data:
-            logging.warning("Null response received from API for owned stock info.")
-            discord.error_message("Null response received from API for owned stock info.")
             return None
 
         try:

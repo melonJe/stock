@@ -177,7 +177,7 @@ def trading_buy(korea_investment: KoreaInvestmentAPI, buy_levels):
                         money += price * volume
                     elif country == "USA":
                         price = round(price, 2)
-                        korea_investment.submit_overseas_reservation_order(country=country, action="buy", symbol=symbol, price=price, volume=volume, end_date=end_date)
+                        korea_investment.submit_overseas_reservation_order(country=country, action="buy", symbol=symbol, price=str(price), volume=str(volume), end_date=end_date)
                         money += price * volume
 
                 except Exception as e:
@@ -281,8 +281,10 @@ def usa_trading():
 
 
 if __name__ == "__main__":
-    ki_api = KoreaInvestmentAPI(app_key=setting_env.APP_KEY, app_secret=setting_env.APP_SECRET, account_number=setting_env.ACCOUNT_NUMBER, account_code=setting_env.ACCOUNT_CODE)
-    trading_buy(korea_investment=ki_api, buy_levels=select_buy_stocks(country="KOR"))
-    trading_sell(korea_investment=ki_api, sell_levels=select_sell_korea_stocks(korea_investment=ki_api))
+    # ki_api = KoreaInvestmentAPI(app_key=setting_env.APP_KEY, app_secret=setting_env.APP_SECRET, account_number=setting_env.ACCOUNT_NUMBER, account_code=setting_env.ACCOUNT_CODE)
+    # trading_buy(korea_investment=ki_api, buy_levels=select_buy_stocks(country="KOR"))
+    # trading_sell(korea_investment=ki_api, sell_levels=select_sell_korea_stocks(korea_investment=ki_api))
     # print(select_buy_stocks(country="KOR"))
     # print(select_sell_stocks(ki_api))
+    usa_trading()
+#
