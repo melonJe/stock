@@ -170,6 +170,8 @@ def trading_buy(korea_investment: KoreaInvestmentAPI, buy_levels):
             for price, volume in levels.items():
                 if stock and price > float(stock.pchs_avg_pric) * 0.975:
                     continue
+                if not volume:
+                    continue
                 try:
                     if country == "KOR":
                         price = price_refine(price)
@@ -284,7 +286,7 @@ if __name__ == "__main__":
     # ki_api = KoreaInvestmentAPI(app_key=setting_env.APP_KEY, app_secret=setting_env.APP_SECRET, account_number=setting_env.ACCOUNT_NUMBER, account_code=setting_env.ACCOUNT_CODE)
     # trading_buy(korea_investment=ki_api, buy_levels=select_buy_stocks(country="KOR"))
     # trading_sell(korea_investment=ki_api, sell_levels=select_sell_korea_stocks(korea_investment=ki_api))
-    # print(select_buy_stocks(country="KOR"))
+    for symbol, values in select_buy_stocks(country="USA").items():
+        print(symbol, values)
     # print(select_sell_stocks(ki_api))
-    usa_trading()
-#
+    # usa_trading()

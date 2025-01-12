@@ -522,7 +522,7 @@ if __name__ == "__main__":
         account_number=setting_env.ACCOUNT_NUMBER,
         account_code=setting_env.ACCOUNT_CODE
     )
-    print(api.get_korea_owned_stock_info() + api.get_oversea_owned_stock_info(country='USA'))
+    # print(api.get_korea_owned_stock_info() + api.get_oversea_owned_stock_info(country='USA'))
     # response = api.submit_overseas_reservation_order(
     #     country="USA",
     #     action="buy",
