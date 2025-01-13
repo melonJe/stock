@@ -146,7 +146,7 @@ def update_blacklist():
         symbol = symbol.union(parse_qs(urlparse(x['href']).query)['code'][0] for x in elements)
     data_to_insert = [{'symbol': x, 'record_date': datetime.datetime.now().strftime('%Y-%m-%d')} for x in symbol]
     if data_to_insert:
-        upsert_many(Blacklist, data_to_insert)
+        upsert_many(Blacklist, data_to_insert, Blacklist.symbol, Blacklist.record_date)
     Blacklist.delete().where(Blacklist.record_date < datetime.datetime.now() - datetime.timedelta(days=30)).execute()
 
     # TODO 미국 주식 Blacklist insert 프로세스 추가
