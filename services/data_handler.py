@@ -284,4 +284,4 @@ def add_price_for_symbol(symbol: str, start_date: datetime.datetime = None, end_
 if __name__ == "__main__":
     # update_stock_listings()
     # add_stock_price(country='USA', start_date=datetime.datetime.now() - relativedelta(years=2), end_date=datetime.datetime.now())
-    update_subscription_stock()
+    print(get_yahoo_finance_data('AAPL', int((datetime.datetime.now() - datetime.timedelta(days=5)).timestamp()), int(datetime.datetime.now().timestamp())))
