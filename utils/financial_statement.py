@@ -1,4 +1,3 @@
-import json
 import re
 import time
 from datetime import datetime, timedelta
@@ -337,7 +336,7 @@ def get_financial_summary_for_update_stock_usa(symbol: str):
         "formatted": "true",
         "includeAdjustedClose": "true",
         "interval": '1d',
-        "period1": int((datetime.now() - relativedelta(years=1)).timestamp()),
+        "period1": int((datetime.now() - relativedelta(years=5)).timestamp()),
         "period2": int(datetime.now().timestamp()),
         "symbol": symbol,
         "userYfid": "true",
@@ -366,66 +365,10 @@ def get_financial_summary_for_update_stock_usa(symbol: str):
     result['Dividend Rate'] = 0
     for values in data['chart']['result'][0]['events']['dividends'].values():
         result['Dividend Rate'] += float(values['amount'])
-
+    result['Dividend Rate'] /= 5
     return result
 
 
 if __name__ == "__main__":
     # 사용 예시
-    symbol = "CIGI"  # 삼성전자
-    # # (0) 하이라이트
-    # df_y = get_finance_from_fnguide(symbol, 'highlight', report_type='D', period='Y', include_estimates=False)
-    # print("[하이라이트]\n", df_y.head(), "\n")
-    #
-    # # (1) 재무상태표만 확인하기
-    # df_state = get_finance_from_fnguide(symbol, report="income", report_type='D', period='Y', include_estimates=False)
-    # print("[재무상태표]\n", df_state.head(), "\n")
-    #
-    # (2) 하이라이트 + 현금흐름표
-    # df_highlight_cash = get_finance_from_fnguide(symbol, report="highlight,cash", report_type='D', period='Q')
-    # print("[하이라이트 + 현금흐름표]\n", df_highlight_cash.head(), "\n")
-    #
-    # # (3) 종합 요약 정보
-    # summary_dict = get_financial_summary_for_update_stock(symbol)
-    # print("[종합 요약 정보]\n", summary_dict)
-    # df = fetch_financial_timeseries(symbol)
-    # print(df)
-    # print((df['quarterlyForwardPeRatio'].diff()[-1:] >= 0).all())
-    base_url = "https://query1.finance.yahoo.com/v8/finance/chart/"
-    params = {
-        "events": "capitalGain|div|split",
-        "formatted": "true",
-        "includeAdjustedClose": "true",
-        "interval": '1d',
-        "period1": int((datetime.now() - relativedelta(years=1)).timestamp()),
-        "period2": int(datetime.now().timestamp()),
-        "symbol": symbol,
-        "userYfid": "true",
-        "lang": "en-US",
-        "region": "US"
-    }
-
-    headers = {
-        "Accept": "*/*",
-        "Accept-Encoding": "gzip, deflate, br",
-        "Accept-Language": "en-US,en;q=0.9",
-        "Cache-Control": "no-cache",
-        "Connection": "keep-alive",
-        "DNT": "1",
-        "Origin": "https://finance.yahoo.com",
-        "Pragma": "no-cache",
-        "Referer": "https://finance.yahoo.com/",
-        "Sec-Fetch-Dest": "empty",
-        "Sec-Fetch-Mode": "cors",
-        "Sec-Fetch-Site": "same-site",
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
-    }
-    response = requests.get(base_url + symbol, params=params, headers=headers)
-    response.raise_for_status()
-    data = response.json()
-    print(json.dumps(data, ensure_ascii=False, indent=3))
-    result = 0
-    for values in data['chart']['result'][0]['events']['dividends'].values():
-        result += float(values['amount'])
-
-    print(result)
+    symbol = "MO"

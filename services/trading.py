@@ -30,7 +30,7 @@ def select_buy_stocks(country: str = "KOR") -> dict:
     sub_symbols = Subscription.select(Subscription.symbol)
     stocks_query = Stock.select(Stock.symbol).where(
         (Stock.country == country)
-        & (Stock.symbol.in_(sub_symbols))
+        # & (Stock.symbol.in_(sub_symbols))
         & ~(Stock.symbol.in_(blacklist_symbols))
     )
     stocks = {row.symbol for row in stocks_query}
