@@ -372,7 +372,7 @@ def get_financial_summary_for_update_stock_usa(symbol: str):
 
 if __name__ == "__main__":
     # 사용 예시
-    symbol = "AKAM"  # 삼성전자
+    symbol = "CIGI"  # 삼성전자
     # # (0) 하이라이트
     # df_y = get_finance_from_fnguide(symbol, 'highlight', report_type='D', period='Y', include_estimates=False)
     # print("[하이라이트]\n", df_y.head(), "\n")
@@ -388,7 +388,9 @@ if __name__ == "__main__":
     # # (3) 종합 요약 정보
     # summary_dict = get_financial_summary_for_update_stock(symbol)
     # print("[종합 요약 정보]\n", summary_dict)
-    # print(fetch_financial_timeseries(symbol='aapl', report='statistics', period='Q', years=1))
+    # df = fetch_financial_timeseries(symbol)
+    # print(df)
+    # print((df['quarterlyForwardPeRatio'].diff()[-1:] >= 0).all())
     base_url = "https://query1.finance.yahoo.com/v8/finance/chart/"
     params = {
         "events": "capitalGain|div|split",
@@ -422,5 +424,8 @@ if __name__ == "__main__":
     response.raise_for_status()
     data = response.json()
     print(json.dumps(data, ensure_ascii=False, indent=3))
+    result = 0
     for values in data['chart']['result'][0]['events']['dividends'].values():
-        print(float(values['amount']))
+        result += float(values['amount'])
+
+    print(result)

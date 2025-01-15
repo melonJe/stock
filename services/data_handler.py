@@ -120,34 +120,44 @@ def update_subscription_usa(stock: Stock, email, data_to_insert, retries=5, dela
     for attempt in range(retries):
         try:
             summary_dict = get_financial_summary_for_update_stock_usa(stock.symbol)
-            df_income = fetch_financial_timeseries('AAPL')
-            df_cash = fetch_financial_timeseries('AAPL', report='cash')
+            df_income = fetch_financial_timeseries(Stock.symbol)
+            df_cash = fetch_financial_timeseries(Stock.symbol, report='cash')
 
             if not (df_cash['quarterlyOperatingCashFlow'][-3:] > 0).all():
+                # logging.info(f'{stock.symbol} OperatingCashFlow')
                 return
 
             try:
                 if not (df_income['quarterlyTotalRevenue'][-3:] > 0).all():
+                    # logging.info(f'{stock.symbol} TotalRevenue')
                     return
                 if not (df_income['quarterlyTotalRevenue'].diff()[-2:] >= 0).all():
+                    # logging.info(f'{stock.symbol} all TotalRevenue')
                     return
             except Exception as e:
                 raise ValueError(f"not find 매출액")
 
             if not (df_income['quarterlyOperatingIncome'].diff()[-1:] >= 0).all():
+                # logging.info(f'{stock.symbol} OperatingIncome')
                 return
             if not (df_income['quarterlyNetIncome'].diff()[-1:] >= 0).all():
+                # logging.info(f'{stock.symbol} NetIncome')
                 return
 
             # if not summary_dict["ROE"] > 10:
+            #     logging.info(f'{stock.symbol} ROE')
             #     return
             # if not summary_dict["ROA"] > 10:
+            #     logging.info(f'{stock.symbol} ROA')
             #     return
             # if not summary_dict["PER"] * summary_dict["PBR"] <= 22.5:
+            #     logging.info(f'{stock.symbol} PER')
             #     return
             if not summary_dict["Debt Ratio"] < 200:
+                # logging.info(f'{stock.symbol} Debt Ratio')
                 return
             if not summary_dict["Dividend Rate"] > 2:
+                # logging.info(f'{stock.symbol} Dividend Rate')
                 return
 
             data_to_insert.append({'email': email, 'symbol': stock})
@@ -342,4 +352,15 @@ if __name__ == "__main__":
     # update_stock_listings()
     # add_stock_price(country='USA', start_date=datetime.datetime.now() - relativedelta(years=2), end_date=datetime.datetime.now())
     # print(get_yahoo_finance_data('AAPL', int((datetime.datetime.now() - datetime.timedelta(days=5)).timestamp()), int(datetime.datetime.now().timestamp())))
-    update_subscription_stock()
+    # update_subscription_stock()
+    data_to_insert = []
+    Subscription.delete().where(Subscription.email == 'jmayermj@gmail.com').execute()
+    with ThreadPoolExecutor(max_workers=10) as executor:
+        futures = [executor.submit(update_subscription_usa, stock, 'jmayermj@gmail.com', data_to_insert, 5, 5) for stock in Stock.select().where(Stock.country == 'USA')]
+
+        for future in futures:
+            future.result()  # Ensure any raised exceptions are handled
+
+    if data_to_insert:
+        logging.info(f"{len(data_to_insert)}개 주식")
+        upsert_many(Subscription, data_to_insert, [], [])
