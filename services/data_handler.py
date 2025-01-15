@@ -344,7 +344,8 @@ def add_price_for_symbol(symbol: str, start_date: datetime.datetime = None, end_
 
         upsert_many(table, data_to_insert, [table.symbol, table.date], ['open', 'high', 'close', 'low', 'volume'])
     except Exception as e:
-        # Stock.delete().where(Stock.symbol == symbol).execute()
+        if get_country_by_symbol(symbol) == "USA":
+            Stock.delete().where(Stock.symbol == symbol).execute()
         logging.error(f"Error processing symbol {symbol}: {e}")
 
 
@@ -353,14 +354,17 @@ if __name__ == "__main__":
     # add_stock_price(country='USA', start_date=datetime.datetime.now() - relativedelta(years=2), end_date=datetime.datetime.now())
     # print(get_yahoo_finance_data('AAPL', int((datetime.datetime.now() - datetime.timedelta(days=5)).timestamp()), int(datetime.datetime.now().timestamp())))
     # update_subscription_stock()
-    data_to_insert = []
-    Subscription.delete().where(Subscription.email == 'jmayermj@gmail.com').execute()
-    with ThreadPoolExecutor(max_workers=10) as executor:
-        futures = [executor.submit(update_subscription_usa, stock, 'jmayermj@gmail.com', data_to_insert, 5, 5) for stock in Stock.select().where(Stock.country == 'USA')]
 
-        for future in futures:
-            future.result()  # Ensure any raised exceptions are handled
+    # data_to_insert = []
+    # Subscription.delete().where(Subscription.email == 'jmayermj@gmail.com').execute()
+    # with ThreadPoolExecutor(max_workers=10) as executor:
+    #     futures = [executor.submit(update_subscription_usa, stock, 'jmayermj@gmail.com', data_to_insert, 5, 5) for stock in Stock.select().where(Stock.country == 'USA')]
+    #
+    #     for future in futures:
+    #         future.result()  # Ensure any raised exceptions are handled
+    #
+    # if data_to_insert:
+    #     logging.info(f"{len(data_to_insert)}개 주식")
+    #     upsert_many(Subscription, data_to_insert, [], [])
 
-    if data_to_insert:
-        logging.info(f"{len(data_to_insert)}개 주식")
-        upsert_many(Subscription, data_to_insert, [], [])
+    add_stock_price(country='USA', start_date=datetime.datetime.now() - datetime.timedelta(days=5), end_date=datetime.datetime.now())

@@ -46,7 +46,6 @@ class StopLoss(Model):
 
 
 class PriceHistory(Model):
-    id = BigAutoField(primary_key=True)
     symbol = CharField()
     date = DateField()
     open = IntegerField()
@@ -58,13 +57,13 @@ class PriceHistory(Model):
     class Meta:
         database = db
         table_name = 'price_history'
+        primary_key = False
         indexes = (
             (('symbol', 'date'), True),
         )
 
 
 class PriceHistoryUS(Model):
-    id = BigAutoField(primary_key=True)
     symbol = CharField()
     date = DateField()
     open = DecimalField(max_digits=10, decimal_places=4, null=True)
@@ -76,6 +75,7 @@ class PriceHistoryUS(Model):
     class Meta:
         database = db
         table_name = 'price_history_us'
+        primary_key = False
         indexes = (
             (('symbol', 'date'), True),
         )
