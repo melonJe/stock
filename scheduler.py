@@ -1,5 +1,5 @@
 from contextlib import asynccontextmanager
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
@@ -33,7 +33,7 @@ def start():
         scheduler.add_job(
             add_stock_price,
             trigger=CronTrigger(day_of_week="tue-sat", hour=10, minute=30, second=0),
-            kwargs={'country': 'USA', 'start_date': datetime.now(), 'end_date': datetime.now()},
+            kwargs={'country': 'USA', 'start_date': datetime.now() - timedelta(days=5), 'end_date': datetime.now()},
             id="add_usa_stock_price",
             max_instances=1,
             replace_existing=True,
