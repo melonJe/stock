@@ -120,9 +120,8 @@ def update_subscription_usa(stock: Stock, email, data_to_insert, retries=5, dela
     for attempt in range(retries):
         try:
             summary_dict = get_financial_summary_for_update_stock_usa(stock.symbol)
-            df_income = fetch_financial_timeseries(Stock.symbol)
-            df_cash = fetch_financial_timeseries(Stock.symbol, report='cash')
-
+            df_income = fetch_financial_timeseries(stock.symbol)
+            df_cash = fetch_financial_timeseries(stock.symbol, report='cash')
             if not (df_cash['quarterlyOperatingCashFlow'][-2:] > 0).all():
                 # logging.info(f'{stock.symbol} OperatingCashFlow')
                 return
@@ -150,9 +149,9 @@ def update_subscription_usa(stock: Stock, email, data_to_insert, retries=5, dela
             # if not summary_dict["ROA"] > 10:
             #     logging.info(f'{stock.symbol} ROA')
             #     return
-            # if not summary_dict["PER"] * summary_dict["PBR"] <= 22.5:
-            #     logging.info(f'{stock.symbol} PER')
-            #     return
+            if not summary_dict["PER"] * summary_dict["PBR"] <= 22.5:
+                # logging.info(f'{stock.symbol} PER')
+                return
             if not summary_dict["Debt Ratio"] < 200:
                 # logging.info(f'{stock.symbol} Debt Ratio')
                 return

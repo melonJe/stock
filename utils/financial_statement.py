@@ -371,5 +371,6 @@ def get_financial_summary_for_update_stock_usa(symbol: str, year: int = 5):
 
 if __name__ == "__main__":
     # 사용 예시
-    symbol = "MO"
-    print(get_financial_summary_for_update_stock_usa('AAPL'))
+    symbol = "ALLE"
+    df = fetch_financial_timeseries(symbol=symbol, report='cash')
+    print((df['quarterlyOperatingCashFlow'][-2:] > 0).all())
