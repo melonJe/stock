@@ -319,7 +319,7 @@ def fetch_financial_timeseries(symbol: str, report='income', period: str = 'Q', 
     return final_df
 
 
-def get_financial_summary_for_update_stock_usa(symbol: str):
+def get_financial_summary_for_update_stock_usa(symbol: str, year: int = 5):
     result = dict()
     balance_df = fetch_financial_timeseries(symbol=symbol, report='balance', period='Q', years=1)
     result['Debt Ratio'] = float(balance_df.iloc[-1]['quarterlyTotalDebt'] / balance_df.iloc[-1]['quarterlyTotalAssets'] * 100)
@@ -336,7 +336,7 @@ def get_financial_summary_for_update_stock_usa(symbol: str):
         "formatted": "true",
         "includeAdjustedClose": "true",
         "interval": '1d',
-        "period1": int((datetime.now() - relativedelta(years=5)).timestamp()),
+        "period1": int((datetime.now() - relativedelta(years=year)).timestamp()),
         "period2": int(datetime.now().timestamp()),
         "symbol": symbol,
         "userYfid": "true",
@@ -365,7 +365,7 @@ def get_financial_summary_for_update_stock_usa(symbol: str):
     result['Dividend Rate'] = 0
     for values in data['chart']['result'][0]['events']['dividends'].values():
         result['Dividend Rate'] += float(values['amount'])
-    result['Dividend Rate'] /= 5
+    result['Dividend Rate'] /= year
     return result
 
 
