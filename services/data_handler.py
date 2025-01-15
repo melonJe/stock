@@ -116,7 +116,7 @@ def update_subscription_kor(stock: Stock, email, data_to_insert):
         pass
 
 
-def update_subscription_usa(stock: Stock, email, data_to_insert, retries=4, delay=30):
+def update_subscription_usa(stock: Stock, email, data_to_insert, retries=5, delay=5):
     for attempt in range(retries):
         try:
             summary_dict = get_financial_summary_for_update_stock_usa(stock.symbol)
@@ -152,14 +152,19 @@ def update_subscription_usa(stock: Stock, email, data_to_insert, retries=4, dela
 
             data_to_insert.append({'email': email, 'symbol': stock})
 
-        except Exception as e:
+        except requests.exceptions.RequestException as e:
             logging.info(f"`Attempt {attempt + 1} failed: {stock.symbol}")
-            logging.info(f"{e}")
             if attempt < retries - 1:
                 time.sleep(delay)
             else:
                 logging.info("All retries failed.")
                 return
+        except KeyError as e:
+            # logging.info(f"{stock.symbol} KeyError: {e}")
+            return None
+        except Exception as e:
+            # logging.info(f"{stock.symbol} Unexpected error occurred: {e}")
+            return None
 
 
 def update_subscription_stock():
@@ -167,17 +172,17 @@ def update_subscription_stock():
     data_to_insert = []
 
     # 한국 주식 프로세스
-    # Subscription.delete().where(Subscription.email == 'cabs0814@naver.com').execute()
-    # with ThreadPoolExecutor(max_workers=10) as executor:
-    #     futures = [executor.submit(update_subscription_kor, stock, 'cabs0814@naver.com', data_to_insert) for stock in Stock.select().where(Stock.country == 'KOR')]
-    #
-    #     for future in futures:
-    #         future.result()  # Ensure any raised exceptions are handled
+    Subscription.delete().where(Subscription.email == 'cabs0814@naver.com').execute()
+    with ThreadPoolExecutor(max_workers=10) as executor:
+        futures = [executor.submit(update_subscription_kor, stock, 'cabs0814@naver.com', data_to_insert) for stock in Stock.select().where(Stock.country == 'KOR')]
+
+        for future in futures:
+            future.result()  # Ensure any raised exceptions are handled
 
     # 미국 주식 프로세스
     Subscription.delete().where(Subscription.email == 'jmayermj@gmail.com').execute()
     with ThreadPoolExecutor(max_workers=10) as executor:
-        futures = [executor.submit(update_subscription_usa, stock, 'jmayermj@gmail.com', data_to_insert, 5, 30) for stock in Stock.select().where(Stock.country == 'USA')]
+        futures = [executor.submit(update_subscription_usa, stock, 'jmayermj@gmail.com', data_to_insert, 5, 5) for stock in Stock.select().where(Stock.country == 'USA')]
 
         for future in futures:
             future.result()  # Ensure any raised exceptions are handled
