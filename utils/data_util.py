@@ -58,7 +58,7 @@ def upsert_many(model: Type[Model], data: list, conflict_target: list = None, pr
         logging.error(f"Upsert many failed for model {model.__name__}: {e}")
 
 
-def get_yahoo_finance_data(symbol, unix_start_date, unix_end_date, interval='1d', retries=4, delay=30):
+def get_yahoo_finance_data(symbol, unix_start_date, unix_end_date, interval='1d', retries=5, delay=5):
     base_url = "https://query1.finance.yahoo.com/v8/finance/chart/"
     params = {
         "events": "capitalGain|div|split",

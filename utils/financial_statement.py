@@ -1,3 +1,4 @@
+import json
 import re
 import time
 from datetime import datetime, timedelta
@@ -6,6 +7,7 @@ from functools import reduce
 import pandas as pd
 import requests
 from bs4 import BeautifulSoup
+from dateutil.relativedelta import relativedelta
 
 pd.set_option('display.max_columns', None)
 
@@ -319,18 +321,31 @@ def fetch_financial_timeseries(symbol: str, report='income', period: str = 'Q', 
 
 
 def get_financial_summary_for_update_stock_usa(symbol: str):
-    balance_df = fetch_financial_timeseries(symbol=symbol, report='balance', period='Q', years=1)
     result = dict()
+    balance_df = fetch_financial_timeseries(symbol=symbol, report='balance', period='Q', years=1)
     result['Debt Ratio'] = float(balance_df.iloc[-1]['quarterlyTotalDebt'] / balance_df.iloc[-1]['quarterlyTotalAssets'] * 100)
 
     statistics_df = fetch_financial_timeseries(symbol=symbol, report='statistics', period='Q', years=1)
-
     # result['ROE']
     # result['ROA']
     result['PER'] = float(statistics_df.iloc[-1]['quarterlyPeRatio'])
     result['PBR'] = float(statistics_df.iloc[-1]['quarterlyPbRatio'])
 
-    r = requests.get(f'https://finance.yahoo.com/quote/{symbol}/key-statistics/', headers={
+    base_url = "https://query1.finance.yahoo.com/v8/finance/chart/"
+    params = {
+        "events": "capitalGain|div|split",
+        "formatted": "true",
+        "includeAdjustedClose": "true",
+        "interval": '1d',
+        "period1": int((datetime.now() - relativedelta(years=1)).timestamp()),
+        "period2": int(datetime.now().timestamp()),
+        "symbol": symbol,
+        "userYfid": "true",
+        "lang": "en-US",
+        "region": "US"
+    }
+
+    headers = {
         "Accept": "*/*",
         "Accept-Encoding": "gzip, deflate, br",
         "Accept-Language": "en-US,en;q=0.9",
@@ -344,26 +359,20 @@ def get_financial_summary_for_update_stock_usa(symbol: str):
         "Sec-Fetch-Mode": "cors",
         "Sec-Fetch-Site": "same-site",
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
-    })
-    soup = BeautifulSoup(r.text, 'html.parser')
-    yf_vaowmx = soup.find_all('td', class_="yf-vaowmx")
-    for index, value in enumerate(yf_vaowmx):
-        if 'Dividend Rate' in value.get_text():
-            try:
-                result['Dividend Rate'] = float(yf_vaowmx[index + 1].get_text())
-            except:
-                result['Dividend Rate'] = -1
-            break
-
-    if 'Dividend Rate' in result.keys():
-        raise KeyError('not found Dividend Rate')
+    }
+    response = requests.get(base_url + symbol, params=params, headers=headers)
+    response.raise_for_status()
+    data = response.json()
+    result['Dividend Rate'] = 0
+    for values in data['chart']['result'][0]['events']['dividends'].values():
+        result['Dividend Rate'] += float(values['amount'])
 
     return result
 
 
 if __name__ == "__main__":
     # 사용 예시
-    symbol = "AOS"  # 삼성전자
+    symbol = "AKAM"  # 삼성전자
     # # (0) 하이라이트
     # df_y = get_finance_from_fnguide(symbol, 'highlight', report_type='D', period='Y', include_estimates=False)
     # print("[하이라이트]\n", df_y.head(), "\n")
@@ -380,7 +389,21 @@ if __name__ == "__main__":
     # summary_dict = get_financial_summary_for_update_stock(symbol)
     # print("[종합 요약 정보]\n", summary_dict)
     # print(fetch_financial_timeseries(symbol='aapl', report='statistics', period='Q', years=1))
-    r = requests.get(f'https://finance.yahoo.com/quote/{symbol}/key-statistics/', headers={
+    base_url = "https://query1.finance.yahoo.com/v8/finance/chart/"
+    params = {
+        "events": "capitalGain|div|split",
+        "formatted": "true",
+        "includeAdjustedClose": "true",
+        "interval": '1d',
+        "period1": int((datetime.now() - relativedelta(years=1)).timestamp()),
+        "period2": int(datetime.now().timestamp()),
+        "symbol": symbol,
+        "userYfid": "true",
+        "lang": "en-US",
+        "region": "US"
+    }
+
+    headers = {
         "Accept": "*/*",
         "Accept-Encoding": "gzip, deflate, br",
         "Accept-Language": "en-US,en;q=0.9",
@@ -394,13 +417,10 @@ if __name__ == "__main__":
         "Sec-Fetch-Mode": "cors",
         "Sec-Fetch-Site": "same-site",
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
-    })
-    soup = BeautifulSoup(r.text, 'html.parser')
-    yf_vaowmx = soup.find_all('td', class_="yf-vaowmx")
-    for index, value in enumerate(yf_vaowmx):
-        if 'Dividend Rate' in value.get_text():
-            try:
-                print(float(yf_vaowmx[index + 1].get_text()))
-            except:
-                print(-1)
-            break
+    }
+    response = requests.get(base_url + symbol, params=params, headers=headers)
+    response.raise_for_status()
+    data = response.json()
+    print(json.dumps(data, ensure_ascii=False, indent=3))
+    for values in data['chart']['result'][0]['events']['dividends'].values():
+        print(float(values['amount']))
