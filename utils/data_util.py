@@ -33,7 +33,7 @@ def upsert(model: Type[Model], data: dict, conflict_target: list, preserve_field
         logging.error(f"Upsert failed for model {model.__name__}: {e}")
 
 
-def upsert_many(model: Type[Model], data: list, conflict_target: list = None, preserve_fields: list = 'IGNORE'):
+def upsert_many(model: Type[Model], data: list, conflict_target: list = None, preserve_fields: list = None):
     """
     Peewee insert_many와 UPSERT를 결합하여 다중 데이터 처리
     :param model: Peewee 모델 클래스
@@ -48,6 +48,11 @@ def upsert_many(model: Type[Model], data: list, conflict_target: list = None, pr
         with models.db.atomic():
             if not conflict_target:
                 model.insert_many(data).on_conflict().execute()
+            elif not preserve_fields:
+                model.insert_many(data).on_conflict(
+                    conflict_target=conflict_target,
+                    action='IGNORE'
+                ).execute()
             else:
                 model.insert_many(data).on_conflict(
                     conflict_target=conflict_target,

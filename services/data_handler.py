@@ -198,7 +198,7 @@ def update_subscription_stock():
 
     if data_to_insert:
         logging.info(f"{len(data_to_insert)}개 주식")
-        upsert_many(Subscription, data_to_insert, [], [])
+        upsert_many(Subscription, data_to_insert, [Subscription.symbol, Subscription.email])
 
 
 def update_blacklist():
@@ -364,6 +364,6 @@ if __name__ == "__main__":
 
     if data_to_insert:
         logging.info(f"{len(data_to_insert)}개 주식")
-        upsert_many(Subscription, data_to_insert, [], [])
+        upsert_many(Subscription, data_to_insert, conflict_target=[Subscription.symbol, Subscription.email])
 
     # add_stock_price(country='USA', start_date=datetime.datetime.now() - datetime.timedelta(days=5), end_date=datetime.datetime.now())
