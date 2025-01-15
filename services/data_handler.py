@@ -149,9 +149,9 @@ def update_subscription_usa(stock: Stock, email, data_to_insert, retries=5, dela
             # if not summary_dict["ROA"] > 10:
             #     logging.info(f'{stock.symbol} ROA')
             #     return
-            if not summary_dict["PER"] * summary_dict["PBR"] <= 22.5:
-                # logging.info(f'{stock.symbol} PER')
-                return
+            # if not summary_dict["PER"] * summary_dict["PBR"] <= 22.5:
+            #     # logging.info(f'{stock.symbol} PER')
+            #     return
             if not summary_dict["Debt Ratio"] < 200:
                 # logging.info(f'{stock.symbol} Debt Ratio')
                 return
