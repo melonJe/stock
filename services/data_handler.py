@@ -1,6 +1,7 @@
 import datetime
 import logging
 import re
+import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from urllib.parse import urlparse, parse_qs
 
@@ -13,7 +14,7 @@ from ta.volatility import AverageTrueRange
 
 from data.models import Stock, PriceHistory, PriceHistoryUS, Subscription, Blacklist, StopLoss
 from utils.data_util import upsert_many, get_yahoo_finance_data
-from utils.financial_statement import get_financial_summary_for_update_stock, get_finance_from_fnguide
+from utils.financial_statement import get_financial_summary_for_update_stock, get_finance_from_fnguide, fetch_financial_timeseries, get_financial_summary_for_update_stock_usa
 
 
 def get_company_name(symbol: str):
@@ -77,7 +78,7 @@ def insert_stock(symbol: str, company_name: str = None, country: str = None):
     return new_stock
 
 
-def update_subscription_process(stock: Stock, email, data_to_insert):
+def update_subscription_kor(stock: Stock, email, data_to_insert):
     try:
         summary_dict = get_financial_summary_for_update_stock(stock.symbol)
         df_highlight = get_finance_from_fnguide(stock.symbol, 'highlight', period='Q', include_estimates=False)
@@ -103,11 +104,11 @@ def update_subscription_process(stock: Stock, email, data_to_insert):
         #     return
         # if not summary_dict["ROA"] > 10:
         #     return
-        if not summary_dict["PER"] * summary_dict["PBR"] <= 22.5:
-            return
+        # if not summary_dict["PER"] * summary_dict["PBR"] <= 22.5:
+        #     return
         if not summary_dict["부채비율"] < 200:
             return
-        if not summary_dict["배당수익률"] >= 2:
+        if not summary_dict["배당수익률"] > 2:
             return
 
         data_to_insert.append({'email': email, 'symbol': stock})
@@ -115,20 +116,71 @@ def update_subscription_process(stock: Stock, email, data_to_insert):
         pass
 
 
+def update_subscription_usa(stock: Stock, email, data_to_insert, retries=4, delay=30):
+    for attempt in range(retries):
+        try:
+            summary_dict = get_financial_summary_for_update_stock_usa(stock.symbol)
+            df_income = fetch_financial_timeseries('AAPL')
+            df_cash = fetch_financial_timeseries('AAPL', report='cash')
+
+            if not (df_cash['quarterlyOperatingCashFlow'][-3:] > 0).all():
+                return
+
+            try:
+                if not (df_income['quarterlyTotalRevenue'][-3:] > 0).all():
+                    return
+                if not (df_income['quarterlyTotalRevenue'].diff()[-2:] >= 0).all():
+                    return
+            except Exception as e:
+                raise ValueError(f"not find 매출액")
+
+            if not (df_income['quarterlyOperatingIncome'].diff()[-1:] >= 0).all():
+                return
+            if not (df_income['quarterlyNetIncome'].diff()[-1:] >= 0).all():
+                return
+
+            # if not summary_dict["ROE"] > 10:
+            #     return
+            # if not summary_dict["ROA"] > 10:
+            #     return
+            # if not summary_dict["PER"] * summary_dict["PBR"] <= 22.5:
+            #     return
+            if not summary_dict["Debt Ratio"] < 200:
+                return
+            if not summary_dict["Dividend Rate"] > 2:
+                return
+
+            data_to_insert.append({'email': email, 'symbol': stock})
+
+        except Exception as e:
+            logging.info(f"`Attempt {attempt + 1} failed: {stock.symbol}")
+            logging.info(f"{e}")
+            if attempt < retries - 1:
+                time.sleep(delay)
+            else:
+                logging.info("All retries failed.")
+                return
+
+
 def update_subscription_stock():
     logging.info(f'{datetime.datetime.now()} update_subscription_stock 시작')
-    email = 'cabs0814@naver.com'
-    Subscription.delete().where(Subscription.email == email).execute()
     data_to_insert = []
 
     # 한국 주식 프로세스
+    # Subscription.delete().where(Subscription.email == 'cabs0814@naver.com').execute()
+    # with ThreadPoolExecutor(max_workers=10) as executor:
+    #     futures = [executor.submit(update_subscription_kor, stock, 'cabs0814@naver.com', data_to_insert) for stock in Stock.select().where(Stock.country == 'KOR')]
+    #
+    #     for future in futures:
+    #         future.result()  # Ensure any raised exceptions are handled
+
+    # 미국 주식 프로세스
+    Subscription.delete().where(Subscription.email == 'jmayermj@gmail.com').execute()
     with ThreadPoolExecutor(max_workers=10) as executor:
-        futures = [executor.submit(update_subscription_process, stock, email, data_to_insert) for stock in Stock.select().where(Stock.country == 'KOR')]
+        futures = [executor.submit(update_subscription_usa, stock, 'jmayermj@gmail.com', data_to_insert, 5, 30) for stock in Stock.select().where(Stock.country == 'USA')]
 
         for future in futures:
             future.result()  # Ensure any raised exceptions are handled
-
-    # TODO 미국 주식 프로세스 생성
 
     if data_to_insert:
         logging.info(f"{len(data_to_insert)}개 주식")
@@ -284,4 +336,5 @@ def add_price_for_symbol(symbol: str, start_date: datetime.datetime = None, end_
 if __name__ == "__main__":
     # update_stock_listings()
     # add_stock_price(country='USA', start_date=datetime.datetime.now() - relativedelta(years=2), end_date=datetime.datetime.now())
-    print(get_yahoo_finance_data('AAPL', int((datetime.datetime.now() - datetime.timedelta(days=5)).timestamp()), int(datetime.datetime.now().timestamp())))
+    # print(get_yahoo_finance_data('AAPL', int((datetime.datetime.now() - datetime.timedelta(days=5)).timestamp()), int(datetime.datetime.now().timestamp())))
+    update_subscription_stock()

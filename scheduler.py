@@ -7,7 +7,7 @@ from apscheduler.triggers.cron import CronTrigger
 from config import setting_env
 from services import data_handler
 from services.data_handler import add_stock_price
-from services.trading import korea_trading
+from services.trading import korea_trading, usa_trading
 
 
 def start():
@@ -16,7 +16,7 @@ def start():
     if not setting_env.SIMULATE:
         scheduler.add_job(
             data_handler.update_subscription_stock,
-            trigger=CronTrigger(day_of_week="sun", hour=2),
+            trigger=CronTrigger(day=1, hour=2),
             id="update_defensive_subscription_stock",
             max_instances=1,
             replace_existing=True,
@@ -55,13 +55,13 @@ def start():
         replace_existing=True,
     )
 
-    # scheduler.add_job(
-    #     usa_trading,
-    #     trigger=CronTrigger(day_of_week="tue-sat", hour=12, minute=00, second=0),
-    #     id="usa_trading",
-    #     max_instances=1,
-    #     replace_existing=True,
-    # )
+    scheduler.add_job(
+        usa_trading,
+        trigger=CronTrigger(day_of_week="tue-sat", hour=12, minute=00, second=0),
+        id="usa_trading",
+        max_instances=1,
+        replace_existing=True,
+    )
 
     try:
         scheduler.start()
