@@ -84,13 +84,13 @@ def update_subscription_kor(stock: Stock, email, data_to_insert):
         df_highlight = get_finance_from_fnguide(stock.symbol, 'highlight', period='Q', include_estimates=False)
         df_cash = get_finance_from_fnguide(stock.symbol, 'cash', period='Q', include_estimates=False)
 
-        if not (pd.to_numeric(df_cash['영업활동으로인한현금흐름'].str.replace(",", ""), errors="coerce")[-3:] > 0).all():
+        if not (pd.to_numeric(df_cash['영업활동으로인한현금흐름'].str.replace(",", ""), errors="coerce")[-2:] > 0).all():
             return
 
         try:
-            if not (pd.to_numeric(df_highlight['매출액'].str.replace(",", ""), errors="coerce")[-3:] > 0).all():
+            if not (pd.to_numeric(df_highlight['매출액'].str.replace(",", ""), errors="coerce")[-2:] > 0).all():
                 return
-            if not (pd.to_numeric(df_highlight['매출액'].str.replace(",", ""), errors="coerce").diff()[-2:] >= 0).all():
+            if not (pd.to_numeric(df_highlight['매출액'].str.replace(",", ""), errors="coerce").diff()[-1:] >= 0).all():
                 return
         except Exception as e:
             raise ValueError(f"not find 매출액")
@@ -123,15 +123,15 @@ def update_subscription_usa(stock: Stock, email, data_to_insert, retries=5, dela
             df_income = fetch_financial_timeseries(Stock.symbol)
             df_cash = fetch_financial_timeseries(Stock.symbol, report='cash')
 
-            if not (df_cash['quarterlyOperatingCashFlow'][-3:] > 0).all():
+            if not (df_cash['quarterlyOperatingCashFlow'][-2:] > 0).all():
                 # logging.info(f'{stock.symbol} OperatingCashFlow')
                 return
 
             try:
-                if not (df_income['quarterlyTotalRevenue'][-3:] > 0).all():
+                if not (df_income['quarterlyTotalRevenue'][-2:] > 0).all():
                     # logging.info(f'{stock.symbol} TotalRevenue')
                     return
-                if not (df_income['quarterlyTotalRevenue'].diff()[-2:] >= 0).all():
+                if not (df_income['quarterlyTotalRevenue'].diff()[-1:] >= 0).all():
                     # logging.info(f'{stock.symbol} all TotalRevenue')
                     return
             except Exception as e:
@@ -156,7 +156,7 @@ def update_subscription_usa(stock: Stock, email, data_to_insert, retries=5, dela
             if not summary_dict["Debt Ratio"] < 200:
                 # logging.info(f'{stock.symbol} Debt Ratio')
                 return
-            if not summary_dict["Dividend Rate"] > 2:
+            if not summary_dict["Dividend Rate"] > 0:
                 # logging.info(f'{stock.symbol} Dividend Rate')
                 return
 
