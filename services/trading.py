@@ -24,12 +24,13 @@ from utils.operations import price_refine
 
 def select_buy_stocks(country: str = "KOR") -> dict:
     buy_levels = dict()
+    anchor_date = (datetime.datetime.now() - datetime.timedelta(days=1) if country == 'USA' else datetime.timedelta(days=0)).strftime('%Y-%m-%d')
 
     blacklist_symbols = Blacklist.select(Blacklist.symbol)
     sub_symbols = Subscription.select(Subscription.symbol)
     stocks_query = Stock.select(Stock.symbol).where(
         (Stock.country == country)
-        # & (Stock.symbol.in_(sub_symbols))
+        & (Stock.symbol.in_(sub_symbols))
         & ~(Stock.symbol.in_(blacklist_symbols))
     )
     stocks = {row.symbol for row in stocks_query}
@@ -44,7 +45,7 @@ def select_buy_stocks(country: str = "KOR") -> dict:
             if len(df) < 200:
                 continue
 
-            if not str(df.iloc[-1]['date']) == datetime.datetime.now().strftime('%Y-%m-%d'):  # 마지막 데이터가 오늘이 아니면 pass
+            if not str(df.iloc[-1]['date']) == anchor_date:  # 마지막 데이터가 오늘이 아니면 pass
                 continue
 
             df['ma120'] = df['close'].rolling(window=120).mean()

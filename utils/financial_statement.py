@@ -1,4 +1,6 @@
 import re
+import time
+from datetime import datetime, timedelta
 from functools import reduce
 
 import pandas as pd
@@ -192,21 +194,213 @@ def get_financial_summary_for_update_stock(symbol: str, report_type: str = 'D', 
     return result
 
 
+def fetch_financial_timeseries(symbol: str, report='income', period: str = 'Q', include_estimates: bool = False, years=5) -> pd.DataFrame:
+    """
+    Yahoo Finance에서 재무 시계열 데이터를 가져와 DataFrame으로 반환합니다.
+
+    매개변수:
+    - symbol (str): 주식 티커 심볼 (예: 'AAPL').
+    - report (str): 재무 보고서 유형 (예: 'income', 'balance', 'cash').
+    - report_type (str): 보고서 세부 유형 ('D'는 상세, 'S'는 요약).
+    - period (str): 데이터 주기 ('Y'는 연간, 'Q'는 분기별).
+    - include_estimates (bool): 추정치를 포함할지 여부.
+
+    반환값:
+    - pd.DataFrame: 요청된 재무 데이터를 포함하는 DataFrame.
+    """
+
+    # 기본 URL 설정
+    base_url = f"https://query1.finance.yahoo.com/ws/fundamentals-timeseries/v1/finance/timeseries/{symbol}"
+
+    # 사용자가 제공한 type 목록
+
+    # report, report_type, period에 따라 type 선택
+    # 예시로, report='income', period='Q'인 경우 분기별 타입 선택
+    # 이 매핑은 사용자의 필요에 따라 조정할 수 있습니다.
+    types = {
+        'income': {
+            'Q': 'quarterlyTaxEffectOfUnusualItems,quarterlyTaxRateForCalcs,quarterlyNormalizedEBITDA,quarterlyNormalizedDilutedEPS,quarterlyNormalizedBasicEPS,quarterlyTotalUnusualItems,quarterlyTotalUnusualItemsExcludingGoodwill,quarterlyNetIncomeFromContinuingOperationNetMinorityInterest,quarterlyReconciledDepreciation,quarterlyReconciledCostOfRevenue,quarterlyEBITDA,quarterlyEBIT,quarterlyNetInterestIncome,quarterlyInterestExpense,quarterlyInterestIncome,quarterlyContinuingAndDiscontinuedDilutedEPS,quarterlyContinuingAndDiscontinuedBasicEPS,quarterlyNormalizedIncome,quarterlyNetIncomeFromContinuingAndDiscontinuedOperation,quarterlyTotalExpenses,quarterlyRentExpenseSupplemental,quarterlyReportedNormalizedDilutedEPS,quarterlyReportedNormalizedBasicEPS,quarterlyTotalOperatingIncomeAsReported,quarterlyDividendPerShare,quarterlyDilutedAverageShares,quarterlyBasicAverageShares,quarterlyDilutedEPS,quarterlyDilutedEPSOtherGainsLosses,quarterlyTaxLossCarryforwardDilutedEPS,quarterlyDilutedAccountingChange,quarterlyDilutedExtraordinary,quarterlyDilutedDiscontinuousOperations,quarterlyDilutedContinuousOperations,quarterlyBasicEPS,quarterlyBasicEPSOtherGainsLosses,quarterlyTaxLossCarryforwardBasicEPS,quarterlyBasicAccountingChange,quarterlyBasicExtraordinary,quarterlyBasicDiscontinuousOperations,quarterlyBasicContinuousOperations,quarterlyDilutedNIAvailtoComStockholders,quarterlyAverageDilutionEarnings,quarterlyNetIncomeCommonStockholders,quarterlyOtherunderPreferredStockDividend,quarterlyPreferredStockDividends,quarterlyNetIncome,quarterlyMinorityInterests,quarterlyNetIncomeIncludingNoncontrollingInterests,quarterlyNetIncomeFromTaxLossCarryforward,quarterlyNetIncomeExtraordinary,quarterlyNetIncomeDiscontinuousOperations,quarterlyNetIncomeContinuousOperations,quarterlyEarningsFromEquityInterestNetOfTax,quarterlyTaxProvision,quarterlyPretaxIncome,quarterlyOtherIncomeExpense,quarterlyOtherNonOperatingIncomeExpenses,quarterlySpecialIncomeCharges,quarterlyGainOnSaleOfPPE,quarterlyGainOnSaleOfBusiness,quarterlyOtherSpecialCharges,quarterlyWriteOff,quarterlyImpairmentOfCapitalAssets,quarterlyRestructuringAndMergernAcquisition,quarterlySecuritiesAmortization,quarterlyEarningsFromEquityInterest,quarterlyGainOnSaleOfSecurity,quarterlyNetNonOperatingInterestIncomeExpense,quarterlyTotalOtherFinanceCost,quarterlyInterestExpenseNonOperating,quarterlyInterestIncomeNonOperating,quarterlyOperatingIncome,quarterlyOperatingExpense,quarterlyOtherOperatingExpenses,quarterlyOtherTaxes,quarterlyProvisionForDoubtfulAccounts,quarterlyDepreciationAmortizationDepletionIncomeStatement,quarterlyDepletionIncomeStatement,quarterlyDepreciationAndAmortizationInIncomeStatement,quarterlyAmortization,quarterlyAmortizationOfIntangiblesIncomeStatement,quarterlyDepreciationIncomeStatement,quarterlyResearchAndDevelopment,quarterlySellingGeneralAndAdministration,quarterlySellingAndMarketingExpense,quarterlyGeneralAndAdministrativeExpense,quarterlyOtherGandA,quarterlyInsuranceAndClaims,quarterlyRentAndLandingFees,quarterlySalariesAndWages,quarterlyGrossProfit,quarterlyCostOfRevenue,quarterlyTotalRevenue,quarterlyExciseTaxes,quarterlyOperatingRevenue,',
+            'Y': 'annualTreasurySharesNumber,annualPreferredSharesNumber,annualOrdinarySharesNumber,annualShareIssued,annualNetDebt,annualTotalDebt,annualTangibleBookValue,annualInvestedCapital,annualWorkingCapital,annualNetTangibleAssets,annualCapitalLeaseObligations,annualCommonStockEquity,annualPreferredStockEquity,annualTotalCapitalization,annualTotalEquityGrossMinorityInterest,annualMinorityInterest,annualStockholdersEquity,annualOtherEquityInterest,annualGainsLossesNotAffectingRetainedEarnings,annualOtherEquityAdjustments,annualFixedAssetsRevaluationReserve,annualForeignCurrencyTranslationAdjustments,annualMinimumPensionLiabilities,annualUnrealizedGainLoss,annualTreasuryStock,annualRetainedEarnings,annualAdditionalPaidInCapital,annualCapitalStock,annualOtherCapitalStock,annualCommonStock,annualPreferredStock,annualTotalPartnershipCapital,annualGeneralPartnershipCapital,annualLimitedPartnershipCapital,annualTotalLiabilitiesNetMinorityInterest,annualTotalNonCurrentLiabilitiesNetMinorityInterest,annualOtherNonCurrentLiabilities,annualLiabilitiesHeldforSaleNonCurrent,annualRestrictedCommonStock,annualPreferredSecuritiesOutsideStockEquity,annualDerivativeProductLiabilities,annualEmployeeBenefits,annualNonCurrentPensionAndOtherPostretirementBenefitPlans,annualNonCurrentAccruedExpenses,annualDuetoRelatedPartiesNonCurrent,annualTradeandOtherPayablesNonCurrent,annualNonCurrentDeferredLiabilities,annualNonCurrentDeferredRevenue,annualNonCurrentDeferredTaxesLiabilities,annualLongTermDebtAndCapitalLeaseObligation,annualLongTermCapitalLeaseObligation,annualLongTermDebt,annualLongTermProvisions,annualCurrentLiabilities,annualOtherCurrentLiabilities,annualCurrentDeferredLiabilities,annualCurrentDeferredRevenue,annualCurrentDeferredTaxesLiabilities,annualCurrentDebtAndCapitalLeaseObligation,annualCurrentCapitalLeaseObligation,annualCurrentDebt,annualOtherCurrentBorrowings,annualLineOfCredit,annualCommercialPaper,annualCurrentNotesPayable,annualPensionandOtherPostRetirementBenefitPlansCurrent,annualCurrentProvisions,annualPayablesAndAccruedExpenses,annualCurrentAccruedExpenses,annualInterestPayable,annualPayables,annualOtherPayable,annualDuetoRelatedPartiesCurrent,annualDividendsPayable,annualTotalTaxPayable,annualIncomeTaxPayable,annualAccountsPayable,annualTotalAssets,annualTotalNonCurrentAssets,annualOtherNonCurrentAssets,annualDefinedPensionBenefit,annualNonCurrentPrepaidAssets,annualNonCurrentDeferredAssets,annualNonCurrentDeferredTaxesAssets,annualDuefromRelatedPartiesNonCurrent,annualNonCurrentNoteReceivables,annualNonCurrentAccountsReceivable,annualFinancialAssets,annualInvestmentsAndAdvances,annualOtherInvestments,annualInvestmentinFinancialAssets,annualHeldToMaturitySecurities,annualAvailableForSaleSecurities,annualFinancialAssetsDesignatedasFairValueThroughProfitorLossTotal,annualTradingSecurities,annualLongTermEquityInvestment,annualInvestmentsinJointVenturesatCost,annualInvestmentsInOtherVenturesUnderEquityMethod,annualInvestmentsinAssociatesatCost,annualInvestmentsinSubsidiariesatCost,annualInvestmentProperties,annualGoodwillAndOtherIntangibleAssets,annualOtherIntangibleAssets,annualGoodwill,annualNetPPE,annualAccumulatedDepreciation,annualGrossPPE,annualLeases,annualConstructionInProgress,annualOtherProperties,annualMachineryFurnitureEquipment,annualBuildingsAndImprovements,annualLandAndImprovements,annualProperties,annualCurrentAssets,annualOtherCurrentAssets,annualHedgingAssetsCurrent,annualAssetsHeldForSaleCurrent,annualCurrentDeferredAssets,annualCurrentDeferredTaxesAssets,annualRestrictedCash,annualPrepaidAssets,annualInventory,annualInventoriesAdjustmentsAllowances,annualOtherInventories,annualFinishedGoods,annualWorkInProcess,annualRawMaterials,annualReceivables,annualReceivablesAdjustmentsAllowances,annualOtherReceivables,annualDuefromRelatedPartiesCurrent,annualTaxesReceivable,annualAccruedInterestReceivable,annualNotesReceivable,annualLoansReceivable,annualAccountsReceivable,annualAllowanceForDoubtfulAccountsReceivable,annualGrossAccountsReceivable,annualCashCashEquivalentsAndShortTermInvestments,annualOtherShortTermInvestments,annualCashAndCashEquivalents,annualCashEquivalents,annualCashFinancial',
+            'T': ''
+        },
+        'balance': {
+            'Q': 'quarterlyTreasurySharesNumber,quarterlyPreferredSharesNumber,quarterlyOrdinarySharesNumber,quarterlyShareIssued,quarterlyNetDebt,quarterlyTotalDebt,quarterlyTangibleBookValue,quarterlyInvestedCapital,quarterlyWorkingCapital,quarterlyNetTangibleAssets,quarterlyCapitalLeaseObligations,quarterlyCommonStockEquity,quarterlyPreferredStockEquity,quarterlyTotalCapitalization,quarterlyTotalEquityGrossMinorityInterest,quarterlyMinorityInterest,quarterlyStockholdersEquity,quarterlyOtherEquityInterest,quarterlyGainsLossesNotAffectingRetainedEarnings,quarterlyOtherEquityAdjustments,quarterlyFixedAssetsRevaluationReserve,quarterlyForeignCurrencyTranslationAdjustments,quarterlyMinimumPensionLiabilities,quarterlyUnrealizedGainLoss,quarterlyTreasuryStock,quarterlyRetainedEarnings,quarterlyAdditionalPaidInCapital,quarterlyCapitalStock,quarterlyOtherCapitalStock,quarterlyCommonStock,quarterlyPreferredStock,quarterlyTotalPartnershipCapital,quarterlyGeneralPartnershipCapital,quarterlyLimitedPartnershipCapital,quarterlyTotalLiabilitiesNetMinorityInterest,quarterlyTotalNonCurrentLiabilitiesNetMinorityInterest,quarterlyOtherNonCurrentLiabilities,quarterlyLiabilitiesHeldforSaleNonCurrent,quarterlyRestrictedCommonStock,quarterlyPreferredSecuritiesOutsideStockEquity,quarterlyDerivativeProductLiabilities,quarterlyEmployeeBenefits,quarterlyNonCurrentPensionAndOtherPostretirementBenefitPlans,quarterlyNonCurrentAccruedExpenses,quarterlyDuetoRelatedPartiesNonCurrent,quarterlyTradeandOtherPayablesNonCurrent,quarterlyNonCurrentDeferredLiabilities,quarterlyNonCurrentDeferredRevenue,quarterlyNonCurrentDeferredTaxesLiabilities,quarterlyLongTermDebtAndCapitalLeaseObligation,quarterlyLongTermCapitalLeaseObligation,quarterlyLongTermDebt,quarterlyLongTermProvisions,quarterlyCurrentLiabilities,quarterlyOtherCurrentLiabilities,quarterlyCurrentDeferredLiabilities,quarterlyCurrentDeferredRevenue,quarterlyCurrentDeferredTaxesLiabilities,quarterlyCurrentDebtAndCapitalLeaseObligation,quarterlyCurrentCapitalLeaseObligation,quarterlyCurrentDebt,quarterlyOtherCurrentBorrowings,quarterlyLineOfCredit,quarterlyCommercialPaper,quarterlyCurrentNotesPayable,quarterlyPensionandOtherPostRetirementBenefitPlansCurrent,quarterlyCurrentProvisions,quarterlyPayablesAndAccruedExpenses,quarterlyCurrentAccruedExpenses,quarterlyInterestPayable,quarterlyPayables,quarterlyOtherPayable,quarterlyDuetoRelatedPartiesCurrent,quarterlyDividendsPayable,quarterlyTotalTaxPayable,quarterlyIncomeTaxPayable,quarterlyAccountsPayable,quarterlyTotalAssets,quarterlyTotalNonCurrentAssets,quarterlyOtherNonCurrentAssets,quarterlyDefinedPensionBenefit,quarterlyNonCurrentPrepaidAssets,quarterlyNonCurrentDeferredAssets,quarterlyNonCurrentDeferredTaxesAssets,quarterlyDuefromRelatedPartiesNonCurrent,quarterlyNonCurrentNoteReceivables,quarterlyNonCurrentAccountsReceivable,quarterlyFinancialAssets,quarterlyInvestmentsAndAdvances,quarterlyOtherInvestments,quarterlyInvestmentinFinancialAssets,quarterlyHeldToMaturitySecurities,quarterlyAvailableForSaleSecurities,quarterlyFinancialAssetsDesignatedasFairValueThroughProfitorLossTotal,quarterlyTradingSecurities,quarterlyLongTermEquityInvestment,quarterlyInvestmentsinJointVenturesatCost,quarterlyInvestmentsInOtherVenturesUnderEquityMethod,quarterlyInvestmentsinAssociatesatCost,quarterlyInvestmentsinSubsidiariesatCost,quarterlyInvestmentProperties,quarterlyGoodwillAndOtherIntangibleAssets,quarterlyOtherIntangibleAssets,quarterlyGoodwill,quarterlyNetPPE,quarterlyAccumulatedDepreciation,quarterlyGrossPPE,quarterlyLeases,quarterlyConstructionInProgress,quarterlyOtherProperties,quarterlyMachineryFurnitureEquipment,quarterlyBuildingsAndImprovements,quarterlyLandAndImprovements,quarterlyProperties,quarterlyCurrentAssets,quarterlyOtherCurrentAssets,quarterlyHedgingAssetsCurrent,quarterlyAssetsHeldForSaleCurrent,quarterlyCurrentDeferredAssets,quarterlyCurrentDeferredTaxesAssets,quarterlyRestrictedCash,quarterlyPrepaidAssets,quarterlyInventory,quarterlyInventoriesAdjustmentsAllowances,quarterlyOtherInventories,quarterlyFinishedGoods,quarterlyWorkInProcess,quarterlyRawMaterials,quarterlyReceivables,quarterlyReceivablesAdjustmentsAllowances,quarterlyOtherReceivables,quarterlyDuefromRelatedPartiesCurrent,quarterlyTaxesReceivable,quarterlyAccruedInterestReceivable,quarterlyNotesReceivable,quarterlyLoansReceivable,quarterlyAccountsReceivable,quarterlyAllowanceForDoubtfulAccountsReceivable,quarterlyGrossAccountsReceivable,quarterlyCashCashEquivalentsAndShortTermInvestments,quarterlyOtherShortTermInvestments,quarterlyCashAndCashEquivalents,quarterlyCashEquivalents,quarterlyCashFinancial',
+            'Y': 'annualTreasurySharesNumber,annualPreferredSharesNumber,annualOrdinarySharesNumber,annualShareIssued,annualNetDebt,annualTotalDebt,annualTangibleBookValue,annualInvestedCapital,annualWorkingCapital,annualNetTangibleAssets,annualCapitalLeaseObligations,annualCommonStockEquity,annualPreferredStockEquity,annualTotalCapitalization,annualTotalEquityGrossMinorityInterest,annualMinorityInterest,annualStockholdersEquity,annualOtherEquityInterest,annualGainsLossesNotAffectingRetainedEarnings,annualOtherEquityAdjustments,annualFixedAssetsRevaluationReserve,annualForeignCurrencyTranslationAdjustments,annualMinimumPensionLiabilities,annualUnrealizedGainLoss,annualTreasuryStock,annualRetainedEarnings,annualAdditionalPaidInCapital,annualCapitalStock,annualOtherCapitalStock,annualCommonStock,annualPreferredStock,annualTotalPartnershipCapital,annualGeneralPartnershipCapital,annualLimitedPartnershipCapital,annualTotalLiabilitiesNetMinorityInterest,annualTotalNonCurrentLiabilitiesNetMinorityInterest,annualOtherNonCurrentLiabilities,annualLiabilitiesHeldforSaleNonCurrent,annualRestrictedCommonStock,annualPreferredSecuritiesOutsideStockEquity,annualDerivativeProductLiabilities,annualEmployeeBenefits,annualNonCurrentPensionAndOtherPostretirementBenefitPlans,annualNonCurrentAccruedExpenses,annualDuetoRelatedPartiesNonCurrent,annualTradeandOtherPayablesNonCurrent,annualNonCurrentDeferredLiabilities,annualNonCurrentDeferredRevenue,annualNonCurrentDeferredTaxesLiabilities,annualLongTermDebtAndCapitalLeaseObligation,annualLongTermCapitalLeaseObligation,annualLongTermDebt,annualLongTermProvisions,annualCurrentLiabilities,annualOtherCurrentLiabilities,annualCurrentDeferredLiabilities,annualCurrentDeferredRevenue,annualCurrentDeferredTaxesLiabilities,annualCurrentDebtAndCapitalLeaseObligation,annualCurrentCapitalLeaseObligation,annualCurrentDebt,annualOtherCurrentBorrowings,annualLineOfCredit,annualCommercialPaper,annualCurrentNotesPayable,annualPensionandOtherPostRetirementBenefitPlansCurrent,annualCurrentProvisions,annualPayablesAndAccruedExpenses,annualCurrentAccruedExpenses,annualInterestPayable,annualPayables,annualOtherPayable,annualDuetoRelatedPartiesCurrent,annualDividendsPayable,annualTotalTaxPayable,annualIncomeTaxPayable,annualAccountsPayable,annualTotalAssets,annualTotalNonCurrentAssets,annualOtherNonCurrentAssets,annualDefinedPensionBenefit,annualNonCurrentPrepaidAssets,annualNonCurrentDeferredAssets,annualNonCurrentDeferredTaxesAssets,annualDuefromRelatedPartiesNonCurrent,annualNonCurrentNoteReceivables,annualNonCurrentAccountsReceivable,annualFinancialAssets,annualInvestmentsAndAdvances,annualOtherInvestments,annualInvestmentinFinancialAssets,annualHeldToMaturitySecurities,annualAvailableForSaleSecurities,annualFinancialAssetsDesignatedasFairValueThroughProfitorLossTotal,annualTradingSecurities,annualLongTermEquityInvestment,annualInvestmentsinJointVenturesatCost,annualInvestmentsInOtherVenturesUnderEquityMethod,annualInvestmentsinAssociatesatCost,annualInvestmentsinSubsidiariesatCost,annualInvestmentProperties,annualGoodwillAndOtherIntangibleAssets,annualOtherIntangibleAssets,annualGoodwill,annualNetPPE,annualAccumulatedDepreciation,annualGrossPPE,annualLeases,annualConstructionInProgress,annualOtherProperties,annualMachineryFurnitureEquipment,annualBuildingsAndImprovements,annualLandAndImprovements,annualProperties,annualCurrentAssets,annualOtherCurrentAssets,annualHedgingAssetsCurrent,annualAssetsHeldForSaleCurrent,annualCurrentDeferredAssets,annualCurrentDeferredTaxesAssets,annualRestrictedCash,annualPrepaidAssets,annualInventory,annualInventoriesAdjustmentsAllowances,annualOtherInventories,annualFinishedGoods,annualWorkInProcess,annualRawMaterials,annualReceivables,annualReceivablesAdjustmentsAllowances,annualOtherReceivables,annualDuefromRelatedPartiesCurrent,annualTaxesReceivable,annualAccruedInterestReceivable,annualNotesReceivable,annualLoansReceivable,annualAccountsReceivable,annualAllowanceForDoubtfulAccountsReceivable,annualGrossAccountsReceivable,annualCashCashEquivalentsAndShortTermInvestments,annualOtherShortTermInvestments,annualCashAndCashEquivalents,annualCashEquivalents,annualCashFinancial',
+            'T': ''
+        },
+        'cash': {
+            'Q': 'quarterlyForeignSales,quarterlyDomesticSales,quarterlyAdjustedGeographySegmentData,quarterlyFreeCashFlow,quarterlyRepurchaseOfCapitalStock,quarterlyRepaymentOfDebt,quarterlyIssuanceOfDebt,quarterlyIssuanceOfCapitalStock,quarterlyCapitalExpenditure,quarterlyInterestPaidSupplementalData,quarterlyIncomeTaxPaidSupplementalData,quarterlyEndCashPosition,quarterlyOtherCashAdjustmentOutsideChangeinCash,quarterlyBeginningCashPosition,quarterlyEffectOfExchangeRateChanges,quarterlyChangesInCash,quarterlyOtherCashAdjustmentInsideChangeinCash,quarterlyCashFlowFromDiscontinuedOperation,quarterlyFinancingCashFlow,quarterlyCashFromDiscontinuedFinancingActivities,quarterlyCashFlowFromContinuingFinancingActivities,quarterlyNetOtherFinancingCharges,quarterlyInterestPaidCFF,quarterlyProceedsFromStockOptionExercised,quarterlyCashDividendsPaid,quarterlyPreferredStockDividendPaid,quarterlyCommonStockDividendPaid,quarterlyNetPreferredStockIssuance,quarterlyPreferredStockPayments,quarterlyPreferredStockIssuance,quarterlyNetCommonStockIssuance,quarterlyCommonStockPayments,quarterlyCommonStockIssuance,quarterlyNetIssuancePaymentsOfDebt,quarterlyNetShortTermDebtIssuance,quarterlyShortTermDebtPayments,quarterlyShortTermDebtIssuance,quarterlyNetLongTermDebtIssuance,quarterlyLongTermDebtPayments,quarterlyLongTermDebtIssuance,quarterlyInvestingCashFlow,quarterlyCashFromDiscontinuedInvestingActivities,quarterlyCashFlowFromContinuingInvestingActivities,quarterlyNetOtherInvestingChanges,quarterlyInterestReceivedCFI,quarterlyDividendsReceivedCFI,quarterlyNetInvestmentPurchaseAndSale,quarterlySaleOfInvestment,quarterlyPurchaseOfInvestment,quarterlyNetInvestmentPropertiesPurchaseAndSale,quarterlySaleOfInvestmentProperties,quarterlyPurchaseOfInvestmentProperties,quarterlyNetBusinessPurchaseAndSale,quarterlySaleOfBusiness,quarterlyPurchaseOfBusiness,quarterlyNetIntangiblesPurchaseAndSale,quarterlySaleOfIntangibles,quarterlyPurchaseOfIntangibles,quarterlyNetPPEPurchaseAndSale,quarterlySaleOfPPE,quarterlyPurchaseOfPPE,quarterlyCapitalExpenditureReported,quarterlyOperatingCashFlow,quarterlyCashFromDiscontinuedOperatingActivities,quarterlyCashFlowFromContinuingOperatingActivities,quarterlyTaxesRefundPaid,quarterlyInterestReceivedCFO,quarterlyInterestPaidCFO,quarterlyDividendReceivedCFO,quarterlyDividendPaidCFO,quarterlyChangeInWorkingCapital,quarterlyChangeInOtherWorkingCapital,quarterlyChangeInOtherCurrentLiabilities,quarterlyChangeInOtherCurrentAssets,quarterlyChangeInPayablesAndAccruedExpense,quarterlyChangeInAccruedExpense,quarterlyChangeInInterestPayable,quarterlyChangeInPayable,quarterlyChangeInDividendPayable,quarterlyChangeInAccountPayable,quarterlyChangeInTaxPayable,quarterlyChangeInIncomeTaxPayable,quarterlyChangeInPrepaidAssets,quarterlyChangeInInventory,quarterlyChangeInReceivables,quarterlyChangesInAccountReceivables,quarterlyOtherNonCashItems,quarterlyExcessTaxBenefitFromStockBasedCompensation,quarterlyStockBasedCompensation,quarterlyUnrealizedGainLossOnInvestmentSecurities,quarterlyProvisionandWriteOffofAssets,quarterlyAssetImpairmentCharge,quarterlyAmortizationOfSecurities,quarterlyDeferredTax,quarterlyDeferredIncomeTax,quarterlyDepreciationAmortizationDepletion,quarterlyDepletion,quarterlyDepreciationAndAmortization,quarterlyAmortizationCashFlow,quarterlyAmortizationOfIntangibles,quarterlyDepreciation,quarterlyOperatingGainsLosses,quarterlyPensionAndEmployeeBenefitExpense,quarterlyEarningsLossesFromEquityInvestments,quarterlyGainLossOnInvestmentSecurities,quarterlyNetForeignCurrencyExchangeGainLoss,quarterlyGainLossOnSaleOfPPE,quarterlyGainLossOnSaleOfBusiness,quarterlyNetIncomeFromContinuingOperations,quarterlyCashFlowsfromusedinOperatingActivitiesDirect,quarterlyTaxesRefundPaidDirect,quarterlyInterestReceivedDirect,quarterlyInterestPaidDirect,quarterlyDividendsReceivedDirect,quarterlyDividendsPaidDirect,quarterlyClassesofCashPayments,quarterlyOtherCashPaymentsfromOperatingActivities,quarterlyPaymentsonBehalfofEmployees,quarterlyPaymentstoSuppliersforGoodsandServices,quarterlyClassesofCashReceiptsfromOperatingActivities,quarterlyOtherCashReceiptsfromOperatingActivities,quarterlyReceiptsfromGovernmentGrants,quarterlyReceiptsfromCustomers',
+            'Y': 'annualForeignSales,annualDomesticSales,annualAdjustedGeographySegmentData,annualFreeCashFlow,annualRepurchaseOfCapitalStock,annualRepaymentOfDebt,annualIssuanceOfDebt,annualIssuanceOfCapitalStock,annualCapitalExpenditure,annualInterestPaidSupplementalData,annualIncomeTaxPaidSupplementalData,annualEndCashPosition,annualOtherCashAdjustmentOutsideChangeinCash,annualBeginningCashPosition,annualEffectOfExchangeRateChanges,annualChangesInCash,annualOtherCashAdjustmentInsideChangeinCash,annualCashFlowFromDiscontinuedOperation,annualFinancingCashFlow,annualCashFromDiscontinuedFinancingActivities,annualCashFlowFromContinuingFinancingActivities,annualNetOtherFinancingCharges,annualInterestPaidCFF,annualProceedsFromStockOptionExercised,annualCashDividendsPaid,annualPreferredStockDividendPaid,annualCommonStockDividendPaid,annualNetPreferredStockIssuance,annualPreferredStockPayments,annualPreferredStockIssuance,annualNetCommonStockIssuance,annualCommonStockPayments,annualCommonStockIssuance,annualNetIssuancePaymentsOfDebt,annualNetShortTermDebtIssuance,annualShortTermDebtPayments,annualShortTermDebtIssuance,annualNetLongTermDebtIssuance,annualLongTermDebtPayments,annualLongTermDebtIssuance,annualInvestingCashFlow,annualCashFromDiscontinuedInvestingActivities,annualCashFlowFromContinuingInvestingActivities,annualNetOtherInvestingChanges,annualInterestReceivedCFI,annualDividendsReceivedCFI,annualNetInvestmentPurchaseAndSale,annualSaleOfInvestment,annualPurchaseOfInvestment,annualNetInvestmentPropertiesPurchaseAndSale,annualSaleOfInvestmentProperties,annualPurchaseOfInvestmentProperties,annualNetBusinessPurchaseAndSale,annualSaleOfBusiness,annualPurchaseOfBusiness,annualNetIntangiblesPurchaseAndSale,annualSaleOfIntangibles,annualPurchaseOfIntangibles,annualNetPPEPurchaseAndSale,annualSaleOfPPE,annualPurchaseOfPPE,annualCapitalExpenditureReported,annualOperatingCashFlow,annualCashFromDiscontinuedOperatingActivities,annualCashFlowFromContinuingOperatingActivities,annualTaxesRefundPaid,annualInterestReceivedCFO,annualInterestPaidCFO,annualDividendReceivedCFO,annualDividendPaidCFO,annualChangeInWorkingCapital,annualChangeInOtherWorkingCapital,annualChangeInOtherCurrentLiabilities,annualChangeInOtherCurrentAssets,annualChangeInPayablesAndAccruedExpense,annualChangeInAccruedExpense,annualChangeInInterestPayable,annualChangeInPayable,annualChangeInDividendPayable,annualChangeInAccountPayable,annualChangeInTaxPayable,annualChangeInIncomeTaxPayable,annualChangeInPrepaidAssets,annualChangeInInventory,annualChangeInReceivables,annualChangesInAccountReceivables,annualOtherNonCashItems,annualExcessTaxBenefitFromStockBasedCompensation,annualStockBasedCompensation,annualUnrealizedGainLossOnInvestmentSecurities,annualProvisionandWriteOffofAssets,annualAssetImpairmentCharge,annualAmortizationOfSecurities,annualDeferredTax,annualDeferredIncomeTax,annualDepreciationAmortizationDepletion,annualDepletion,annualDepreciationAndAmortization,annualAmortizationCashFlow,annualAmortizationOfIntangibles,annualDepreciation,annualOperatingGainsLosses,annualPensionAndEmployeeBenefitExpense,annualEarningsLossesFromEquityInvestments,annualGainLossOnInvestmentSecurities,annualNetForeignCurrencyExchangeGainLoss,annualGainLossOnSaleOfPPE,annualGainLossOnSaleOfBusiness,annualNetIncomeFromContinuingOperations,annualCashFlowsfromusedinOperatingActivitiesDirect,annualTaxesRefundPaidDirect,annualInterestReceivedDirect,annualInterestPaidDirect,annualDividendsReceivedDirect,annualDividendsPaidDirect,annualClassesofCashPayments,annualOtherCashPaymentsfromOperatingActivities,annualPaymentsonBehalfofEmployees,annualPaymentstoSuppliersforGoodsandServices,annualClassesofCashReceiptsfromOperatingActivities,annualOtherCashReceiptsfromOperatingActivities,annualReceiptsfromGovernmentGrants,annualReceiptsfromCustomers',
+            'T': ''
+        },
+        'statistics': {
+            'Q': 'quarterlyMarketCap,quarterlyEnterpriseValue,quarterlyPeRatio,quarterlyForwardPeRatio,quarterlyPegRatio,quarterlyPsRatio,quarterlyPbRatio,quarterlyEnterprisesValueRevenueRatio,quarterlyEnterprisesValueEBITDARatio'
+        }
+    }
+    headers = {
+        "Accept": "*/*",
+        "Accept-Encoding": "gzip, deflate, br",
+        "Accept-Language": "en-US,en;q=0.9",
+        "Cache-Control": "no-cache",
+        "Connection": "keep-alive",
+        "DNT": "1",
+        "Origin": "https://finance.yahoo.com",
+        "Pragma": "no-cache",
+        "Referer": "https://finance.yahoo.com/",
+        "Sec-Fetch-Dest": "empty",
+        "Sec-Fetch-Mode": "cors",
+        "Sec-Fetch-Site": "same-site",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
+    }
+    # 쿼리 파라미터 구성
+    params = {
+        'merge': 'false',
+        'padTimeSeries': 'true',
+        'period1': int(time.mktime((datetime.now() - timedelta(days=365 * years)).timetuple())),  # 10년 전
+        'period2': int(time.mktime(datetime.now().timetuple())),  # 현재
+        'lang': 'ko-KR',  # 한국어 설정
+        'region': 'KR',  # 대한민국 설정
+        'type': types[report][period]
+    }
+
+    # GET 요청 전송
+    response = requests.get(base_url, params=params, headers=headers)
+    if response.status_code != 200:
+        raise ConnectionError(f"데이터 가져오기 실패: {response.status_code} - {response.text}")
+
+    data = response.json()
+
+    # print(json.dumps(data, ensure_ascii=False, indent=3))
+    if 'timeseries' not in data or 'result' not in data['timeseries']:
+        raise ValueError("잘못된 응답 구조입니다.")
+
+    results = data['timeseries']['result']
+
+    df_list = []
+
+    for item in results:
+        meta = item.get('meta', {})
+        data_type = meta.get('type', [None])[0]
+        timestamps = item.get('timestamp', [])
+        data_points = item.get(data_type, [])
+
+        if not data_type or not data_points:
+            continue  # 데이터가 없는 경우 건너뜀
+
+        # 데이터 추출
+        records = []
+        missing_data_count = 0
+        for ts, dp in zip(timestamps, data_points):
+            date = datetime.fromtimestamp(ts).strftime('%Y-%m-%d')
+            if dp is None:
+                reported_value = None
+                missing_data_count += 1
+            else:
+                reported_value = dp.get('reportedValue', {}).get('raw', None)
+            records.append({'Date': date, data_type: reported_value})
+
+        # if missing_data_count > 0:
+        #     print(f"Warning: {missing_data_count} missing data points for {data_type}")
+
+        df = pd.DataFrame(records)
+        df.set_index('Date', inplace=True)
+        df_list.append(df)
+
+    if not df_list:
+        return pd.DataFrame()  # 데이터가 없는 경우 빈 DataFrame 반환
+
+    # 모든 DataFrame을 Date 기준으로 병합
+    final_df = pd.concat(df_list, axis=1)
+
+    # 날짜 순으로 정렬
+    final_df.sort_index(inplace=True)
+
+    return final_df
+
+
+def get_financial_summary_for_update_stock_usa(symbol: str):
+    balance_df = fetch_financial_timeseries(symbol=symbol, report='balance', period='Q', years=1)
+    result = dict()
+    result['Debt Ratio'] = float(balance_df.iloc[-1]['quarterlyTotalDebt'] / balance_df.iloc[-1]['quarterlyTotalAssets'] * 100)
+
+    statistics_df = fetch_financial_timeseries(symbol=symbol, report='statistics', period='Q', years=1)
+
+    # result['ROE']
+    # result['ROA']
+    result['PER'] = float(statistics_df.iloc[-1]['quarterlyPeRatio'])
+    result['PBR'] = float(statistics_df.iloc[-1]['quarterlyPbRatio'])
+
+    r = requests.get(f'https://finance.yahoo.com/quote/{symbol}/key-statistics/', headers={
+        "Accept": "*/*",
+        "Accept-Encoding": "gzip, deflate, br",
+        "Accept-Language": "en-US,en;q=0.9",
+        "Cache-Control": "no-cache",
+        "Connection": "keep-alive",
+        "DNT": "1",
+        "Origin": "https://finance.yahoo.com",
+        "Pragma": "no-cache",
+        "Referer": "https://finance.yahoo.com/",
+        "Sec-Fetch-Dest": "empty",
+        "Sec-Fetch-Mode": "cors",
+        "Sec-Fetch-Site": "same-site",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
+    })
+    soup = BeautifulSoup(r.text, 'html.parser')
+    yf_vaowmx = soup.find_all('td', class_="yf-vaowmx")
+    for index, value in enumerate(yf_vaowmx):
+        if 'Dividend Rate' in value.get_text():
+            try:
+                result['Dividend Rate'] = float(yf_vaowmx[index + 1].get_text())
+            except:
+                result['Dividend Rate'] = -1
+            break
+
+    if 'Dividend Rate' in result.keys():
+        raise KeyError('not found Dividend Rate')
+
+    return result
+
+
 if __name__ == "__main__":
     # 사용 예시
-    symbol_code = "005930"  # 삼성전자
+    symbol = "AOS"  # 삼성전자
     # # (0) 하이라이트
-    # df_y = get_finance_from_fnguide(symbol_code, 'highlight', report_type='D', period='Y', include_estimates=False)
+    # df_y = get_finance_from_fnguide(symbol, 'highlight', report_type='D', period='Y', include_estimates=False)
     # print("[하이라이트]\n", df_y.head(), "\n")
     #
     # # (1) 재무상태표만 확인하기
-    # df_state = get_finance_from_fnguide(symbol_code, report="income", report_type='D', period='Y', include_estimates=False)
+    # df_state = get_finance_from_fnguide(symbol, report="income", report_type='D', period='Y', include_estimates=False)
     # print("[재무상태표]\n", df_state.head(), "\n")
     #
     # (2) 하이라이트 + 현금흐름표
-    df_highlight_cash = get_finance_from_fnguide(symbol_code, report="highlight,cash", report_type='D', period='Q')
-    print("[하이라이트 + 현금흐름표]\n", df_highlight_cash.head(), "\n")
+    # df_highlight_cash = get_finance_from_fnguide(symbol, report="highlight,cash", report_type='D', period='Q')
+    # print("[하이라이트 + 현금흐름표]\n", df_highlight_cash.head(), "\n")
     #
     # # (3) 종합 요약 정보
-    # summary_dict = get_financial_summary_for_update_stock(symbol_code)
+    # summary_dict = get_financial_summary_for_update_stock(symbol)
     # print("[종합 요약 정보]\n", summary_dict)
+    # print(fetch_financial_timeseries(symbol='aapl', report='statistics', period='Q', years=1))
+    r = requests.get(f'https://finance.yahoo.com/quote/{symbol}/key-statistics/', headers={
+        "Accept": "*/*",
+        "Accept-Encoding": "gzip, deflate, br",
+        "Accept-Language": "en-US,en;q=0.9",
+        "Cache-Control": "no-cache",
+        "Connection": "keep-alive",
+        "DNT": "1",
+        "Origin": "https://finance.yahoo.com",
+        "Pragma": "no-cache",
+        "Referer": "https://finance.yahoo.com/",
+        "Sec-Fetch-Dest": "empty",
+        "Sec-Fetch-Mode": "cors",
+        "Sec-Fetch-Site": "same-site",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
+    })
+    soup = BeautifulSoup(r.text, 'html.parser')
+    yf_vaowmx = soup.find_all('td', class_="yf-vaowmx")
+    for index, value in enumerate(yf_vaowmx):
+        if 'Dividend Rate' in value.get_text():
+            try:
+                print(float(yf_vaowmx[index + 1].get_text()))
+            except:
+                print(-1)
+            break
