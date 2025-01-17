@@ -124,8 +124,8 @@ def get_yahoo_finance_data(symbol, unix_start_date, unix_end_date, interval='1d'
             return df
 
         except requests.exceptions.RequestException as e:
-            traceback.print_exc()
             print(f"Attempt {attempt + 1} failed: {symbol}")
+            print(e)
             if attempt < retries - 1:
                 time.sleep(delay)
             else:
