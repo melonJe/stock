@@ -24,7 +24,10 @@ from utils.operations import price_refine
 
 def select_buy_stocks(country: str = "KOR") -> dict:
     buy_levels = dict()
-    anchor_date = (datetime.datetime.now() - datetime.timedelta(days=1) if country == 'USA' else datetime.timedelta(days=0)).strftime('%Y-%m-%d')
+    anchor_date = datetime.datetime.now()
+    if country == 'USA':
+        anchor_date = anchor_date - datetime.timedelta(days=1)
+    anchor_date = anchor_date.strftime('%Y-%m-%d')
 
     blacklist_symbols = Blacklist.select(Blacklist.symbol)
     sub_symbols = Subscription.select(Subscription.symbol)
