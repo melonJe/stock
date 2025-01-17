@@ -264,7 +264,7 @@ def korea_trading():
     while datetime.datetime.now().time() < time(18, 15, 00):
         sleep(1 * 60)
 
-    add_stock_price(country="KOR", start_date=datetime.datetime.now(), end_date=datetime.datetime.now())
+    add_stock_price(country="KOR", start_date=datetime.datetime.now() - datetime.timedelta(days=5), end_date=datetime.datetime.now())
     for stock in ki_api.get_owned_stock_info():
         stop_loss_insert(stock.pdno, float(stock.pchs_avg_pric))
 
