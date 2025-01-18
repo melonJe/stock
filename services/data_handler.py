@@ -366,4 +366,4 @@ if __name__ == "__main__":
     #     logging.info(f"{len(data_to_insert)}개 주식")
     #     upsert_many(Subscription, data_to_insert, conflict_target=[Subscription.symbol, Subscription.email])
 
-    add_stock_price(start_date=datetime.datetime.now() - datetime.timedelta(days=5), end_date=datetime.datetime.now())
+    add_stock_price(country="USA", start_date=datetime.datetime.now() - datetime.timedelta(days=5), end_date=datetime.datetime.now())
