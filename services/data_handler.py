@@ -342,9 +342,10 @@ def add_price_for_symbol(symbol: str, start_date: datetime.datetime = None, end_
             ]
 
         upsert_many(table, data_to_insert, [table.symbol, table.date], ['open', 'high', 'close', 'low', 'volume'])
+    except KeyError as e:
+        logging.error(f"Error processing symbol {symbol}: {e}")
+        Stock.delete().where(Stock.symbol == symbol).execute()
     except Exception as e:
-        # if get_country_by_symbol(symbol) == "USA":
-        #     Stock.delete().where(Stock.symbol == symbol).execute()
         logging.error(f"Error processing symbol {symbol}: {e}")
 
 

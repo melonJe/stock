@@ -33,7 +33,7 @@ def select_buy_stocks(country: str = "KOR") -> dict:
     sub_symbols = Subscription.select(Subscription.symbol)
     stocks_query = Stock.select(Stock.symbol).where(
         (Stock.country == country)
-        & (Stock.symbol.in_(sub_symbols))
+        # & (Stock.symbol.in_(sub_symbols))
         & ~(Stock.symbol.in_(blacklist_symbols))
     )
     stocks = {row.symbol for row in stocks_query}
@@ -50,6 +50,11 @@ def select_buy_stocks(country: str = "KOR") -> dict:
 
             if not str(df.iloc[-1]['date']) == anchor_date:  # 마지막 데이터가 오늘이 아니면 pass
                 continue
+
+            df['diff_price'] = (df['high'] - df['low'])
+            recent_5days = df.tail(10)
+            if recent_5days['diff_price'].min() * 5 < recent_5days['diff_price'].max():
+                break
 
             df['ma120'] = df['close'].rolling(window=120).mean()
             df['ma60'] = df['close'].rolling(window=60).mean()
@@ -290,10 +295,11 @@ def usa_trading():
 
 
 if __name__ == "__main__":
-    # ki_api = KoreaInvestmentAPI(app_key=setting_env.APP_KEY, app_secret=setting_env.APP_SECRET, account_number=setting_env.ACCOUNT_NUMBER, account_code=setting_env.ACCOUNT_CODE)
-    # trading_buy(korea_investment=ki_api, buy_levels=select_buy_stocks(country="KOR"))
-    # trading_sell(korea_investment=ki_api, sell_levels=select_sell_korea_stocks(korea_investment=ki_api))
-    select_buy_stocks(country="USA")
+    ki_api = KoreaInvestmentAPI(app_key=setting_env.APP_KEY, app_secret=setting_env.APP_SECRET, account_number=setting_env.ACCOUNT_NUMBER, account_code=setting_env.ACCOUNT_CODE)
+    trading_buy(korea_investment=ki_api, buy_levels=select_buy_stocks())
+    trading_buy(korea_investment=ki_api, buy_levels=select_buy_stocks(country="USA"))
+    trading_sell(korea_investment=ki_api, sell_levels=select_sell_korea_stocks(korea_investment=ki_api))
+    # select_buy_stocks(country="USA")
     # for symbol, values in select_buy_stocks(country="USA").items():
     #     print(symbol, values)
     # print(select_sell_stocks(ki_api))
