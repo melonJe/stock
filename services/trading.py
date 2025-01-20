@@ -58,9 +58,10 @@ def select_buy_stocks(country: str = "KOR") -> dict:
             df['diff_price'] = df['diff_price'].replace(["", "N/A"], None)
             df['diff_price'] = pd.to_numeric(df['diff_price'], errors='coerce')
             df = df.dropna(subset=['diff_price'])
-            recent_days = df.tail(10)
+            recent_days = df.tail(30)
             if recent_days.loc[recent_days['diff_price'] < recent_days['diff_price'].mean(), 'diff_price'].mean() * 10 < recent_days['diff_price'].max():
                 continue
+            recent_days = df.tail(10)
             if not (
                     np.all(recent_days['ma120'] <= recent_days['ma60']) and
                     np.all(recent_days['ma60'] <= recent_days['ma20']) and
