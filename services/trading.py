@@ -48,8 +48,8 @@ def select_buy_stocks(country: str = "KOR") -> dict:
             if len(df) < 200:
                 continue
 
-            # if not str(df.iloc[-1]['date']) == anchor_date:  # 마지막 데이터가 오늘이 아니면 pass
-            #     continue
+            if not str(df.iloc[-1]['date']) == anchor_date:  # 마지막 데이터가 오늘이 아니면 pass
+                continue
 
             df['ma120'] = df['close'].rolling(window=120).mean()
             df['ma60'] = df['close'].rolling(window=60).mean()
@@ -78,22 +78,25 @@ def select_buy_stocks(country: str = "KOR") -> dict:
                 continue
 
             df['CMF'] = ChaikinMoneyFlowIndicator(high=df['high'].astype('float64'), low=df['low'].astype('float64'), close=df['close'].astype('float64'), volume=df['volume'].astype('float64'), window=10).chaikin_money_flow()
-            if df.iloc[-1]['CMF'] > 0.1:
-                df['ATR5'] = AverageTrueRange(high=df['high'].astype('float64'), low=df['low'].astype('float64'), close=df['close'].astype('float64'), window=5).average_true_range()
-                df['ATR10'] = AverageTrueRange(high=df['high'].astype('float64'), low=df['low'].astype('float64'), close=df['close'].astype('float64'), window=10).average_true_range()
-                df['ATR20'] = AverageTrueRange(high=df['high'].astype('float64'), low=df['low'].astype('float64'), close=df['close'].astype('float64'), window=20).average_true_range()
-                atr = max(df.iloc[-1]['ATR5'], df.iloc[-1]['ATR10'], df.iloc[-1]['ATR20'])
-                if atr / df.iloc[-1]['close'] > 0.05:
-                    continue
-                volume = int(min(10000 // atr, np.average(df['volume'][-20:]) // (atr ** (1 / 2))))
-                if country == "USA":
-                    volume //= 1000
-                buy_levels[symbol] = {
-                    df.iloc[-1]['ma120']: volume // 10 * 4,
-                    df.iloc[-1]['ma60']: volume // 10 * 3,
-                    df.iloc[-1]['ma20']: volume // 10 * 2,
-                    df.iloc[-1]['close']: volume // 10 * 1
-                }
+            if df.iloc[-1]['CMF'] < 0.1:
+                continue
+
+            df['ATR5'] = AverageTrueRange(high=df['high'].astype('float64'), low=df['low'].astype('float64'), close=df['close'].astype('float64'), window=5).average_true_range()
+            df['ATR10'] = AverageTrueRange(high=df['high'].astype('float64'), low=df['low'].astype('float64'), close=df['close'].astype('float64'), window=10).average_true_range()
+            df['ATR20'] = AverageTrueRange(high=df['high'].astype('float64'), low=df['low'].astype('float64'), close=df['close'].astype('float64'), window=20).average_true_range()
+            atr = max(df.iloc[-1]['ATR5'], df.iloc[-1]['ATR10'], df.iloc[-1]['ATR20'])
+            if atr / df.iloc[-1]['close'] > 0.05:
+                continue
+
+            volume = int(min(10000 // atr, np.average(df['volume'][-20:]) // (atr ** (1 / 2))))
+            if country == "USA":
+                volume //= 1000
+            buy_levels[symbol] = {
+                df.iloc[-1]['ma120']: volume // 10 * 4,
+                df.iloc[-1]['ma60']: volume // 10 * 3,
+                df.iloc[-1]['ma20']: volume // 10 * 2,
+                df.iloc[-1]['close']: volume // 10 * 1
+            }
         except Exception as e:
             traceback.print_exc()
             logging.error(f"Error occurred: {e}")
