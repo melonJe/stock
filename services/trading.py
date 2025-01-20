@@ -48,22 +48,23 @@ def select_buy_stocks(country: str = "KOR") -> dict:
             if len(df) < 200:
                 continue
 
-            if not str(df.iloc[-1]['date']) == anchor_date:  # 마지막 데이터가 오늘이 아니면 pass
-                continue
-
-            df['diff_price'] = (df['high'] - df['low'])
-            recent_5days = df.tail(10)
-            if recent_5days['diff_price'].min() * 5 < recent_5days['diff_price'].max():
-                break
+            # if not str(df.iloc[-1]['date']) == anchor_date:  # 마지막 데이터가 오늘이 아니면 pass
+            #     continue
 
             df['ma120'] = df['close'].rolling(window=120).mean()
             df['ma60'] = df['close'].rolling(window=60).mean()
             df['ma20'] = df['close'].rolling(window=20).mean()
-            latest_days = df[-10:]
+            df['diff_price'] = df['high'] - df['low']
+            df['diff_price'] = df['diff_price'].replace(["", "N/A"], None)
+            df['diff_price'] = pd.to_numeric(df['diff_price'], errors='coerce')
+            df = df.dropna(subset=['diff_price'])
+            recent_days = df.tail(10)
+            if recent_days.loc[recent_days['diff_price'] < recent_days['diff_price'].mean(), 'diff_price'].mean() * 10 < recent_days['diff_price'].max():
+                continue
             if not (
-                    np.all(latest_days['ma120'] <= latest_days['ma60']) and
-                    np.all(latest_days['ma60'] <= latest_days['ma20']) and
-                    np.all(latest_days['ma20'] <= latest_days['close'])
+                    np.all(recent_days['ma120'] <= recent_days['ma60']) and
+                    np.all(recent_days['ma60'] <= recent_days['ma20']) and
+                    np.all(recent_days['ma20'] <= recent_days['close'])
             ):
                 continue
 
@@ -296,9 +297,9 @@ def usa_trading():
 
 if __name__ == "__main__":
     ki_api = KoreaInvestmentAPI(app_key=setting_env.APP_KEY, app_secret=setting_env.APP_SECRET, account_number=setting_env.ACCOUNT_NUMBER, account_code=setting_env.ACCOUNT_CODE)
-    trading_buy(korea_investment=ki_api, buy_levels=select_buy_stocks())
+    # trading_buy(korea_investment=ki_api, buy_levels=select_buy_stocks())
     trading_buy(korea_investment=ki_api, buy_levels=select_buy_stocks(country="USA"))
-    trading_sell(korea_investment=ki_api, sell_levels=select_sell_korea_stocks(korea_investment=ki_api))
+    # trading_sell(korea_investment=ki_api, sell_levels=select_sell_korea_stocks(korea_investment=ki_api))
     # select_buy_stocks(country="USA")
     # for symbol, values in select_buy_stocks(country="USA").items():
     #     print(symbol, values)
