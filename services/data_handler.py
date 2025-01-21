@@ -90,15 +90,19 @@ def update_subscription_kor(stock: Stock, email, data_to_insert):
         try:
             if not (pd.to_numeric(df_highlight['매출액'].str.replace(",", ""), errors="coerce")[-2:] > 0).all():
                 return
-            if not (pd.to_numeric(df_highlight['매출액'].str.replace(",", ""), errors="coerce").diff()[-1:] >= 0).all():
-                return
+            # if not (pd.to_numeric(df_highlight['매출액'].str.replace(",", ""), errors="coerce").diff()[-1:] >= 0).all():
+            #     return
         except Exception as e:
             raise ValueError(f"not find 매출액")
 
-        if not (pd.to_numeric(df_highlight['영업이익'].str.replace(",", ""), errors="coerce").diff()[-1:] >= 0).all():
+        if not (pd.to_numeric(df_highlight['영업이익'].str.replace(",", ""), errors="coerce")[-2:] >= 0).all():
             return
-        if not (pd.to_numeric(df_highlight['당기순이익'].str.replace(",", ""), errors="coerce").diff()[-1:] >= 0).all():
+        if not (pd.to_numeric(df_highlight['당기순이익'].str.replace(",", ""), errors="coerce")[-2:] >= 0).all():
             return
+        # if not (pd.to_numeric(df_highlight['영업이익'].str.replace(",", ""), errors="coerce").diff()[-1:] >= 0).all():
+        #     return
+        # if not (pd.to_numeric(df_highlight['당기순이익'].str.replace(",", ""), errors="coerce").diff()[-1:] >= 0).all():
+        #     return
 
         # if not summary_dict["ROE"] > 10:
         #     return
@@ -122,41 +126,35 @@ def update_subscription_usa(stock: Stock, email, data_to_insert, retries=5, dela
             summary_dict = get_financial_summary_for_update_stock_usa(stock.symbol)
             df_income = fetch_financial_timeseries(stock.symbol)
             df_cash = fetch_financial_timeseries(stock.symbol, report='cash')
-            if not (df_cash['quarterlyOperatingCashFlow'][-2:] > 0).all():
-                # logging.info(f'{stock.symbol} OperatingCashFlow')
-                return
 
+            if not (df_cash['quarterlyOperatingCashFlow'][-2:] > 0).all():
+                return
             try:
                 if not (df_income['quarterlyTotalRevenue'][-2:] > 0).all():
-                    # logging.info(f'{stock.symbol} TotalRevenue')
                     return
-                if not (df_income['quarterlyTotalRevenue'].diff()[-1:] >= 0).all():
-                    # logging.info(f'{stock.symbol} all TotalRevenue')
-                    return
+                # if not (df_income['quarterlyTotalRevenue'].diff()[-1:] >= 0).all():
+                #     return
             except Exception as e:
                 raise ValueError(f"not find 매출액")
 
-            if not (df_income['quarterlyOperatingIncome'].diff()[-1:] >= 0).all():
-                # logging.info(f'{stock.symbol} OperatingIncome')
+            if not (df_income['quarterlyOperatingIncome'][-2:] >= 0).all():
                 return
-            if not (df_income['quarterlyNetIncome'].diff()[-1:] >= 0).all():
-                # logging.info(f'{stock.symbol} NetIncome')
+            if not (df_income['quarterlyNetIncome'][-2:] >= 0).all():
                 return
+            # if not (df_income['quarterlyOperatingIncome'].diff()[-1:] >= 0).all():
+            #     return
+            # if not (df_income['quarterlyNetIncome'].diff()[-1:] >= 0).all():
+            #     return
 
             # if not summary_dict["ROE"] > 10:
-            #     logging.info(f'{stock.symbol} ROE')
             #     return
             # if not summary_dict["ROA"] > 10:
-            #     logging.info(f'{stock.symbol} ROA')
             #     return
             # if not summary_dict["PER"] * summary_dict["PBR"] <= 22.5:
-            #     # logging.info(f'{stock.symbol} PER')
             #     return
             if not summary_dict["Debt Ratio"] < 200:
-                # logging.info(f'{stock.symbol} Debt Ratio')
                 return
             if not summary_dict["Dividend Rate"] > 0:
-                # logging.info(f'{stock.symbol} Dividend Rate')
                 return
 
             data_to_insert.append({'email': email, 'symbol': stock})
