@@ -63,8 +63,8 @@ def select_buy_stocks(country: str = "KOR") -> dict:
                 continue
             recent_days = df.tail(10)
             if not (
-                    np.all(recent_days['ma120'] <= recent_days['ma60']) and
-                    np.all(recent_days['ma60'] <= recent_days['ma20']) and
+                    np.all(recent_days['ma120'] <= recent_days['ma60']) &
+                    np.all(recent_days['ma60'] <= recent_days['ma20']) &
                     np.all(recent_days['ma20'] <= recent_days['close'])
             ):
                 continue
@@ -301,8 +301,8 @@ def usa_trading():
 
 if __name__ == "__main__":
     ki_api = KoreaInvestmentAPI(app_key=setting_env.APP_KEY, app_secret=setting_env.APP_SECRET, account_number=setting_env.ACCOUNT_NUMBER, account_code=setting_env.ACCOUNT_CODE)
-    # trading_buy(korea_investment=ki_api, buy_levels=select_buy_stocks())
-    trading_buy(korea_investment=ki_api, buy_levels=select_buy_stocks(country="USA"))
+    trading_buy(korea_investment=ki_api, buy_levels=select_buy_stocks())
+    # trading_buy(korea_investment=ki_api, buy_levels=select_buy_stocks(country="USA"))
     # trading_sell(korea_investment=ki_api, sell_levels=select_sell_korea_stocks(korea_investment=ki_api))
     # select_buy_stocks(country="USA")
     # for symbol, values in select_buy_stocks(country="USA").items():
