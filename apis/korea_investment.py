@@ -506,7 +506,7 @@ class KoreaInvestmentAPI:
                 logging.info("해외 예약 주문이 성공적으로 접수되었습니다.")
                 return response_data
             else:
-                logging.error(f"해외 예약 주문 실패: {response_data}")
+                logging.error(f"{symbol} 해외 예약 주문 실패: {response_data}")
                 return response_data
         else:
             logging.error("해외 예약 주문 요청에 실패했습니다.")

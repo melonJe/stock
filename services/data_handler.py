@@ -342,7 +342,7 @@ def add_price_for_symbol(symbol: str, start_date: datetime.datetime = None, end_
         upsert_many(table, data_to_insert, [table.symbol, table.date], ['open', 'high', 'close', 'low', 'volume'])
     except KeyError as e:
         logging.error(f"Error processing symbol {symbol}: {e}")
-        Stock.delete().where(Stock.symbol == symbol).execute()
+        # Stock.delete().where(Stock.symbol == symbol).execute()
     except Exception as e:
         logging.error(f"Error processing symbol {symbol}: {e}")
 
@@ -351,5 +351,5 @@ if __name__ == "__main__":
     # update_stock_listings()
     # add_stock_price(country='USA', start_date=datetime.datetime.now() - relativedelta(years=2), end_date=datetime.datetime.now())
     # print(get_yahoo_finance_data('AAPL', int((datetime.datetime.now() - datetime.timedelta(days=5)).timestamp()), int(datetime.datetime.now().timestamp())))
-    update_subscription_stock()
-    # add_stock_price(country="USA", start_date=datetime.datetime.now() - datetime.timedelta(days=5), end_date=datetime.datetime.now())
+    # update_subscription_stock()
+    add_stock_price(country="USA", start_date=datetime.datetime.now() - datetime.timedelta(days=5), end_date=datetime.datetime.now())
