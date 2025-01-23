@@ -43,7 +43,7 @@ def upsert_many(model: Type[Model], data: list, conflict_target: list = None, pr
     """
     if not data:
         return
-    print(data)
+
     try:
         with models.db.atomic():
             if not conflict_target:
