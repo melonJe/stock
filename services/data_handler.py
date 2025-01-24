@@ -75,6 +75,7 @@ def insert_stock(symbol: str, company_name: str = None, country: str = None):
         country = get_country_by_symbol(symbol)
 
     new_stock = Stock.create(symbol=symbol, company_name=company_name, country=country)
+    add_price_for_symbol(symbol)
     return new_stock
 
 
@@ -307,7 +308,7 @@ def add_price_for_symbol(symbol: str, start_date: datetime.datetime = None, end_
         table = get_history_table(country)
         data_to_insert = None
         if country == "KOR":
-            start_date = (datetime.datetime.now() - relativedelta(months=1)).strftime('%Y-%m-%d') if not start_date else start_date.strftime('%Y-%m-%d')
+            start_date = (datetime.datetime.now() - relativedelta(years=2)).strftime('%Y-%m-%d') if not start_date else start_date.strftime('%Y-%m-%d')
             end_date = datetime.datetime.now().strftime('%Y-%m-%d') if not end_date else end_date.strftime('%Y-%m-%d')
             df_krx = FinanceDataReader.DataReader(
                 symbol=f'NAVER:{symbol}',
@@ -325,7 +326,7 @@ def add_price_for_symbol(symbol: str, start_date: datetime.datetime = None, end_
                 for idx, row in df_krx.iterrows()
             ]
         elif country == "USA":
-            unix_start_date = int((datetime.datetime.now() - relativedelta(months=1)).timestamp()) if not start_date else int(start_date.timestamp())
+            unix_start_date = int((datetime.datetime.now() - relativedelta(years=2)).timestamp()) if not start_date else int(start_date.timestamp())
             unix_end_date = int(datetime.datetime.now().timestamp()) if not end_date else int(end_date.timestamp())
             df_krx = get_yahoo_finance_data(symbol, unix_start_date, unix_end_date)
             data_to_insert = [
@@ -338,6 +339,7 @@ def add_price_for_symbol(symbol: str, start_date: datetime.datetime = None, end_
                  'volume': row['Volume']}
                 for idx, row in df_krx.iterrows()
             ]
+            print(data_to_insert)  # 디버깅
 
         upsert_many(table, data_to_insert, [table.symbol, table.date], ['open', 'high', 'close', 'low', 'volume'])
     except KeyError as e:
