@@ -309,7 +309,7 @@ def add_price_for_symbol(symbol: str, start_date: datetime.datetime = None, end_
         data_to_insert = None
         if country == "KOR":
             start_date = (datetime.datetime.now() - relativedelta(years=2)).strftime('%Y-%m-%d') if not start_date else start_date.strftime('%Y-%m-%d')
-            end_date = datetime.datetime.now().strftime('%Y-%m-%d') if not end_date else end_date.strftime('%Y-%m-%d')
+            end_date = (datetime.datetime.now() + relativedelta(days=5)).strftime('%Y-%m-%d') if not end_date else end_date.strftime('%Y-%m-%d')
             df_krx = FinanceDataReader.DataReader(
                 symbol=f'NAVER:{symbol}',
                 start=start_date,
