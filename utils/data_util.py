@@ -142,5 +142,5 @@ if __name__ == "__main__":
     # df = get_yahoo_finance_data(symbol, unix_start_date, unix_end_date, interval)
     # if df is not None:
     #     print(df)
-    print(int((datetime.datetime.now() - relativedelta(months=1)).timestamp()))
-    get_yahoo_finance_data('AAPL', int((datetime.datetime.now() - relativedelta(days=4)).timestamp()), int(datetime.datetime.now().timestamp()))
+    # print(int((datetime.datetime.now() - relativedelta(months=1)).timestamp()))
+    print(get_yahoo_finance_data('AAPL', int((datetime.datetime.now() - relativedelta(days=4)).timestamp()), int((datetime.datetime.now() + relativedelta(days=4)).timestamp())))
