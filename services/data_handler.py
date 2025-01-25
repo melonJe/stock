@@ -339,7 +339,6 @@ def add_price_for_symbol(symbol: str, start_date: datetime.datetime = None, end_
                  'volume': row['Volume']}
                 for idx, row in df_krx.iterrows()
             ]
-            print(data_to_insert)  # 디버깅
 
         upsert_many(table, data_to_insert, [table.symbol, table.date], ['open', 'high', 'close', 'low', 'volume'])
     except KeyError as e:
