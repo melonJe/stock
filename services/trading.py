@@ -196,7 +196,7 @@ def trading_buy(korea_investment: KoreaInvestmentAPI, buy_levels):
                         money += price * volume
                     elif country == "USA":
                         price = round(price, 2)
-                        korea_investment.submit_overseas_reservation_order(country=country, action="buy", symbol=symbol, price=str(price), volume=str(volume), end_date=end_date)
+                        korea_investment.submit_overseas_reservation_order(country=country, action="buy", symbol=symbol, price=str(price), volume=str(volume))
                         money += price * volume
 
                 except Exception as e:
@@ -230,7 +230,7 @@ def trading_sell(korea_investment: KoreaInvestmentAPI, sell_levels):
             elif country == "USA":
                 if price < float(stock.pchs_avg_pric):
                     price = round(float(stock.pchs_avg_pric) * 1.025, 2)
-                korea_investment.submit_overseas_reservation_order(country=country, action="sell", symbol=symbol, price=price, volume=volume, end_date=end_date)
+                korea_investment.submit_overseas_reservation_order(country=country, action="sell", symbol=symbol, price=price, volume=volume)
 
 
 def stop_loss_notify(korea_investment: KoreaInvestmentAPI):

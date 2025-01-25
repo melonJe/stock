@@ -451,7 +451,7 @@ class KoreaInvestmentAPI:
             discord.error_message("stock_trade_list HTTP 요청 실패.")
             return None
 
-    def submit_overseas_reservation_order(self, country: str, action: str, symbol: str, volume: str, price: str, end_date: Optional[str] = None, ) -> Optional[Dict]:
+    def submit_overseas_reservation_order(self, country: str, action: str, symbol: str, volume: str, price: str) -> Optional[Dict]:
         """
         Submit an overseas stock reservation order.
         """
