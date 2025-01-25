@@ -40,7 +40,7 @@ def start():
 
         scheduler.add_job(
             add_stock_price,
-            trigger=CronTrigger(day_of_week="tue-sat", hour=16, minute=00, second=0),
+            trigger=CronTrigger(day_of_week="tue-sat", hour=12, minute=00, second=0),
             kwargs={'country': 'USA', 'start_date': datetime.now() - timedelta(days=5), 'end_date': datetime.now() + timedelta(days=5)},
             id="add_usa_stock_price",
             max_instances=1,
@@ -57,7 +57,7 @@ def start():
 
     scheduler.add_job(
         usa_trading,
-        trigger=CronTrigger(day_of_week="tue-sat", hour=16, minute=30, second=0),
+        trigger=CronTrigger(day_of_week="tue-sat", hour=14, minute=00, second=0),
         id="usa_trading",
         max_instances=1,
         replace_existing=True,
