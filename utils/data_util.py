@@ -96,7 +96,7 @@ def get_yahoo_finance_data(symbol, unix_start_date, unix_end_date, interval='1d'
     }
     for attempt in range(retries):
         try:
-            response = requests.get(base_url + symbol, params=params, headers=headers)
+            response = requests.get(base_url + symbol, params=params, headers=headers, timeout=30)
             response.raise_for_status()
 
             data = response.json()
