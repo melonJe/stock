@@ -188,14 +188,14 @@ def update_subscription_stock():
     with ThreadPoolExecutor(max_workers=min(os.cpu_count(), 10)) as executor:
         futures = [executor.submit(update_subscription_kor, stock, 'cabs0814@naver.com', data_to_insert) for stock in Stock.select().where(Stock.country == 'KOR')]
 
-        for future in futures:
+        for future in as_completed(futures):
             future.result()  # Ensure any raised exceptions are handled
 
     # 미국 주식 프로세스
     with ThreadPoolExecutor(max_workers=min(os.cpu_count(), 10)) as executor:
         futures = [executor.submit(update_subscription_usa, stock, 'jmayermj@gmail.com', data_to_insert, 5, 5) for stock in Stock.select().where(Stock.country == 'USA')]
 
-        for future in futures:
+        for future in as_completed(futures):
             future.result()  # Ensure any raised exceptions are handled
 
     if data_to_insert:
@@ -210,7 +210,7 @@ def update_blacklist():
             'https://finance.naver.com/sise/investment_alert.naver?type=warning', 'https://finance.naver.com/sise/investment_alert.naver?type=risk')
     symbol = set()
     for url in urls:
-        page = requests.get(url).text
+        page = requests.get(url, timeout=30).text
         soup = BeautifulSoup(page, "html.parser")
         elements = soup.select('a.tltle')
         symbol = symbol.union(parse_qs(urlparse(x['href']).query)['code'][0] for x in elements)
