@@ -23,21 +23,21 @@ CREATE TABLE stop_loss (
 CREATE TABLE price_history (
     symbol VARCHAR NOT NULL,
     date DATE NOT NULL,
-    open INTEGER NOT NULL,
-    high INTEGER NOT NULL,
-    close INTEGER NOT NULL,
-    low INTEGER NOT NULL,
-    volume INTEGER NOT NULL,
+    open BIGINT NOT NULL,
+    high BIGINT NOT NULL,
+    close BIGINT NOT NULL,
+    low BIGINT NOT NULL,
+    volume BIGINT NOT NULL,
     PRIMARY KEY (symbol, date)
 );
 
 CREATE TABLE price_history_us (
     symbol VARCHAR NOT NULL,
     date DATE NOT NULL,
-    open DECIMAL(10, 4) NULL,
-    high DECIMAL(10, 4) NULL,
-    close DECIMAL(10, 4) NULL,
-    low DECIMAL(10, 4) NULL,
+    open DECIMAL(20, 4) NULL,
+    high DECIMAL(20, 4) NULL,
+    close DECIMAL(20, 4) NULL,
+    low DECIMAL(20, 4) NULL,
     volume BIGINT NULL,
     PRIMARY KEY (symbol, date)
 );
