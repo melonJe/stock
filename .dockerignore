@@ -7,7 +7,7 @@ __pycache__
 .env.stock
 .env.postgres
 .gitignore
-docker-build.sh
+stock-build.sh
 docker-compose.yml
 nohup.out
 db.sqlite3

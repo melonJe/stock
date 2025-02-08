@@ -25,7 +25,7 @@ services:
     ports:
       - "18000:8000"
     env_file:
-      - .env
+      - .env.stock
     environment:
       - TZ=Asia/Seoul
     depends_on:
