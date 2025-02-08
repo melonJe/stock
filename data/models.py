@@ -66,10 +66,10 @@ class PriceHistory(Model):
 class PriceHistoryUS(Model):
     symbol = CharField()
     date = DateField()
-    open = DecimalField(max_digits=10, decimal_places=4, null=True)
-    high = DecimalField(max_digits=10, decimal_places=4, null=True)
-    close = DecimalField(max_digits=10, decimal_places=4, null=True)
-    low = DecimalField(max_digits=10, decimal_places=4, null=True)
+    open = DecimalField(max_digits=20, decimal_places=4, null=True)
+    high = DecimalField(max_digits=20, decimal_places=4, null=True)
+    close = DecimalField(max_digits=20, decimal_places=4, null=True)
+    low = DecimalField(max_digits=20, decimal_places=4, null=True)
     volume = BigIntegerField(null=True)
 
     class Meta:

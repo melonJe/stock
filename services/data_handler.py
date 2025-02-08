@@ -163,20 +163,21 @@ def update_subscription_usa(stock: Stock, email, data_to_insert, retries=5, dela
                 return
 
             data_to_insert.append({'email': email, 'symbol': stock})
+            return
 
         except requests.exceptions.RequestException as e:
             logging.info(f"`Attempt {attempt + 1} failed: {stock.symbol}")
             if attempt < retries - 1:
                 time.sleep(delay)
             else:
-                logging.info("All retries failed.")
+                # logging.info(f"{stock.symbol} All retries failed.")
                 return
         except KeyError as e:
             # logging.info(f"{stock.symbol} KeyError: {e}")
-            return None
+            return
         except Exception as e:
             # logging.info(f"{stock.symbol} Unexpected error occurred: {e}")
-            return None
+            return
 
 
 def update_subscription_stock():
@@ -357,8 +358,6 @@ def add_price_for_symbol(symbol: str, start_date: datetime.datetime = None, end_
 
 if __name__ == "__main__":
     # update_stock_listings()
-    # add_stock_price(country='USA', start_date=datetime.datetime.now() - relativedelta(years=2), end_date=datetime.datetime.now())
+    add_stock_price(start_date=datetime.datetime.now() - relativedelta(years=5), end_date=datetime.datetime.now())
     # add_stock_price(start_date=datetime.datetime.now() - relativedelta(years=2), end_date=datetime.datetime.now())
     # print(get_yahoo_finance_data('AAPL', int((datetime.datetime.now() - datetime.timedelta(days=5)).timestamp()), int(datetime.datetime.now().timestamp())))
-    logging.info(f'{datetime.datetime.now()} update_subscription_stock 시작')
-    data_to_insert = []
