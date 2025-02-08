@@ -33,7 +33,7 @@ else
 fi
 
 # Docker 빌드
-docker buildx build --tag stock:latest . || { echo "Docker build failed"; exit 1; }
+docker build --tag stock:latest . || { echo "Docker build failed"; exit 1; }
 
 # Docker Compose 파일 복사
 cp -f ./docker-compose.stock.yml ../docker-compose.stock.yml || { echo "Copy failed"; exit 1; }
