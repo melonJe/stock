@@ -9,6 +9,7 @@ import requests
 from dateutil.relativedelta import relativedelta
 from peewee import Model
 
+from custom_exception.exception import NotFoundUrl
 from data import models
 
 
@@ -126,6 +127,10 @@ def get_yahoo_finance_data(symbol, unix_start_date, unix_end_date, interval='1d'
         except requests.exceptions.RequestException as e:
             print(f"Attempt {attempt + 1} failed: {symbol}")
             print(e)
+
+            if "Not Found for url" in str(e):
+                raise NotFoundUrl(f"Not Found for url")
+
             if attempt < retries - 1:
                 time.sleep(delay)
             else:

@@ -12,6 +12,7 @@ from bs4 import BeautifulSoup
 from dateutil.relativedelta import relativedelta
 from ta.volatility import AverageTrueRange
 
+from custom_exception.exception import NotFoundUrl
 from data.models import Stock, PriceHistory, PriceHistoryUS, Subscription, Blacklist, StopLoss
 from utils.data_util import upsert_many, get_yahoo_finance_data
 from utils.financial_statement import get_financial_summary_for_update_stock, get_finance_from_fnguide, fetch_financial_timeseries, get_financial_summary_for_update_stock_usa
@@ -341,16 +342,18 @@ def add_price_for_symbol(symbol: str, start_date: datetime.datetime = None, end_
             ]
 
         upsert_many(table, data_to_insert, [table.symbol, table.date], ['open', 'high', 'close', 'low', 'volume'])
+
+    except NotFoundUrl as e:
+        Stock.delete().where(Stock.symbol == symbol).execute()
     except KeyError as e:
         logging.error(f"Error processing symbol {symbol}: {e}")
-        # Stock.delete().where(Stock.symbol == symbol).execute()
     except Exception as e:
         logging.error(f"Error processing symbol {symbol}: {e}")
 
 
 if __name__ == "__main__":
-    # update_stock_listings()
+    update_stock_listings()
     # add_stock_price(country='USA', start_date=datetime.datetime.now() - relativedelta(years=2), end_date=datetime.datetime.now())
+    add_stock_price(start_date=datetime.datetime.now() - datetime.timedelta(years=2), end_date=datetime.datetime.now())
     # print(get_yahoo_finance_data('AAPL', int((datetime.datetime.now() - datetime.timedelta(days=5)).timestamp()), int(datetime.datetime.now().timestamp())))
     # update_subscription_stock()
-    add_stock_price(start_date=datetime.datetime.now() - datetime.timedelta(days=5), end_date=datetime.datetime.now())
