@@ -92,7 +92,7 @@ def get_finance_from_fnguide(symbol: str, report='highlight', report_type: str =
             f'https://comp.fnguide.com/SVO2/ASP/SVD_Main.asp'
             f'?pGB=1&gicode=A{symbol}&cID=&MenuYn=Y&ReportGB=&NewMenuID=101&stkGb=701'
         )
-        response = requests.get(url_main)
+        response = requests.get(url_main, timeout=30)
         response.raise_for_status()
         soup_main = BeautifulSoup(response.text, 'html.parser')
 
@@ -109,7 +109,7 @@ def get_finance_from_fnguide(symbol: str, report='highlight', report_type: str =
             f'https://comp.fnguide.com/SVO2/ASP/SVD_Finance.asp'
             f'?pGB=1&gicode=A{symbol}&cID=&MenuYn=Y&ReportGB=&NewMenuID=103&stkGb=701'
         )
-        response = requests.get(url_finance)
+        response = requests.get(url_finance, timeout=30)
         response.raise_for_status()
         soup_finance = BeautifulSoup(response.text, 'html.parser')
 
@@ -172,7 +172,7 @@ def get_financial_summary_for_update_stock(symbol: str, report_type: str = 'D', 
         f'https://comp.fnguide.com/SVO2/ASP/SVD_Main.asp'
         f'?pGB=1&gicode=A{symbol}&cID=&MenuYn=Y&ReportGB=&NewMenuID=101&stkGb=701'
     )
-    response = requests.get(url_main)
+    response = requests.get(url_main, timeout=30)
     response.raise_for_status()
     soup = BeautifulSoup(response.text, 'html.parser')
 
@@ -265,7 +265,7 @@ def fetch_financial_timeseries(symbol: str, report='income', period: str = 'Q', 
     }
 
     # GET 요청 전송
-    response = requests.get(base_url, params=params, headers=headers)
+    response = requests.get(base_url, params=params, headers=headers, timeout=30)
     if response.status_code != 200:
         raise ConnectionError(f"데이터 가져오기 실패: {response.status_code} - {response.text}")
 
@@ -359,7 +359,7 @@ def get_financial_summary_for_update_stock_usa(symbol: str, year: int = 5):
         "Sec-Fetch-Site": "same-site",
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
     }
-    response = requests.get(base_url + symbol, params=params, headers=headers)
+    response = requests.get(base_url + symbol, params=params, headers=headers, timeout=30)
     response.raise_for_status()
     data = response.json()
     result['Dividend Rate'] = 0
