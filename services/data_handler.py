@@ -83,7 +83,7 @@ def insert_stock(symbol: str, company_name: str = None, country: str = None):
 
 def update_subscription_kor(stock: Stock, email, data_to_insert):
     try:
-        print(stock.symbol)
+        # print(stock.symbol)
         summary_dict = get_financial_summary_for_update_stock(stock.symbol)
         df_highlight = get_finance_from_fnguide(stock.symbol, 'highlight', period='Q', include_estimates=False)
         df_cash = get_finance_from_fnguide(stock.symbol, 'cash', period='Q', include_estimates=False)
@@ -125,6 +125,7 @@ def update_subscription_kor(stock: Stock, email, data_to_insert):
 
 
 def update_subscription_usa(stock: Stock, email, data_to_insert, retries=5, delay=5):
+    # print(stock.symbol)
     for attempt in range(retries):
         try:
             summary_dict = get_financial_summary_for_update_stock_usa(stock.symbol)
@@ -306,6 +307,7 @@ def add_stock_price(symbol: str = None, country: str = None, start_date: datetim
 
 
 def add_price_for_symbol(symbol: str, start_date: datetime.datetime = None, end_date: datetime.datetime = None):
+    # print(symbol)
     try:
         country = get_country_by_symbol(symbol)
         table = get_history_table(country)
@@ -355,7 +357,7 @@ def add_price_for_symbol(symbol: str, start_date: datetime.datetime = None, end_
 
 if __name__ == "__main__":
     # update_stock_listings()
-    # add_stock_price(country='USA', start_date=datetime.datetime.now() - relativedelta(years=2), end_date=datetime.datetime.now())
+    add_stock_price(country='USA', start_date=datetime.datetime.now() - relativedelta(years=2), end_date=datetime.datetime.now())
     # add_stock_price(start_date=datetime.datetime.now() - relativedelta(years=2), end_date=datetime.datetime.now())
     # print(get_yahoo_finance_data('AAPL', int((datetime.datetime.now() - datetime.timedelta(days=5)).timestamp()), int(datetime.datetime.now().timestamp())))
     update_subscription_stock()
