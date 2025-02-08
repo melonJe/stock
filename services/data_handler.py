@@ -1,5 +1,6 @@
 import datetime
 import logging
+import os
 import re
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -82,6 +83,7 @@ def insert_stock(symbol: str, company_name: str = None, country: str = None):
 
 def update_subscription_kor(stock: Stock, email, data_to_insert):
     try:
+        print(stock.symbol)
         summary_dict = get_financial_summary_for_update_stock(stock.symbol)
         df_highlight = get_finance_from_fnguide(stock.symbol, 'highlight', period='Q', include_estimates=False)
         df_cash = get_finance_from_fnguide(stock.symbol, 'cash', period='Q', include_estimates=False)
@@ -182,7 +184,7 @@ def update_subscription_stock():
 
     # 한국 주식 프로세스
     Subscription.delete().where(Subscription.email == 'cabs0814@naver.com').execute()
-    with ThreadPoolExecutor(max_workers=10) as executor:
+    with ThreadPoolExecutor(max_workers=min(os.cpu_count(), 10)) as executor:
         futures = [executor.submit(update_subscription_kor, stock, 'cabs0814@naver.com', data_to_insert) for stock in Stock.select().where(Stock.country == 'KOR')]
 
         for future in futures:
@@ -190,7 +192,7 @@ def update_subscription_stock():
 
     # 미국 주식 프로세스
     Subscription.delete().where(Subscription.email == 'jmayermj@gmail.com').execute()
-    with ThreadPoolExecutor(max_workers=10) as executor:
+    with ThreadPoolExecutor(max_workers=min(os.cpu_count(), 10)) as executor:
         futures = [executor.submit(update_subscription_usa, stock, 'jmayermj@gmail.com', data_to_insert, 5, 5) for stock in Stock.select().where(Stock.country == 'USA')]
 
         for future in futures:
@@ -239,7 +241,7 @@ def process_stock_listing(df, code_col, name_col, region):
     주어진 시장 데이터를 처리하고, insert_stock 함수를 병렬로 실행.
     """
     try:
-        with ThreadPoolExecutor(max_workers=10) as executor:
+        with ThreadPoolExecutor(max_workers=min(os.cpu_count(), 10)) as executor:
             futures = [
                 executor.submit(insert_stock, item[code_col], item[name_col], region)
                 for item in df.to_dict('records')
@@ -288,7 +290,7 @@ def add_stock_price(symbol: str = None, country: str = None, start_date: datetim
             stocks = stocks.where(Stock.country == country)
 
         # ThreadPoolExecutor로 스레드 풀 생성
-        with ThreadPoolExecutor(max_workers=10) as executor:
+        with ThreadPoolExecutor(max_workers=min(os.cpu_count(), 10)) as executor:
             futures = []
             for stock in stocks:
                 futures.append(
@@ -352,8 +354,8 @@ def add_price_for_symbol(symbol: str, start_date: datetime.datetime = None, end_
 
 
 if __name__ == "__main__":
-    update_stock_listings()
+    # update_stock_listings()
     # add_stock_price(country='USA', start_date=datetime.datetime.now() - relativedelta(years=2), end_date=datetime.datetime.now())
-    add_stock_price(start_date=datetime.datetime.now() - datetime.timedelta(years=2), end_date=datetime.datetime.now())
+    # add_stock_price(start_date=datetime.datetime.now() - relativedelta(years=2), end_date=datetime.datetime.now())
     # print(get_yahoo_finance_data('AAPL', int((datetime.datetime.now() - datetime.timedelta(days=5)).timestamp()), int(datetime.datetime.now().timestamp())))
-    # update_subscription_stock()
+    update_subscription_stock()
