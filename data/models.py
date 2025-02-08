@@ -48,11 +48,11 @@ class StopLoss(Model):
 class PriceHistory(Model):
     symbol = CharField()
     date = DateField()
-    open = IntegerField()
-    high = IntegerField()
-    close = IntegerField()
-    low = IntegerField()
-    volume = IntegerField()
+    open = BigIntegerField(null=True)
+    high = BigIntegerField(null=True)
+    close = BigIntegerField(null=True)
+    low = BigIntegerField(null=True)
+    volume = BigIntegerField(null=True)
 
     class Meta:
         database = db
