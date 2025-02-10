@@ -32,7 +32,7 @@ def start():
 
         scheduler.add_job(
             data_handler.update_blacklist,
-            trigger=CronTrigger(hour=15, minute=30, second=0),
+            trigger=CronTrigger(hour=17, minute=30, second=0),
             id="update_blacklist",
             max_instances=1,
             replace_existing=True,
