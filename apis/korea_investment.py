@@ -488,7 +488,7 @@ class KoreaInvestmentAPI:
             "ORD_DVSN": ord_dvsn,
             "SLL_BUY_DVSN_CD": sll_buy_dvsn_cd,
             "PRDT_TYPE_CD": prdt_type_cd,
-            "RSVN_ORD_RCIT_DT": end_date,
+            # "RSVN_ORD_RCIT_DT": end_date,
             "OVRS_RSVN_ODNO": ovrs_rsvn_odno
         }
 
