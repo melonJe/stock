@@ -351,13 +351,15 @@ def add_price_for_symbol(symbol: str, start_date: datetime.datetime = None, end_
     except NotFoundUrl as e:
         Stock.delete().where(Stock.symbol == symbol).execute()
     except KeyError as e:
-        logging.error(f"Error processing symbol {symbol}: {e}")
+        # logging.error(f"Error processing symbol {symbol}: {e}")
+        pass
     except Exception as e:
-        logging.error(f"Error processing symbol {symbol}: {e}")
+        # logging.error(f"Error processing symbol {symbol}: {e}")
+        pass
 
 
 if __name__ == "__main__":
-    # update_stock_listings()
+    update_stock_listings()
     add_stock_price(start_date=datetime.datetime.now() - relativedelta(years=5), end_date=datetime.datetime.now())
     # add_stock_price(start_date=datetime.datetime.now() - relativedelta(years=2), end_date=datetime.datetime.now())
     # print(get_yahoo_finance_data('AAPL', int((datetime.datetime.now() - datetime.timedelta(days=5)).timestamp()), int(datetime.datetime.now().timestamp())))

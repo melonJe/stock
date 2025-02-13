@@ -1,5 +1,4 @@
 #docker network create --driver=bridge --subnet 172.20.0.0/16 --gateway 172.20.0.1 melon-net
-version: '3.9'
 services:
   stock_db:
     image: postgres:latest
