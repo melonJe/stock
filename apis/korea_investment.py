@@ -7,6 +7,7 @@ import requests
 
 from config import setting_env
 from config.country_config import COUNTRY_CONFIG_ORDER
+from custom_exception.exception import OrderException
 from data.dto.account_dto import InquireBalanceRequestDTO, AccountResponseDTO, StockResponseDTO, OverseesStockResponseDTO
 from data.dto.holiday_dto import HolidayResponseDTO, HolidayRequestDTO
 from data.dto.stock_trade_dto import StockTradeListRequestDTO, StockTradeListResponseDTO
@@ -501,16 +502,16 @@ class KoreaInvestmentAPI:
             error_log_prefix="해외 예약 주문 API 요청 실패"
         )
 
-        if response_data:
-            if response_data.get("rt_cd") == "0":
-                logging.info("해외 예약 주문이 성공적으로 접수되었습니다.")
-                return response_data
-            else:
-                logging.error(f"{symbol} 해외 예약 주문 실패: {response_data}")
-                return response_data
+        if not response_data:
+            raise OrderException(f"{symbol} 해외 예약 주문 요청에 실패했습니다.")
+
+        if response_data.get("rt_cd") == "0":
+            logging.info("해외 예약 주문이 성공적으로 접수되었습니다.")
+            return response_data
         else:
-            logging.error("해외 예약 주문 요청에 실패했습니다.")
-            return None
+            error_msg = f"{symbol} 해외 예약 주문 실패: {response_data}"
+            logging.error(error_msg)
+            raise OrderException(error_msg)
 
 
 # 사용 예시
