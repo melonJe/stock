@@ -1,5 +1,4 @@
 from dataclasses import dataclass
-from typing import Union, List
 
 
 @dataclass
@@ -47,7 +46,11 @@ class StockResponseDTO:
     stck_loan_unpr: str  # 주식대출단가
 
 
+@dataclass
 class OverseesStockResponseDTO:
+    cano: str  # 종합계좌번호
+    acnt_prdt_cd: str  # 계좌상품코드
+    prdt_type_cd: str  # 상품유형코드
     ovrs_pdno: str  # 해외상품번호
     ovrs_item_name: str  # 해외종목명
     frcr_evlu_pfls_amt: str  # 외화평가손익금액
@@ -63,59 +66,62 @@ class OverseesStockResponseDTO:
     loan_type_cd: str  # 대출유형코드
     loan_dt: str  # 대출일자
     expd_dt: str  # 만기일자
-    evlu_amt: str  # 평가금액
-    evlu_pfls_amt: str  # 평가손익금액
-    evlu_pfls_rt: str  # 평가손익율
-    bfdy_buy_qty: str  # 전일매수수량
-    bfdy_sll_qty: str  # 전일매도수량
-    thdt_buyqty: str  # 금일매수수량
-    thdt_sll_qty: str  # 금일매도수량
-    hldg_qty: str  # 보유수량
-    prpr: str  # 현재가
-    evlu_erng_rt: str  # 평가수익율
-    loan_amt: str  # 대출금액
-    stln_slng_chgs: str  # 대주매각대금
-    fltt_rt: str  # 등락율
-    bfdy_cprs_icdc: str  # 전일대비증감
-    item_mgna_rt_name: str  # 종목증거금율명
-    grta_rt_name: str  # 보증금율명
-    sbst_pric: str  # 대용가격
-    stck_loan_unpr: str  # 주식대출단가
+    # evlu_amt: str  # 평가금액
+    # evlu_pfls_amt: str  # 평가손익금액
+    # evlu_pfls_rt: str  # 평가손익율
+    # bfdy_buy_qty: str  # 전일매수수량
+    # bfdy_sll_qty: str  # 전일매도수량
+    # thdt_buyqty: str  # 금일매수수량
+    # thdt_sll_qty: str  # 금일매도수량
+    # hldg_qty: str  # 보유수량
+    # prpr: str  # 현재가
+    # evlu_erng_rt: str  # 평가수익율
+    # loan_amt: str  # 대출금액
+    # stln_slng_chgs: str  # 대주매각대금
+    # fltt_rt: str  # 등락율
+    # bfdy_cprs_icdc: str  # 전일대비증감
+    # item_mgna_rt_name: str  # 종목증거금율명
+    # grta_rt_name: str  # 보증금율명
+    # sbst_pric: str  # 대용가격
+    # stck_loan_unpr: str  # 주식대출단가
 
 
-def convert_to_stock_response(data: Union[OverseesStockResponseDTO, List[OverseesStockResponseDTO]]) -> Union[StockResponseDTO, List[StockResponseDTO]]:
-    def convert(item: OverseesStockResponseDTO) -> StockResponseDTO:
-        return StockResponseDTO(
-            pdno=item.ovrs_pdno,
-            prdt_name=item.ovrs_item_name,
-            bfdy_buy_qty=item.bfdy_buy_qty,
-            bfdy_sll_qty=item.bfdy_sll_qty,
-            thdt_buyqty=item.thdt_buyqty,
-            thdt_sll_qty=item.thdt_sll_qty,
-            hldg_qty=item.hldg_qty,
-            ord_psbl_qty=item.ord_psbl_qty,
-            pchs_avg_pric=item.pchs_avg_pric,
-            pchs_amt=item.frcr_pchs_amt1,
-            prpr=item.prpr,
-            evlu_amt=item.evlu_amt,
-            evlu_pfls_amt=item.evlu_pfls_amt,
-            evlu_pfls_rt=item.evlu_pfls_rt,
-            evlu_erng_rt=item.evlu_erng_rt,
-            loan_dt=item.loan_dt,
-            loan_amt=item.loan_amt,
-            stln_slng_chgs=item.stln_slng_chgs,
-            expd_dt=item.expd_dt,
-            fltt_rt=item.fltt_rt,
-            bfdy_cprs_icdc=item.bfdy_cprs_icdc,
-            item_mgna_rt_name=item.item_mgna_rt_name,
-            grta_rt_name=item.grta_rt_name,
-            sbst_pric=item.sbst_pric,
-            stck_loan_unpr=item.stck_loan_unpr
-        )
+def convert_overseas_to_domestic(overseas_stocks):
+    if not isinstance(overseas_stocks, list):
+        overseas_stocks = [overseas_stocks]
 
-    if isinstance(data, list):
-        return [convert(item) for item in data]
-    return convert(data)
+    result = []
+    for overseas_stock in overseas_stocks:
+        result.append(StockResponseDTO(
+            pdno=overseas_stock.ovrs_pdno,  # 해외상품번호를 국내 상품번호로 매핑
+            prdt_name=overseas_stock.ovrs_item_name,  # 해외종목명을 국내 상품명으로 매핑
+            trad_dvsn_name="",  # 매매구분명 (해외 데이터에 없음, 기본값 설정)
+            bfdy_buy_qty="0",  # 전일매수수량 (해외 데이터에 없음, 기본값 설정)
+            bfdy_sll_qty="0",  # 전일매도수량 (해외 데이터에 없음, 기본값 설정)
+            thdt_buyqty="0",  # 금일매수수량 (해외 데이터에 없음, 기본값 설정)
+            thdt_sll_qty="0",  # 금일매도수량 (해외 데이터에 없음, 기본값 설정)
+            hldg_qty=overseas_stock.ovrs_cblc_qty,  # 해외잔고수량을 보유수량으로 매핑
+            ord_psbl_qty=overseas_stock.ord_psbl_qty,  # 주문가능수량
+            pchs_avg_pric=overseas_stock.pchs_avg_pric,  # 매입평균가격
+            pchs_amt=overseas_stock.frcr_pchs_amt1,  # 외화매입금액1을 매입금액으로 매핑
+            prpr=overseas_stock.now_pric2,  # 현재가
+            evlu_amt=overseas_stock.ovrs_stck_evlu_amt,  # 평가금액
+            evlu_pfls_amt=overseas_stock.frcr_evlu_pfls_amt,  # 평가손익금액
+            evlu_pfls_rt=overseas_stock.evlu_pfls_rt,  # 평가손익율
+            evlu_erng_rt="0",  # 평가수익율 (미사용 항목)
+            loan_dt=overseas_stock.loan_dt,  # 대출일자
+            loan_amt="0",  # 대출금액 (해외 데이터에 없음, 기본값 설정)
+            stln_slng_chgs="0",  # 대주매각대금 (해외 데이터에 없음, 기본값 설정)
+            expd_dt=overseas_stock.expd_dt,  # 만기일자
+            fltt_rt="0",  # 등락율 (해외 데이터에 없음, 기본값 설정)
+            bfdy_cprs_icdc="0",  # 전일대비증감 (해외 데이터에 없음, 기본값 설정)
+            item_mgna_rt_name="",  # 종목증거금율명 (해외 데이터에 없음, 기본값 설정)
+            grta_rt_name="",  # 보증금율명 (해외 데이터에 없음, 기본값 설정)
+            sbst_pric="0",  # 대용가격 (해외 데이터에 없음, 기본값 설정)
+            stck_loan_unpr="0"  # 주식대출단가 (해외 데이터에 없음, 기본값 설정)
+        ))
+
+    return result
 
 
 @dataclass

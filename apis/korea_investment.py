@@ -8,7 +8,7 @@ import requests
 from config import setting_env
 from config.country_config import COUNTRY_CONFIG_ORDER
 from custom_exception.exception import OrderException
-from data.dto.account_dto import InquireBalanceRequestDTO, AccountResponseDTO, StockResponseDTO, OverseesStockResponseDTO, convert_to_stock_response
+from data.dto.account_dto import InquireBalanceRequestDTO, AccountResponseDTO, StockResponseDTO, OverseesStockResponseDTO, convert_overseas_to_domestic
 from data.dto.holiday_dto import HolidayResponseDTO, HolidayRequestDTO
 from data.dto.stock_trade_dto import StockTradeListRequestDTO, StockTradeListResponseDTO
 from utils import discord
@@ -286,7 +286,7 @@ class KoreaInvestmentAPI:
                 return result
             return self.get_oversea_owned_stock_info(country='USA', symbol=symbol)
         else:
-            return self.get_korea_owned_stock_info() + convert_to_stock_response(self.get_oversea_owned_stock_info(country='USA'))
+            return self.get_korea_owned_stock_info() + convert_overseas_to_domestic(self.get_oversea_owned_stock_info(country='USA'))
 
     def get_korea_owned_stock_info(self, symbol: str = None) -> Union[List[StockResponseDTO], StockResponseDTO, None]:
         """
@@ -336,14 +336,13 @@ class KoreaInvestmentAPI:
         # 조회에 필요한 GET 파라미터 구성
         params = {
             "CANO": self._account_number,
-            "ACNT_PRDT_CD": self._account_number,
+            "ACNT_PRDT_CD": self._account_code,
             "OVRS_EXCG_CD": config.get("ovrs_excg_cd"),
             "TR_CRCY_CD": config.get("tr_crcy_cd"),
             "CTX_AREA_FK200": '',
             "CTX_AREA_NK200": '',
         }
         response_data = self._get_request('/uapi/overseas-stock/v1/trading/inquire-balance', params, self._add_tr_id_to_headers("TTS3012R", use_prefix=True))
-        print(response_data)
         if not response_data:
             return None
 
@@ -541,4 +540,4 @@ if __name__ == "__main__":
 
     # response = api.get_oversea_owned_stock_info(country="USA")
     # print(json.dumps(response, indent=4, ensure_ascii=False))
-    print(api.get_oversea_owned_stock_info(country='USA'))
+    print(api.get_owned_stock_info())

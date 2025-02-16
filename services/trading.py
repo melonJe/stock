@@ -219,7 +219,13 @@ def trading_buy(korea_investment: KoreaInvestmentAPI, buy_levels):
 
 def trading_sell(korea_investment: KoreaInvestmentAPI, sell_levels):
     end_date = korea_investment.get_nth_open_day(1)
-    for symbol, levels in sell_levels.items():
+    sell_queue = {}
+    for sell in SellQueue.select():
+        if sell.symbol not in sell_queue.keys():
+            sell_queue[sell.symbol] = {}
+        sell_queue[sell.symbol][sell.price] = sell.volume
+    sell_queue.update(sell_levels)
+    for symbol, levels in sell_queue.items():
         country = get_country_by_symbol(symbol)
         stock = korea_investment.get_owned_stock_info(symbol=symbol)
         if not stock:
