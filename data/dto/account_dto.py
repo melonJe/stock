@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from typing import Union, List
 
 
 @dataclass
@@ -80,6 +81,41 @@ class OverseesStockResponseDTO:
     grta_rt_name: str  # 보증금율명
     sbst_pric: str  # 대용가격
     stck_loan_unpr: str  # 주식대출단가
+
+
+def convert_to_stock_response(data: Union[OverseesStockResponseDTO, List[OverseesStockResponseDTO]]) -> Union[StockResponseDTO, List[StockResponseDTO]]:
+    def convert(item: OverseesStockResponseDTO) -> StockResponseDTO:
+        return StockResponseDTO(
+            pdno=item.ovrs_pdno,
+            prdt_name=item.ovrs_item_name,
+            bfdy_buy_qty=item.bfdy_buy_qty,
+            bfdy_sll_qty=item.bfdy_sll_qty,
+            thdt_buyqty=item.thdt_buyqty,
+            thdt_sll_qty=item.thdt_sll_qty,
+            hldg_qty=item.hldg_qty,
+            ord_psbl_qty=item.ord_psbl_qty,
+            pchs_avg_pric=item.pchs_avg_pric,
+            pchs_amt=item.frcr_pchs_amt1,
+            prpr=item.prpr,
+            evlu_amt=item.evlu_amt,
+            evlu_pfls_amt=item.evlu_pfls_amt,
+            evlu_pfls_rt=item.evlu_pfls_rt,
+            evlu_erng_rt=item.evlu_erng_rt,
+            loan_dt=item.loan_dt,
+            loan_amt=item.loan_amt,
+            stln_slng_chgs=item.stln_slng_chgs,
+            expd_dt=item.expd_dt,
+            fltt_rt=item.fltt_rt,
+            bfdy_cprs_icdc=item.bfdy_cprs_icdc,
+            item_mgna_rt_name=item.item_mgna_rt_name,
+            grta_rt_name=item.grta_rt_name,
+            sbst_pric=item.sbst_pric,
+            stck_loan_unpr=item.stck_loan_unpr
+        )
+
+    if isinstance(data, list):
+        return [convert(item) for item in data]
+    return convert(data)
 
 
 @dataclass
