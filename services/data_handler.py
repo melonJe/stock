@@ -81,7 +81,7 @@ def insert_stock(symbol: str, company_name: str = None, country: str = None):
     return new_stock
 
 
-def update_subscription_kor(stock: Stock, email, data_to_insert):
+def update_subscription_kor(stock: Stock, data_to_insert):
     try:
         # print(stock.symbol)
         summary_dict = get_financial_summary_for_update_stock(stock.symbol)
@@ -119,12 +119,12 @@ def update_subscription_kor(stock: Stock, email, data_to_insert):
         if not summary_dict["배당수익률"] > 2:
             return
 
-        data_to_insert.append({'email': email, 'symbol': stock})
+        data_to_insert.append({'symbol': stock})
     except Exception as e:
         pass
 
 
-def update_subscription_usa(stock: Stock, email, data_to_insert, retries=5, delay=5):
+def update_subscription_usa(stock: Stock, data_to_insert, retries=5, delay=5):
     # print(stock.symbol)
     for attempt in range(retries):
         try:
@@ -162,7 +162,7 @@ def update_subscription_usa(stock: Stock, email, data_to_insert, retries=5, dela
             if not summary_dict["Dividend Rate"] > 0:
                 return
 
-            data_to_insert.append({'email': email, 'symbol': stock})
+            data_to_insert.append({'symbol': stock})
             return
 
         except requests.exceptions.RequestException as e:
@@ -200,9 +200,8 @@ def update_subscription_stock():
 
     if data_to_insert:
         logging.info(f"{len(data_to_insert)}개 주식")
-        Subscription.delete().where(Subscription.email == 'cabs0814@naver.com').execute()
-        Subscription.delete().where(Subscription.email == 'jmayermj@gmail.com').execute()
-        upsert_many(Subscription, data_to_insert, [Subscription.symbol, Subscription.email])
+        Subscription.delete().execute()
+        upsert_many(Subscription, data_to_insert, [Subscription.symbol])
 
 
 def update_blacklist():

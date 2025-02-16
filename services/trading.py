@@ -1,7 +1,9 @@
 import datetime
 import logging
+import math
 import threading
 import traceback
+from datetime import datetime, timedelta
 from datetime import time
 from time import sleep
 from typing import Union
@@ -9,6 +11,7 @@ from typing import Union
 import numpy as np
 import pandas
 import pandas as pd
+from peewee import fn
 from ta.momentum import rsi
 from ta.trend import adx
 from ta.volatility import AverageTrueRange
@@ -16,7 +19,7 @@ from ta.volume import ChaikinMoneyFlowIndicator
 
 from apis.korea_investment import KoreaInvestmentAPI
 from config import setting_env
-from data.models import Blacklist, Stock, StopLoss, Subscription, PriceHistory, PriceHistoryUS
+from data.models import Blacklist, Stock, StopLoss, Subscription, PriceHistory, PriceHistoryUS, SellQueue
 from services.data_handler import stop_loss_insert, get_history_table, get_country_by_symbol, add_stock_price
 from utils import discord
 from utils.operations import price_refine
@@ -233,6 +236,94 @@ def trading_sell(korea_investment: KoreaInvestmentAPI, sell_levels):
                 korea_investment.submit_overseas_reservation_order(country=country, action="sell", symbol=symbol, price=price, volume=volume)
 
 
+def update_sell_queue(ki_api: KoreaInvestmentAPI):
+    today_str = datetime.now().strftime("%Y%m%d")
+    response_data = ki_api.get_stock_order_list(start_date=today_str, end_date=today_str)
+
+    sell_queue_entries = {}
+    for trade in response_data:
+        symbol = Stock.get(Stock.symbol == trade.pdno)
+        volume = int(trade.tot_ccld_qty)
+        price = int(trade.avg_prvs)
+        trade_type = trade.sll_buy_dvsn_cd
+
+        if trade_type == "02":
+            df = pd.DataFrame(
+                list(PriceHistory.select().where(
+                    (PriceHistory.date.between(datetime.now() - timedelta(days=600), datetime.now())) &
+                    (PriceHistory.symbol == symbol)
+                ).order_by(PriceHistory.date))
+            )
+            df['ma60'] = df['close'].rolling(window=60).mean()
+            volumes_and_prices = [
+                (volume - int(volume * 0.5), price_refine(math.ceil(max(price * 1.005, df.iloc[-1]['ma60'] * 1.125)))),
+                (int(volume * 0.5), price_refine(math.ceil(max(price * 1.005, df.iloc[-1]['ma60'] * 1.175))))
+            ]
+
+            for vol, prc in volumes_and_prices:
+                if vol > 0:
+                    sell_queue_entries[(symbol, prc)] = sell_queue_entries.get((symbol, prc), 0) + vol
+
+        elif trade_type == "01":
+            sell_queue_entries[(symbol, price)] = sell_queue_entries.get((symbol, price), 0) - volume
+
+    for (symbol, price), volume in sell_queue_entries.items():
+        sell_entry = SellQueue.get_or_none((SellQueue.symbol == symbol) & (SellQueue.price == price))
+        if sell_entry:
+            sell_entry.volume += volume
+            if sell_entry.volume <= 0:
+                sell_entry.delete_instance()
+            else:
+                sell_entry.save()
+        elif volume > 0:
+            SellQueue.create(symbol=symbol, volume=volume, price=price)
+
+    owned_stock_info = ki_api.get_owned_stock_info()
+    for stock in owned_stock_info:
+        symbol = Stock.get(Stock.symbol == stock.pdno)
+        owned_volume = int(stock.hldg_qty)
+        total_db_volume = SellQueue.select(fn.SUM(SellQueue.volume)).where(SellQueue.symbol == symbol).scalar() or 0
+
+        if owned_volume < total_db_volume:
+            excess_volume = total_db_volume - owned_volume
+            while excess_volume > 0:
+                smallest_price_entry = SellQueue.select().where(SellQueue.symbol == symbol).order_by(SellQueue.price).first()
+                if smallest_price_entry:
+                    if smallest_price_entry.volume <= excess_volume:
+                        excess_volume -= smallest_price_entry.volume
+                        smallest_price_entry.delete_instance()
+                    else:
+                        smallest_price_entry.volume -= excess_volume
+                        smallest_price_entry.save()
+                        excess_volume = 0
+        elif owned_volume > total_db_volume:
+            additional_volume = owned_volume - total_db_volume
+            avg_price = float(stock.pchs_avg_pric)
+
+            df = pd.DataFrame(
+                list(PriceHistory.select().where(
+                    (PriceHistory.date.between(datetime.now() - timedelta(days=600), datetime.now())) &
+                    (PriceHistory.symbol == symbol)
+                ).order_by(PriceHistory.date))
+            )
+            df['ma60'] = df['close'].rolling(window=60).mean()
+
+            volumes_and_prices = [
+                (additional_volume, price_refine(math.ceil(avg_price * 1.005), 1))
+            ]
+
+            for vol, prc in volumes_and_prices:
+                if vol > 0:
+                    sell_entry = SellQueue.get_or_none((SellQueue.symbol == symbol) & (SellQueue.price == prc))
+                    if sell_entry:
+                        sell_entry.volume += vol
+                        sell_entry.save()
+                    else:
+                        SellQueue.create(symbol=symbol, volume=vol, price=prc)
+
+    SellQueue.delete().where(SellQueue.volume <= 0).execute()
+
+
 def stop_loss_notify(korea_investment: KoreaInvestmentAPI):
     alert = set()
     while datetime.datetime.now().time() < time(15, 30, 00):
@@ -274,6 +365,7 @@ def korea_trading():
     while datetime.datetime.now().time() < time(18, 15, 00):
         sleep(1 * 60)
 
+    update_sell_queue(ki_api=ki_api)
     add_stock_price(country="KOR", start_date=datetime.datetime.now() - datetime.timedelta(days=5), end_date=datetime.datetime.now())
     for stock in ki_api.get_owned_stock_info():
         stop_loss_insert(stock.pdno, float(stock.pchs_avg_pric))

@@ -1,58 +1,55 @@
-CREATE TABLE account (
-    email VARCHAR(320) PRIMARY KEY,
-    pass_hash BYTEA NOT NULL,
-    pass_salt BYTEA NOT NULL
+CREATE TABLE public.blacklist (
+	symbol varchar NOT NULL,
+	record_date date DEFAULT CURRENT_DATE NULL,
+	CONSTRAINT blacklist_pkey PRIMARY KEY (symbol)
 );
 
-CREATE TABLE blacklist (
-    symbol VARCHAR PRIMARY KEY,
-    record_date DATE DEFAULT CURRENT_DATE
+CREATE TABLE public.price_history (
+	symbol varchar NOT NULL,
+	"date" date NOT NULL,
+	"open" int8 NOT NULL,
+	high int8 NOT NULL,
+	"close" int8 NOT NULL,
+	low int8 NOT NULL,
+	volume int8 NOT NULL,
+	CONSTRAINT price_history_pkey PRIMARY KEY (symbol, date)
 );
 
-CREATE TABLE stock (
-    symbol VARCHAR PRIMARY KEY,
-    company_name VARCHAR NOT NULL,
-    country VARCHAR NULL
+CREATE TABLE public.price_history_us (
+	symbol varchar NOT NULL,
+	"date" date NOT NULL,
+	"open" numeric(20, 4) NULL,
+	high numeric(20, 4) NULL,
+	"close" numeric(20, 4) NULL,
+	low numeric(20, 4) NULL,
+	volume int8 NULL,
+	CONSTRAINT price_history_us_pkey PRIMARY KEY (symbol, date)
 );
 
-CREATE TABLE stop_loss (
-    symbol VARCHAR PRIMARY KEY,
-    price INTEGER NOT NULL
+CREATE TABLE public.sell_queue (
+	id bigserial NOT NULL,
+	symbol varchar NOT NULL,
+	volume int4 NOT NULL,
+	price int4 NOT NULL,
+	CONSTRAINT sell_queue_pkey PRIMARY KEY (id)
 );
 
-CREATE TABLE price_history (
-    symbol VARCHAR NOT NULL,
-    date DATE NOT NULL,
-    open BIGINT NOT NULL,
-    high BIGINT NOT NULL,
-    close BIGINT NOT NULL,
-    low BIGINT NOT NULL,
-    volume BIGINT NOT NULL,
-    PRIMARY KEY (symbol, date)
+CREATE TABLE public.stock (
+	symbol varchar NOT NULL,
+	company_name varchar NOT NULL,
+	country varchar NULL,
+	CONSTRAINT stock_pkey PRIMARY KEY (symbol)
 );
 
-CREATE TABLE price_history_us (
-    symbol VARCHAR NOT NULL,
-    date DATE NOT NULL,
-    open DECIMAL(20, 4) NULL,
-    high DECIMAL(20, 4) NULL,
-    close DECIMAL(20, 4) NULL,
-    low DECIMAL(20, 4) NULL,
-    volume BIGINT NULL,
-    PRIMARY KEY (symbol, date)
+CREATE TABLE public.stop_loss (
+	symbol varchar NOT NULL,
+	price int4 NOT NULL,
+	CONSTRAINT stop_loss_pkey PRIMARY KEY (symbol)
 );
 
-CREATE TABLE sell_queue (
-    id BIGSERIAL PRIMARY KEY,
-    email VARCHAR(320) NOT NULL,
-    symbol VARCHAR NOT NULL,
-    volume INTEGER NOT NULL,
-    price INTEGER NOT NULL
-);
-
-CREATE TABLE subscription (
-    id BIGSERIAL PRIMARY KEY,
-    email VARCHAR(320) NOT NULL,
-    symbol VARCHAR NOT NULL,
-    UNIQUE (email, symbol)
+CREATE TABLE public."subscription" (
+	id bigserial NOT NULL,
+	symbol varchar NOT NULL,
+	CONSTRAINT subscription_pkey PRIMARY KEY (id),
+	CONSTRAINT subscription_unique UNIQUE (symbol)
 );
