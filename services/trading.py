@@ -3,8 +3,6 @@ import logging
 import math
 import threading
 import traceback
-from datetime import datetime, timedelta
-from datetime import time
 from time import sleep
 from typing import Union
 
@@ -243,7 +241,7 @@ def trading_sell(korea_investment: KoreaInvestmentAPI, sell_levels):
 
 
 def update_sell_queue(ki_api: KoreaInvestmentAPI):
-    today_str = datetime.now().strftime("%Y%m%d")
+    today_str = datetime.datetime.now().strftime("%Y%m%d")
     response_data = ki_api.get_stock_order_list(start_date=today_str, end_date=today_str)
 
     sell_queue_entries = {}
@@ -256,7 +254,7 @@ def update_sell_queue(ki_api: KoreaInvestmentAPI):
         if trade_type == "02":
             df = pd.DataFrame(
                 list(PriceHistory.select().where(
-                    (PriceHistory.date.between(datetime.now() - timedelta(days=600), datetime.now())) &
+                    (PriceHistory.date.between(datetime.datetime.now() - datetime.timedelta(days=600), datetime.datetime.now())) &
                     (PriceHistory.symbol == symbol)
                 ).order_by(PriceHistory.date))
             )
@@ -308,7 +306,7 @@ def update_sell_queue(ki_api: KoreaInvestmentAPI):
 
             df = pd.DataFrame(
                 list(PriceHistory.select().where(
-                    (PriceHistory.date.between(datetime.now() - timedelta(days=600), datetime.now())) &
+                    (PriceHistory.date.between(datetime.datetime.now() - datetime.timedelta(days=600), datetime.datetime.now())) &
                     (PriceHistory.symbol == symbol)
                 ).order_by(PriceHistory.date))
             )
@@ -332,7 +330,7 @@ def update_sell_queue(ki_api: KoreaInvestmentAPI):
 
 def stop_loss_notify(korea_investment: KoreaInvestmentAPI):
     alert = set()
-    while datetime.datetime.now().time() < time(15, 30, 00):
+    while datetime.datetime.now().time() < datetime.time(15, 30, 00):
         owned_stocks = korea_investment.get_owned_stock_info()
         for item in owned_stocks:
             try:
@@ -368,7 +366,7 @@ def korea_trading():
     stop_loss = threading.Thread(target=stop_loss_notify, args=(ki_api,))
     stop_loss.start()
 
-    while datetime.datetime.now().time() < time(18, 15, 00):
+    while datetime.datetime.now().time() < datetime.time(18, 15, 00):
         sleep(1 * 60)
 
     update_sell_queue(ki_api=ki_api)
