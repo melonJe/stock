@@ -217,13 +217,8 @@ def trading_buy(korea_investment: KoreaInvestmentAPI, buy_levels):
 
 def trading_sell(korea_investment: KoreaInvestmentAPI, sell_levels):
     end_date = korea_investment.get_nth_open_day(1)
-    sell_queue = {}
-    for sell in SellQueue.select():
-        if sell.symbol not in sell_queue.keys():
-            sell_queue[sell.symbol] = {}
-        sell_queue[sell.symbol][sell.price] = sell.volume
-    sell_queue.update(sell_levels)
-    for symbol, levels in sell_queue.items():
+
+    for symbol, levels in sell_levels.items():
         country = get_country_by_symbol(symbol)
         stock = korea_investment.get_owned_stock_info(symbol=symbol)
         if not stock:
@@ -377,8 +372,15 @@ def korea_trading():
         stop_loss_insert(stock.pdno, float(stock.pchs_avg_pric))
 
     sell_stock = select_sell_korea_stocks(ki_api)
-    sell = threading.Thread(target=trading_sell, args=(ki_api, sell_stock,))
+    sell_queue = {}
+    for sell in SellQueue.select().join(Stock, on=(SellQueue.symbol == Stock.symbol)).where(Stock.country == 'KOR'):
+        if sell.symbol not in sell_queue.keys():
+            sell_queue[sell.symbol] = {}
+        sell_queue[sell.symbol][sell.price] = sell.volume
+    sell_queue.update(sell_stock)
+    sell = threading.Thread(target=trading_sell, args=(ki_api, sell_queue,))
     sell.start()
+
     buy_stock = select_buy_stocks(country="KOR")
     logging.info(f'buy_stock data: {buy_stock}')
     buy = threading.Thread(target=trading_buy, args=(ki_api, buy_stock,))
@@ -392,8 +394,15 @@ def usa_trading():
     logging.info(f'usa_stock data: {usa_stock}')
     usa_buy = threading.Thread(target=trading_buy, args=(ki_api, usa_stock,))
     usa_buy.start()
+
     sell_stock = select_sell_overseas_stocks(ki_api)
-    sell = threading.Thread(target=trading_sell, args=(ki_api, sell_stock,))
+    sell_queue = {}
+    for sell in SellQueue.select().join(Stock, on=(SellQueue.symbol == Stock.symbol)).where(Stock.country == 'USA'):
+        if sell.symbol not in sell_queue.keys():
+            sell_queue[sell.symbol] = {}
+        sell_queue[sell.symbol][sell.price] = sell.volume
+    sell_queue.update(sell_stock)
+    sell = threading.Thread(target=trading_sell, args=(ki_api, sell_queue,))
     sell.start()
 
 
