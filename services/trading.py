@@ -247,16 +247,17 @@ def update_sell_queue(ki_api: KoreaInvestmentAPI):
     sell_queue_entries = {}
     for trade in response_data:
         symbol = Stock.get(Stock.symbol == trade.pdno)
+        table = get_history_table(get_country_by_symbol(symbol))
         volume = int(trade.tot_ccld_qty)
         price = int(trade.avg_prvs)
         trade_type = trade.sll_buy_dvsn_cd
 
         if trade_type == "02":
             df = pd.DataFrame(
-                list(PriceHistory.select().where(
-                    (PriceHistory.date.between(datetime.datetime.now() - datetime.timedelta(days=600), datetime.datetime.now())) &
-                    (PriceHistory.symbol == symbol)
-                ).order_by(PriceHistory.date))
+                list(table.select().where(
+                    (table.date.between(datetime.datetime.now() - datetime.timedelta(days=600), datetime.datetime.now())) &
+                    (table.symbol == symbol)
+                ).order_by(table.date))
             )
             df['ma60'] = df['close'].rolling(window=60).mean()
             volumes_and_prices = [
@@ -285,6 +286,7 @@ def update_sell_queue(ki_api: KoreaInvestmentAPI):
     owned_stock_info = ki_api.get_owned_stock_info()
     for stock in owned_stock_info:
         symbol = Stock.get(Stock.symbol == stock.pdno)
+        table = get_history_table(get_country_by_symbol(symbol))
         owned_volume = int(stock.hldg_qty)
         total_db_volume = SellQueue.select(fn.SUM(SellQueue.volume)).where(SellQueue.symbol == symbol).scalar() or 0
 
@@ -305,10 +307,10 @@ def update_sell_queue(ki_api: KoreaInvestmentAPI):
             avg_price = float(stock.pchs_avg_pric)
 
             df = pd.DataFrame(
-                list(PriceHistory.select().where(
-                    (PriceHistory.date.between(datetime.datetime.now() - datetime.timedelta(days=600), datetime.datetime.now())) &
-                    (PriceHistory.symbol == symbol)
-                ).order_by(PriceHistory.date))
+                list(table.select().where(
+                    (table.date.between(datetime.datetime.now() - datetime.timedelta(days=600), datetime.datetime.now())) &
+                    (table.symbol == symbol)
+                ).order_by(table.date))
             )
             df['ma60'] = df['close'].rolling(window=60).mean()
 
