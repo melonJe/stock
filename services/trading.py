@@ -158,7 +158,7 @@ def select_sell_overseas_stocks(korea_investment: KoreaInvestmentAPI, country: s
         try:
             df = pd.DataFrame((
                 list((PriceHistoryUS.select()
-                      .where(PriceHistoryUS.date.between(datetime.datetime.now() - datetime.timedelta(days=365), datetime.datetime.now()) & (PriceHistoryUS.symbol == stock.pdno))
+                      .where(PriceHistoryUS.date.between(datetime.datetime.now() - datetime.timedelta(days=365), datetime.datetime.now()) & (PriceHistoryUS.symbol == stock.ovrs_pdno))
                       .order_by(PriceHistoryUS.date)).dicts())
             ))
             data = filter_sell_stocks(df, stock.ord_psbl_qty)
@@ -241,7 +241,7 @@ def update_sell_queue(ki_api: KoreaInvestmentAPI):
 
     sell_queue_entries = {}
     for trade in response_data:
-        symbol = Stock.get(Stock.symbol == trade.pdno)
+        symbol = Stock.get(Stock.symbol == trade.pdno).symbol
         table = get_history_table(get_country_by_symbol(symbol))
         volume = int(trade.tot_ccld_qty)
         price = int(trade.avg_prvs)
@@ -280,7 +280,7 @@ def update_sell_queue(ki_api: KoreaInvestmentAPI):
 
     owned_stock_info = ki_api.get_owned_stock_info()
     for stock in owned_stock_info:
-        symbol = Stock.get(Stock.symbol == stock.pdno)
+        symbol = Stock.get(Stock.symbol == stock.pdno).symbol
         table = get_history_table(get_country_by_symbol(symbol))
         owned_volume = int(stock.hldg_qty)
         total_db_volume = SellQueue.select(fn.SUM(SellQueue.volume)).where(SellQueue.symbol == symbol).scalar() or 0
@@ -407,12 +407,13 @@ def usa_trading():
 
 
 if __name__ == "__main__":
-    ki_api = KoreaInvestmentAPI(app_key=setting_env.APP_KEY, app_secret=setting_env.APP_SECRET, account_number=setting_env.ACCOUNT_NUMBER, account_code=setting_env.ACCOUNT_CODE)
-    trading_buy(korea_investment=ki_api, buy_levels=select_buy_stocks())
-    trading_buy(korea_investment=ki_api, buy_levels=select_buy_stocks(country="USA"))
+    # ki_api = KoreaInvestmentAPI(app_key=setting_env.APP_KEY, app_secret=setting_env.APP_SECRET, account_number=setting_env.ACCOUNT_NUMBER, account_code=setting_env.ACCOUNT_CODE)
+    # trading_buy(korea_investment=ki_api, buy_levels=select_buy_stocks())
+    # trading_buy(korea_investment=ki_api, buy_levels=select_buy_stocks(country="USA"))
     # trading_sell(korea_investment=ki_api, sell_levels=select_sell_korea_stocks(korea_investment=ki_api))
     # select_buy_stocks(country="USA")
     # for symbol, values in select_buy_stocks(country="USA").items():
     #     print(symbol, values)
     # print(select_sell_stocks(ki_api))
     # usa_trading()
+    print(type(Stock.get(Stock.symbol == '000660').symbol))
