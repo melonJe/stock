@@ -161,6 +161,11 @@ def select_sell_overseas_stocks(korea_investment: KoreaInvestmentAPI, country: s
                       .where(PriceHistoryUS.date.between(datetime.datetime.now() - datetime.timedelta(days=365), datetime.datetime.now()) & (PriceHistoryUS.symbol == stock.ovrs_pdno))
                       .order_by(PriceHistoryUS.date)).dicts())
             ))
+            df['open'] = df['open'].astype(float)
+            df['high'] = df['high'].astype(float)
+            df['close'] = df['close'].astype(float)
+            df['low'] = df['low'].astype(float)
+
             data = filter_sell_stocks(df, stock.ord_psbl_qty)
             if data:
                 sell_levels[stock.pdno] = data
