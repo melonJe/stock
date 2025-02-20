@@ -75,7 +75,7 @@ class SellQueue(Model):
     symbol = CharField()
     volume = IntegerField()
     id = BigAutoField(primary_key=True)
-    price = IntegerField()
+    price = DecimalField(max_digits=20, decimal_places=4, null=True)
 
     class Meta:
         database = db
