@@ -117,6 +117,8 @@ class KoreaInvestmentAPI:
         :return: JSON response as a dictionary or None if failed.
         """
         full_url = f"{setting_env.DOMAIN}{path}"
+        print(full_url)
+        print(payload)
         effective_headers = self._headers if headers is None else headers
         try:
             response = requests.post(full_url, json=payload, headers=effective_headers)
@@ -476,43 +478,46 @@ class KoreaInvestmentAPI:
             return None
 
         prdt_type_cd = config.get("prdt_type_cd")
-        ovrs_excg_cd = config.get("ovrs_excg_cd")
+        ovrs_excg_cd = [x.strip() for x in config.get("ovrs_excg_cd").split(',')]
         ord_dvsn = ord_dvsn if ord_dvsn else "00"
         ovrs_rsvn_odno = config.get("ovrs_rsvn_odno")
 
-        payload = {
-            "CANO": self._account_number,
-            "ACNT_PRDT_CD": self._account_code,
-            "PDNO": symbol,
-            "OVRS_EXCG_CD": ovrs_excg_cd,
-            "FT_ORD_QTY": volume,
-            "FT_ORD_UNPR3": price,
-            "ORD_DVSN": ord_dvsn,
-            "SLL_BUY_DVSN_CD": sll_buy_dvsn_cd,
-            "PRDT_TYPE_CD": prdt_type_cd,
-            # "RSVN_ORD_RCIT_DT": end_date,
-            "OVRS_RSVN_ODNO": ovrs_rsvn_odno
-        }
+        for exchange in ovrs_excg_cd:
+            payload = {
+                "CANO": self._account_number,
+                "ACNT_PRDT_CD": self._account_code,
+                "PDNO": symbol,
+                "OVRS_EXCG_CD": exchange,
+                "FT_ORD_QTY": volume,
+                "FT_ORD_UNPR3": price,
+                "ORD_DVSN": ord_dvsn,
+                "SLL_BUY_DVSN_CD": sll_buy_dvsn_cd,
+                "PRDT_TYPE_CD": prdt_type_cd,
+                # "RSVN_ORD_RCIT_DT": end_date,
+                "OVRS_RSVN_ODNO": ovrs_rsvn_odno
+            }
 
-        headers = self._add_tr_id_to_headers(tr_id, use_prefix=False)
-        path = "/uapi/overseas-stock/v1/trading/order-resv"
-        response_data = self._post_request(
-            path=path,
-            payload=payload,
-            headers=headers,
-            error_log_prefix="해외 예약 주문 API 요청 실패"
-        )
+            headers = self._add_tr_id_to_headers(tr_id, use_prefix=False)
+            path = "/uapi/overseas-stock/v1/trading/order-resv"
+            response_data = self._post_request(
+                path=path,
+                payload=payload,
+                headers=headers,
+                error_log_prefix="해외 예약 주문 API 요청 실패"
+            )
 
-        if not response_data:
-            raise OrderException(f"{symbol} 해외 예약 주문 요청에 실패했습니다.")
+            if not response_data:
+                raise OrderException(f"{symbol} 해외 예약 주문 요청에 실패했습니다.")
 
-        if response_data.get("rt_cd") == "0":
-            logging.info("해외 예약 주문이 성공적으로 접수되었습니다.")
-            return response_data
-        else:
-            error_msg = f"{symbol} 해외 예약 주문 실패: {response_data}"
-            logging.error(error_msg)
-            raise OrderException(error_msg)
+            if response_data.get("rt_cd") == "0":
+                logging.info("해외 예약 주문이 성공적으로 접수되었습니다.")
+                return response_data
+            else:
+                if '해당종목정보가 없습니다' in response_data['msg1']:
+                    continue
+                error_msg = f"{symbol} 해외 예약 주문 실패: {response_data}"
+                logging.error(error_msg)
+                raise OrderException(error_msg)
 
 
 # 사용 예시

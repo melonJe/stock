@@ -1,7 +1,6 @@
 import datetime
 import logging
 import time
-import traceback
 from typing import Type
 
 import pandas as pd
@@ -60,7 +59,6 @@ def upsert_many(model: Type[Model], data: list, conflict_target: list = None, pr
                     preserve=preserve_fields
                 ).execute()
     except Exception as e:
-        traceback.print_exc()
         logging.error(f"Upsert many failed for model {model.__name__}: {e}")
 
 

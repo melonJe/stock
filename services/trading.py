@@ -2,7 +2,6 @@ import datetime
 import logging
 import math
 import threading
-import traceback
 from time import sleep
 from typing import Union
 
@@ -100,7 +99,6 @@ def select_buy_stocks(country: str = "KOR") -> dict:
                 df.iloc[-1]['close']: volume // 10 * 1
             }
         except Exception as e:
-            traceback.print_exc()
             logging.error(f"Error occurred: {e}")
     return buy_levels
 
@@ -146,7 +144,6 @@ def select_sell_korea_stocks(korea_investment: KoreaInvestmentAPI) -> dict:
             if data:
                 sell_levels[stock.pdno] = data
         except Exception as e:
-            traceback.print_exc()
             logging.error(f"Error occurred: {e}")
     return sell_levels
 
@@ -170,7 +167,6 @@ def select_sell_overseas_stocks(korea_investment: KoreaInvestmentAPI, country: s
             if data:
                 sell_levels[stock.pdno] = data
         except Exception as e:
-            traceback.print_exc()
             logging.error(f"Error occurred: {e}")
     return sell_levels
 
@@ -179,7 +175,6 @@ def trading_buy(korea_investment: KoreaInvestmentAPI, buy_levels):
     try:
         end_date = korea_investment.get_nth_open_day(3)
     except Exception as e:
-        traceback.print_exc()
         logging.error(f"Error occurred while getting nth open day: {e}")
         return
 
@@ -206,17 +201,14 @@ def trading_buy(korea_investment: KoreaInvestmentAPI, buy_levels):
                         money += price * volume
 
                 except Exception as e:
-                    traceback.print_exc()
                     logging.error(f"Error occurred while executing trades for symbol {symbol}: {e}")
         except Exception as e:
-            traceback.print_exc()
             logging.error(f"Error occurred while processing symbol {symbol}: {e}")
 
     if money:
         try:
             discord.send_message(f'총 액 : {money}')
         except Exception as e:
-            traceback.print_exc()
             logging.error(f"Error occurred while sending message to Discord: {e}")
 
 
@@ -361,7 +353,6 @@ def stop_loss_notify(korea_investment: KoreaInvestmentAPI):
                 alert.add(item.pdno)
             except Exception as e:
                 logging.error(f"Error processing item {item.pdno}: {e}")
-                traceback.print_exc()
 
         sleep(1 * 60)
 
