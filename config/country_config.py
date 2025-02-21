@@ -19,7 +19,7 @@ COUNTRY_CONFIG_ORDER = {
     "USA": {
         "tr_id_buy": "TTTT3014U",
         "tr_id_sell": "TTTT3016U",
-        "ovrs_excg_cd": "NASD",
+        "ovrs_excg_cd": "NASD,NYSE,AMEX",
         "prdt_type_cd": None,
         "sll_buy_dvsn_cd_buy": "02",
         "sll_buy_dvsn_cd_sell": "01",
