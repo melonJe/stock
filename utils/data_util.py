@@ -123,16 +123,12 @@ def get_yahoo_finance_data(symbol, unix_start_date, unix_end_date, interval='1d'
             return df
 
         except requests.exceptions.RequestException as e:
-            print(f"Attempt {attempt + 1} failed: {symbol}")
-            print(e)
-
             if "Not Found for url" in str(e):
                 raise NotFoundUrl(f"Not Found for url")
 
             if attempt < retries - 1:
                 time.sleep(delay)
             else:
-                print("All retries failed.")
                 return None
 
 

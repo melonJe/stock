@@ -7,7 +7,6 @@ import requests
 
 from config import setting_env
 from config.country_config import COUNTRY_CONFIG_ORDER
-from custom_exception.exception import OrderException
 from data.dto.account_dto import InquireBalanceRequestDTO, AccountResponseDTO, StockResponseDTO, OverseesStockResponseDTO, convert_overseas_to_domestic
 from data.dto.holiday_dto import HolidayResponseDTO, HolidayRequestDTO
 from data.dto.stock_trade_dto import StockTradeListRequestDTO, StockTradeListResponseDTO
@@ -31,8 +30,8 @@ class KoreaInvestmentAPI:
         self._account_code = account_code
         authorization = self.authenticate()
         self._headers = {
-            "Authorization": authorization,
-            "Content-Type": "application/json",
+            "authorization": authorization,
+            "content-Type": "application/json; charset=utf-8",
             "appkey": app_key,
             "appsecret": app_secret
         }
@@ -117,8 +116,6 @@ class KoreaInvestmentAPI:
         :return: JSON response as a dictionary or None if failed.
         """
         full_url = f"{setting_env.DOMAIN}{path}"
-        print(full_url)
-        print(payload)
         effective_headers = self._headers if headers is None else headers
         try:
             response = requests.post(full_url, json=payload, headers=effective_headers)
@@ -329,44 +326,44 @@ class KoreaInvestmentAPI:
         """
         해외주식 잔고 조회 API를 호출하는 메서드.
         """
+        result = list()
         country_code = country.upper()
         config = COUNTRY_CONFIG_ORDER.get(country_code)
         if not config:
             logging.error(f"Unsupported country code: {country_code}")
             return None
-
-        # 조회에 필요한 GET 파라미터 구성
         params = {
             "CANO": self._account_number,
             "ACNT_PRDT_CD": self._account_code,
-            "OVRS_EXCG_CD": config.get("ovrs_excg_cd"),
             "TR_CRCY_CD": config.get("tr_crcy_cd"),
             "CTX_AREA_FK200": '',
             "CTX_AREA_NK200": '',
         }
-        response_data = self._get_request('/uapi/overseas-stock/v1/trading/inquire-balance', params, self._add_tr_id_to_headers("TTS3012R", use_prefix=True))
-        if not response_data:
-            return None
 
-        try:
-            stock_data = response_data.get("output1", [])
-            response_list = [OverseesStockResponseDTO(**item) for item in stock_data]
+        ovrs_excg_cd = [x.strip() for x in config.get("ovrs_excg_cd").split(',')]
+        # 조회에 필요한 GET 파라미터 구성
+        for exchange in ovrs_excg_cd:
+            params['OVRS_EXCG_CD'] = exchange
+            response_data = self._get_request('/uapi/overseas-stock/v1/trading/inquire-balance', params, self._add_tr_id_to_headers("TTS3012R", use_prefix=True))
+            if not response_data:
+                continue
+            try:
+                stock_data = response_data.get("output1", [])
+                if stock_data:
+                    result.extend([OverseesStockResponseDTO(**item) for item in stock_data])
+            except KeyError as e:
+                logging.error(f"KeyError: {e} - response data: {response_data}")
+                continue
+            except Exception as e:
+                logging.error(f"Unexpected error: {e} - response data: {response_data}")
+                continue
 
-            if symbol:
-                for item in response_list:
-                    if item.ovrs_pdno == symbol:
-                        return item
-                return None
-            else:
-                return response_list
-        except KeyError as e:
-            logging.error(f"KeyError: {e} - response data: {response_data}")
-            discord.error_message(f"KeyError: {e} - response data: {response_data}")
-            return None
-        except Exception as e:
-            logging.error(f"Unexpected error: {e} - response data: {response_data}")
-            discord.error_message(f"Unexpected error: {e} - response data: {response_data}")
-            return None
+        if symbol:
+            for item in result:
+                if item.ovrs_pdno == symbol:
+                    return item
+        else:
+            return result
 
     def get_domestic_market_holidays(self, date: str) -> Dict[str, HolidayResponseDTO]:
         """
@@ -481,11 +478,13 @@ class KoreaInvestmentAPI:
         ovrs_excg_cd = [x.strip() for x in config.get("ovrs_excg_cd").split(',')]
         ord_dvsn = ord_dvsn if ord_dvsn else "00"
         ovrs_rsvn_odno = config.get("ovrs_rsvn_odno")
+        rvse_cncl_dvsn_cd = config.get("RVSE_CNCL_DVSN_CD")
 
         for exchange in ovrs_excg_cd:
             payload = {
                 "CANO": self._account_number,
                 "ACNT_PRDT_CD": self._account_code,
+                "RVSE_CNCL_DVSN_CD": rvse_cncl_dvsn_cd,
                 "PDNO": symbol,
                 "OVRS_EXCG_CD": exchange,
                 "FT_ORD_QTY": volume,
@@ -494,10 +493,11 @@ class KoreaInvestmentAPI:
                 "SLL_BUY_DVSN_CD": sll_buy_dvsn_cd,
                 "PRDT_TYPE_CD": prdt_type_cd,
                 # "RSVN_ORD_RCIT_DT": end_date,
+                "ORD_SVR_DVSN_CD": "0",
                 "OVRS_RSVN_ODNO": ovrs_rsvn_odno
             }
 
-            headers = self._add_tr_id_to_headers(tr_id, use_prefix=False)
+            headers = self._add_tr_id_to_headers(tr_id, use_prefix=True)
             path = "/uapi/overseas-stock/v1/trading/order-resv"
             response_data = self._post_request(
                 path=path,
@@ -507,7 +507,7 @@ class KoreaInvestmentAPI:
             )
 
             if not response_data:
-                raise OrderException(f"{symbol} 해외 예약 주문 요청에 실패했습니다.")
+                continue
 
             if response_data.get("rt_cd") == "0":
                 logging.info("해외 예약 주문이 성공적으로 접수되었습니다.")
@@ -517,7 +517,7 @@ class KoreaInvestmentAPI:
                     continue
                 error_msg = f"{symbol} 해외 예약 주문 실패: {response_data}"
                 logging.error(error_msg)
-                raise OrderException(error_msg)
+                continue
 
 
 # 사용 예시
@@ -545,4 +545,4 @@ if __name__ == "__main__":
 
     # response = api.get_oversea_owned_stock_info(country="USA")
     # print(json.dumps(response, indent=4, ensure_ascii=False))
-    print(api.get_owned_stock_info())
+    print(api.get_account_info())
