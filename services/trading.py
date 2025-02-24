@@ -54,13 +54,13 @@ def select_buy_stocks(country: str = "KOR") -> dict:
             df['ma120'] = df['close'].rolling(window=120).mean()
             df['ma60'] = df['close'].rolling(window=60).mean()
             df['ma20'] = df['close'].rolling(window=20).mean()
-            df['diff_price'] = df['high'] - df['low']
-            df['diff_price'] = df['diff_price'].replace(["", "N/A"], None)
-            df['diff_price'] = pd.to_numeric(df['diff_price'], errors='coerce')
-            df = df.dropna(subset=['diff_price'])
-            recent_days = df.tail(30)
-            if recent_days.loc[recent_days['diff_price'] < recent_days['diff_price'].mean(), 'diff_price'].mean() * 5 < recent_days['diff_price'].max():
-                continue
+            # df['diff_price'] = df['high'] - df['low']
+            # df['diff_price'] = df['diff_price'].replace(["", "N/A"], None)
+            # df['diff_price'] = pd.to_numeric(df['diff_price'], errors='coerce')
+            # df = df.dropna(subset=['diff_price'])
+            # recent_days = df.tail(30)
+            # if recent_days.loc[recent_days['diff_price'] < recent_days['diff_price'].mean(), 'diff_price'].mean() * 5 < recent_days['diff_price'].max():
+            #     continue
             recent_days = df.tail(10)
             if not (
                     np.all(recent_days['ma120'] <= recent_days['ma60']) &
@@ -69,9 +69,9 @@ def select_buy_stocks(country: str = "KOR") -> dict:
             ):
                 continue
 
-            df['RSI'] = rsi(df['close'], window=9)
-            if df.iloc[-1]['RSI'] > 70:
-                continue
+            # df['RSI'] = rsi(df['close'], window=9)
+            # if df.iloc[-1]['RSI'] > 70:
+            #     continue
 
             df[['high', 'low', 'close']] = df[['high', 'low', 'close']].apply(pd.to_numeric, errors='coerce')
             df['ADX'] = adx(df['high'], df['low'], df['close'], window=14)
