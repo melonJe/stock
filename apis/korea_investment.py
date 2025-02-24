@@ -496,6 +496,7 @@ class KoreaInvestmentAPI:
                 "ORD_SVR_DVSN_CD": "0",
                 "OVRS_RSVN_ODNO": ovrs_rsvn_odno
             }
+            payload = {k: v for k, v in payload.items() if v is not None}
 
             headers = self._add_tr_id_to_headers(tr_id, use_prefix=True)
             path = "/uapi/overseas-stock/v1/trading/order-resv"
@@ -545,4 +546,4 @@ if __name__ == "__main__":
 
     # response = api.get_oversea_owned_stock_info(country="USA")
     # print(json.dumps(response, indent=4, ensure_ascii=False))
-    print(api.get_account_info())
+    print(api.get_owned_stock_info())
