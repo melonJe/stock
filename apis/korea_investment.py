@@ -519,31 +519,3 @@ class KoreaInvestmentAPI:
                 error_msg = f"{symbol} 해외 예약 주문 실패: {response_data}"
                 logging.error(error_msg)
                 continue
-
-
-# 사용 예시
-if __name__ == "__main__":
-    # KoreaInvestmentAPI 인스턴스 생성
-    api = KoreaInvestmentAPI(
-        app_key=setting_env.APP_KEY,
-        app_secret=setting_env.APP_SECRET,
-        account_number=setting_env.ACCOUNT_NUMBER,
-        account_code=setting_env.ACCOUNT_CODE
-    )
-    # print(api.get_korea_owned_stock_info() + api.get_oversea_owned_stock_info(country='USA'))
-    # response = api.submit_overseas_reservation_order(
-    #     country="USA",
-    #     action="buy",
-    #     symbol="AAPL",
-    #     volume="1",
-    #     price="148.00",
-    #     end_date=api.get_nth_open_day(1)  # 예약 종료일자 (예시)
-    # )
-    # if response:
-    #     print(json.dumps(response, indent=4, ensure_ascii=False))
-    # else:
-    #     print("해외 예약 주문 요청에 실패했습니다.")
-
-    # response = api.get_oversea_owned_stock_info(country="USA")
-    # print(json.dumps(response, indent=4, ensure_ascii=False))
-    print(api.get_owned_stock_info())
