@@ -96,7 +96,7 @@ class KoreaInvestmentAPI:
             response.raise_for_status()
             return response.json()
         except requests.RequestException as e:
-            logging.error(f"{error_log_prefix}. 예외: {e}, URL: {full_url}")
+            logging.info(f"{error_log_prefix}. URL: {full_url}, 예외: {e}")
             return None
 
     def _post_request(
