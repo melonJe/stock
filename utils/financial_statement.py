@@ -367,10 +367,3 @@ def get_financial_summary_for_update_stock_usa(symbol: str, year: int = 5):
         result['Dividend Rate'] += float(values['amount'])
     result['Dividend Rate'] = result['Dividend Rate'] / float(data['chart']['result'][0]['indicators']['quote'][0]['close'][-1]) * 100 / year
     return result
-
-
-if __name__ == "__main__":
-    # 사용 예시
-    symbol = "ALLE"
-    df = fetch_financial_timeseries(symbol=symbol, report='cash')
-    print((df['quarterlyOperatingCashFlow'][-2:] > 0).all())

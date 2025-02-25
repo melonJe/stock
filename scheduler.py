@@ -69,16 +69,6 @@ def start():
         scheduler.shutdown()
 
 
-if __name__ == "__main__":
-    start()
-    # ki_api = KoreaInvestmentAPI(app_key=setting_env.APP_KEY, app_secret=setting_env.APP_SECRET, account_number=setting_env.ACCOUNT_NUMBER, account_code=setting_env.ACCOUNT_CODE)
-    # data_handler.add_stock_price(start_date="2020-01-01", end_date=datetime.now())
-    # trading_buy(ki_api=ki_api, buy_levels=select_buy_stocks(country="KOR"))
-    # trading_sell(ki_api=ki_api)
-    # print(select_buy_stocks(country="KOR"))
-    # print(select_sell_stocks(ki_api))
-
-
 @asynccontextmanager
 async def lifespan(app):
     start()

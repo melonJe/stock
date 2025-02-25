@@ -1,11 +1,9 @@
-import datetime
 import logging
 import time
 from typing import Type
 
 import pandas as pd
 import requests
-from dateutil.relativedelta import relativedelta
 from peewee import Model
 
 from custom_exception.exception import NotFoundUrl
@@ -130,16 +128,3 @@ def get_yahoo_finance_data(symbol, unix_start_date, unix_end_date, interval='1d'
                 time.sleep(delay)
             else:
                 return None
-
-
-if __name__ == "__main__":
-    # symbol = "AAPL"
-    # unix_start_date = "1704958797"
-    # unix_end_date = "1736581197"
-    # interval = "1d"
-    #
-    # df = get_yahoo_finance_data(symbol, unix_start_date, unix_end_date, interval)
-    # if df is not None:
-    #     print(df)
-    # print(int((datetime.datetime.now() - relativedelta(months=1)).timestamp()))
-    print(get_yahoo_finance_data('AAPL', int((datetime.datetime.now() - relativedelta(days=4)).timestamp()), int((datetime.datetime.now() + relativedelta(days=4)).timestamp())))
