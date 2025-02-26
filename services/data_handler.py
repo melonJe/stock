@@ -355,3 +355,7 @@ def add_price_for_symbol(symbol: str, start_date: datetime.datetime = None, end_
     except Exception as e:
         # logging.error(f"Error processing symbol {symbol}: {e}")
         pass
+
+
+if __name__ == "__main__":
+    add_stock_price(country="KOR", start_date=datetime.datetime.now() - datetime.timedelta(days=5), end_date=datetime.datetime.now())
