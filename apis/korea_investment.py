@@ -1,6 +1,7 @@
 import logging
 import urllib.parse
 from datetime import datetime, timedelta
+from time import sleep
 from typing import List, Union, Dict, Optional
 
 import requests
@@ -89,6 +90,7 @@ class KoreaInvestmentAPI:
         :param error_log_prefix: Prefix for error logging.
         :return: JSON response as a dictionary or None if failed.
         """
+        sleep(0.5)
         full_url = f"{setting_env.DOMAIN}{path}?{urllib.parse.urlencode(params)}"
         effective_headers = self._headers if headers is None else headers
         try:
@@ -115,6 +117,7 @@ class KoreaInvestmentAPI:
         :param error_log_prefix: Prefix for error logging.
         :return: JSON response as a dictionary or None if failed.
         """
+        sleep(0.5)
         full_url = f"{setting_env.DOMAIN}{path}"
         effective_headers = self._headers if headers is None else headers
         try:
