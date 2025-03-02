@@ -218,7 +218,6 @@ def trading_sell(korea_investment: KoreaInvestmentAPI, sell_levels):
         country = get_country_by_symbol(symbol)
         stock = korea_investment.get_owned_stock_info(symbol=symbol)
         if not stock:
-            discord.send_message(f'Not held a stock {stock.prdt_name}')
             continue
         for price, volume in levels.items():
             if country == "KOR":
@@ -398,7 +397,6 @@ def usa_trading():
     ki_api = KoreaInvestmentAPI(app_key=setting_env.APP_KEY, app_secret=setting_env.APP_SECRET, account_number=setting_env.ACCOUNT_NUMBER, account_code=setting_env.ACCOUNT_CODE)
 
     usa_stock = select_buy_stocks(country="USA")
-    logging.info(f'usa_stock data: {usa_stock}')
     usa_buy = threading.Thread(target=trading_buy, args=(ki_api, usa_stock,))
     usa_buy.start()
 

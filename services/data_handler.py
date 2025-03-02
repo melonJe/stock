@@ -186,14 +186,14 @@ def update_subscription_stock():
 
     # 한국 주식 프로세스
     with ThreadPoolExecutor(max_workers=min(os.cpu_count(), 10)) as executor:
-        futures = [executor.submit(update_subscription_kor, stock, 'cabs0814@naver.com', data_to_insert) for stock in Stock.select().where(Stock.country == 'KOR')]
+        futures = [executor.submit(update_subscription_kor, stock, data_to_insert) for stock in Stock.select().where(Stock.country == 'KOR')]
 
         for future in as_completed(futures):
             future.result()  # Ensure any raised exceptions are handled
 
     # 미국 주식 프로세스
     with ThreadPoolExecutor(max_workers=min(os.cpu_count(), 10)) as executor:
-        futures = [executor.submit(update_subscription_usa, stock, 'jmayermj@gmail.com', data_to_insert, 5, 5) for stock in Stock.select().where(Stock.country == 'USA')]
+        futures = [executor.submit(update_subscription_usa, stock, data_to_insert, 5, 5) for stock in Stock.select().where(Stock.country == 'USA')]
 
         for future in as_completed(futures):
             future.result()  # Ensure any raised exceptions are handled
@@ -358,4 +358,5 @@ def add_price_for_symbol(symbol: str, start_date: datetime.datetime = None, end_
 
 
 if __name__ == "__main__":
-    add_stock_price(country="KOR", start_date=datetime.datetime.now() - datetime.timedelta(days=5), end_date=datetime.datetime.now())
+    update_subscription_stock()
+    # add_stock_price(country="KOR", start_date=datetime.datetime.now() - datetime.timedelta(days=5), end_date=datetime.datetime.now())
