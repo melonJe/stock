@@ -62,24 +62,24 @@ def select_buy_stocks(country: str = "KOR") -> dict:
             # if recent_days.loc[recent_days['diff_price'] < recent_days['diff_price'].mean(), 'diff_price'].mean() * 5 < recent_days['diff_price'].max():
             #     continue
             recent_days = df.tail(3)
-            if not (
-                    np.all(recent_days['ma120'] <= recent_days['ma60']) &
-                    np.all(recent_days['ma60'] <= recent_days['ma20']) &
-                    np.all(recent_days['ma20'] <= recent_days['close'])
-            ):
+            if np.sum(np.sum([
+                recent_days['ma120'] <= recent_days['ma60'],
+                recent_days['ma60'] <= recent_days['ma20'],
+                recent_days['ma20'] <= recent_days['close']
+            ], axis=0)) < 7:
                 continue
 
             df['RSI'] = rsi(df['close'], window=9)
-            if df.iloc[-1]['RSI'] > 70:
+            if df.iloc[-1]['RSI'] > 80:
                 continue
 
             df[['high', 'low', 'close']] = df[['high', 'low', 'close']].apply(pd.to_numeric, errors='coerce')
             df['ADX'] = adx(df['high'], df['low'], df['close'], window=14)
-            if df.iloc[-1]['ADX'] < 25:
+            if df.iloc[-1]['ADX'] < 20 and df.iloc[-1]['ADX'] < df.iloc[-2]['ADX']:
                 continue
 
             df['CMF'] = ChaikinMoneyFlowIndicator(high=df['high'].astype('float64'), low=df['low'].astype('float64'), close=df['close'].astype('float64'), volume=df['volume'].astype('float64'), window=10).chaikin_money_flow()
-            if df.iloc[-1]['CMF'] < 0.1:
+            if df['CMF'].rolling(5).mean().iloc[-1] < 0.1:
                 continue
 
             df['ATR5'] = AverageTrueRange(high=df['high'].astype('float64'), low=df['low'].astype('float64'), close=df['close'].astype('float64'), window=5).average_true_range()
