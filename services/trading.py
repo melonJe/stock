@@ -335,9 +335,9 @@ def update_sell_queue(ki_api: KoreaInvestmentAPI):
 def stop_loss_notify(korea_investment: KoreaInvestmentAPI):
     alert = set()
     while datetime.datetime.now().time() < datetime.time(15, 30, 00):
-        owned_stocks = korea_investment.get_owned_stock_info()
-        for item in owned_stocks:
-            try:
+        try:
+            owned_stocks = korea_investment.get_owned_stock_info()
+            for item in owned_stocks:
                 if item.pdno in alert:
                     continue
                 stock = StopLoss.get_or_none(StopLoss.symbol == item.pdno)
@@ -349,8 +349,8 @@ def stop_loss_notify(korea_investment: KoreaInvestmentAPI):
                 discord.send_message(f"{item.prdt_name} 판매 권유")
                 logging.info(f"{item.prdt_name} 판매 권유")
                 alert.add(item.pdno)
-            except Exception as e:
-                logging.error(f"Error processing item {item.pdno}: {e}")
+        except Exception as e:
+            logging.error(f"stop_loss_notify Error processing: {e}")
 
         sleep(1 * 60)
 
