@@ -220,7 +220,7 @@ class KoreaInvestmentAPI:
         """
         Place a buy order.
         """
-        headers = self._add_tr_id_to_headers("TTC0802U")
+        headers = self._add_tr_id_to_headers("TTC0012U")
         order_payload = self._create_order_payload(symbol, price, volume, order_type)
         return self._send_order("/uapi/domestic-stock/v1/trading/order-cash", headers, order_payload)
 
@@ -237,7 +237,7 @@ class KoreaInvestmentAPI:
         """
         Place a sell order.
         """
-        headers = self._add_tr_id_to_headers("TTC0801U")
+        headers = self._add_tr_id_to_headers("TTC0011U")
         order_payload = self._create_order_payload(symbol, price, volume, order_type)
         return self._send_order("/uapi/domestic-stock/v1/trading/order-cash", headers, order_payload)
 
@@ -420,9 +420,9 @@ class KoreaInvestmentAPI:
         # 최근 90일 여부에 따른 tr_id 결정
         ninety_days_ago = datetime.now() - timedelta(days=90)
         if datetime.strptime(end_date, "%Y%m%d") >= ninety_days_ago:
-            tr_id = "TTTC8001R"
+            tr_id = "TTTC0081R"
         else:
-            tr_id = "CTSC9115R"
+            tr_id = "CTSC9215R"
 
         headers = self._add_tr_id_to_headers(tr_id, use_prefix=False)
         params = StockTradeListRequestDTO(
