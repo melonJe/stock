@@ -54,3 +54,6 @@ class StockTradeListResponseDTO:
     cpbc_ordp_mtrl_dvsn_cd: str
     ord_orgno: str
     rsvn_ord_end_dt: str
+    excg_id_dvsn_cd: str
+    stpm_cndt_pric: str
+    stpm_efct_occr_dtmd: str

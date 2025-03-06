@@ -30,7 +30,7 @@ CREATE TABLE public.sell_queue (
 	id bigserial NOT NULL,
 	symbol varchar NOT NULL,
 	volume int4 NOT NULL,
-	price int4 NOT NULL,
+	price numeric(20, 4) NULL,
 	CONSTRAINT sell_queue_pkey PRIMARY KEY (id)
 );
 
