@@ -14,7 +14,7 @@ services:
     environment:
       - TZ=Asia/Seoul
     volumes:
-      - stock_db_volume:/var/lib/postgresql/data
+      - ./stock_db_volume:/var/lib/postgresql/data
 
   stock:
     image: stock:latest
@@ -35,7 +35,3 @@ networks:
   melon-net:
     name: melon-net
     external: true
-
-volumes:
-  stock_db_volume:
-    name: stock_db_volume
