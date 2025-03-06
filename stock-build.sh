@@ -36,10 +36,10 @@ fi
 docker build --tag stock:latest . || { echo "Docker build failed"; exit 1; }
 
 # Docker Compose 파일 복사
-cp -f ./docker-compose.stock.yml ../docker-compose.stock.yml || { echo "Copy failed"; exit 1; }
+cp -f ./docker-compose.yml ../docker-compose.yml || { echo "Copy failed"; exit 1; }
 
 # 원래 위치로 돌아가기
 cd "$current_dir" || exit
 
 # docker-compose up -d 실행하고 더 이상 사용되지 않는 이미지 제거
-docker-compose -f docker-compose.stock.yml down && docker-compose -f docker-compose.stock.yml up -d && docker image prune -f || { echo "Docker Compose failed"; exit 1; }
+docker-compose down && docker-compose up -d && docker image prune -f || { echo "Docker Compose failed"; exit 1; }
