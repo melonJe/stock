@@ -38,3 +38,4 @@ networks:
 
 volumes:
   stock_db_volume:
+    name: stock_db_volume
