@@ -314,11 +314,13 @@ def update_sell_queue(ki_api: KoreaInvestmentAPI):
             volumes_and_prices = []
             if stock_db.country == 'KOR':
                 volumes_and_prices = [
-                    (additional_volume, price_refine(math.ceil(avg_price * 1.005), 1))
+                    (additional_volume - int(additional_volume * 0.5), price_refine(math.ceil(avg_price * 1.105))),
+                    (int(additional_volume * 0.5), price_refine(math.ceil(avg_price * 1.255)))
                 ]
             elif stock_db.country == 'USA':
                 volumes_and_prices = [
-                    (additional_volume, round(float(avg_price) * 1.005, 2))
+                    (additional_volume - int(additional_volume * 0.5), round(float(avg_price * 1.105))),
+                    (int(additional_volume * 0.5), round(float(avg_price * 1.255)))
                 ]
             for vol, prc in volumes_and_prices:
                 if vol > 0:
