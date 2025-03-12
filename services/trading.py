@@ -67,7 +67,7 @@ def select_buy_stocks(country: str = "KOR") -> dict:
                 recent_days['ma120'] <= recent_days['ma60'],
                 recent_days['ma60'] <= recent_days['ma20'],
                 recent_days['ma20'] <= recent_days['close']
-            ], axis=0)) < int(days * 3 * 0.9):
+            ], axis=0)) < int(days * 3 * 0.95):
                 continue
 
             df['RSI'] = rsi(df['close'], window=9)
