@@ -61,12 +61,13 @@ def select_buy_stocks(country: str = "KOR") -> dict:
             # recent_days = df.tail(30)
             # if recent_days.loc[recent_days['diff_price'] < recent_days['diff_price'].mean(), 'diff_price'].mean() * 5 < recent_days['diff_price'].max():
             #     continue
-            recent_days = df.tail(5)
+            days = 5
+            recent_days = df.tail(days)
             if np.sum(np.sum([
                 recent_days['ma120'] <= recent_days['ma60'],
                 recent_days['ma60'] <= recent_days['ma20'],
                 recent_days['ma20'] <= recent_days['close']
-            ], axis=0)) < 7:
+            ], axis=0)) < int(days * 3 * 0.9):
                 continue
 
             df['RSI'] = rsi(df['close'], window=9)
