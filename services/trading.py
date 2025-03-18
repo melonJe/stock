@@ -54,13 +54,7 @@ def select_buy_stocks(country: str = "KOR") -> dict:
             df['ma120'] = df['close'].rolling(window=120).mean()
             df['ma60'] = df['close'].rolling(window=60).mean()
             df['ma20'] = df['close'].rolling(window=20).mean()
-            # df['diff_price'] = df['high'] - df['low']
-            # df['diff_price'] = df['diff_price'].replace(["", "N/A"], None)
-            # df['diff_price'] = pd.to_numeric(df['diff_price'], errors='coerce')
-            # df = df.dropna(subset=['diff_price'])
-            # recent_days = df.tail(30)
-            # if recent_days.loc[recent_days['diff_price'] < recent_days['diff_price'].mean(), 'diff_price'].mean() * 5 < recent_days['diff_price'].max():
-            #     continue
+
             days = 5
             recent_days = df.tail(days)
             if np.sum(np.sum([
@@ -70,9 +64,9 @@ def select_buy_stocks(country: str = "KOR") -> dict:
             ], axis=0)) < int(days * 3 * 0.95):
                 continue
 
-            df['RSI'] = rsi(df['close'], window=9)
-            if df.iloc[-1]['RSI'] > 80:
-                continue
+            # df['RSI'] = rsi(df['close'], window=9)
+            # if df.iloc[-1]['RSI'] > 80:
+            #     continue
 
             df[['high', 'low', 'close']] = df[['high', 'low', 'close']].apply(pd.to_numeric, errors='coerce')
             df['ADX'] = adx(df['high'], df['low'], df['close'], window=14)
@@ -416,3 +410,21 @@ def usa_trading():
 
 if __name__ == "__main__":
     ki_api = KoreaInvestmentAPI(app_key=setting_env.APP_KEY, app_secret=setting_env.APP_SECRET, account_number=setting_env.ACCOUNT_NUMBER, account_code=setting_env.ACCOUNT_CODE)
+    update_sell_queue(ki_api=ki_api)
+    add_stock_price(country="KOR", start_date=datetime.datetime.now() - datetime.timedelta(days=5), end_date=datetime.datetime.now())
+    for stock in ki_api.get_owned_stock_info():
+        stop_loss_insert(stock.pdno, float(stock.pchs_avg_pric))
+
+    sell_stock = select_sell_korea_stocks(ki_api)
+    sell_queue = {}
+    for sell in SellQueue.select().join(Stock, on=(SellQueue.symbol == Stock.symbol)).where(Stock.country == 'KOR'):
+        if sell.symbol not in sell_queue.keys():
+            sell_queue[sell.symbol] = {}
+        sell_queue[sell.symbol][sell.price] = sell.volume
+    sell_queue.update(sell_stock)
+    sell = threading.Thread(target=trading_sell, args=(ki_api, sell_queue,))
+    sell.start()
+    buy_stock = select_buy_stocks(country="KOR")
+    logging.info(f'buy_stock data: {buy_stock}')
+    buy = threading.Thread(target=trading_buy, args=(ki_api, buy_stock,))
+    buy.start()
