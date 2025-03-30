@@ -64,17 +64,17 @@ def select_buy_stocks(country: str = "KOR") -> dict:
             ], axis=0)) < int(days * 3 * 0.95):
                 continue
 
-            # df['RSI'] = rsi(df['close'], window=9)
-            # if df.iloc[-1]['RSI'] > 80:
-            #     continue
+            df['RSI'] = rsi(df['close'], window=9)
+            if df.iloc[-1]['RSI'] > 80:
+                continue
 
             df[['high', 'low', 'close']] = df[['high', 'low', 'close']].apply(pd.to_numeric, errors='coerce')
             df['ADX'] = adx(df['high'], df['low'], df['close'], window=14)
-            if df.iloc[-1]['ADX'] < 20 and df.iloc[-1]['ADX'] < df.iloc[-2]['ADX']:
+            if df.iloc[-1]['ADX'] < 25 or df.iloc[-1]['ADX'] < df.iloc[-2]['ADX']:
                 continue
 
             df['CMF'] = ChaikinMoneyFlowIndicator(high=df['high'].astype('float64'), low=df['low'].astype('float64'), close=df['close'].astype('float64'), volume=df['volume'].astype('float64'), window=10).chaikin_money_flow()
-            if df['CMF'].rolling(5).mean().iloc[-1] < 0.1:
+            if df['CMF'].rolling(5).mean().iloc[-1] < 0.125:
                 continue
 
             df['ATR5'] = AverageTrueRange(high=df['high'].astype('float64'), low=df['low'].astype('float64'), close=df['close'].astype('float64'), window=5).average_true_range()
