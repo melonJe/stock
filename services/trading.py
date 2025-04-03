@@ -70,7 +70,7 @@ def select_buy_stocks(country: str = "KOR") -> dict:
 
             df[['high', 'low', 'close']] = df[['high', 'low', 'close']].apply(pd.to_numeric, errors='coerce')
             df['ADX'] = adx(df['high'], df['low'], df['close'], window=14)
-            if df.iloc[-1]['ADX'] < 25 or df.iloc[-1]['ADX'] < df.iloc[-2]['ADX']:
+            if df.iloc[-1]['ADX'] < 20 or df.iloc[-1]['ADX'] < df.iloc[-2]['ADX']:
                 continue
 
             df['CMF'] = ChaikinMoneyFlowIndicator(high=df['high'].astype('float64'), low=df['low'].astype('float64'), close=df['close'].astype('float64'), volume=df['volume'].astype('float64'), window=10).chaikin_money_flow()
