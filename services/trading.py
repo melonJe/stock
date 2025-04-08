@@ -384,18 +384,18 @@ def korea_trading():
     sell = threading.Thread(target=trading_sell, args=(ki_api, sell_queue,))
     sell.start()
 
-    buy_stock = select_buy_stocks(country="KOR")
-    logging.info(f'buy_stock data: {buy_stock}')
-    buy = threading.Thread(target=trading_buy, args=(ki_api, buy_stock,))
-    buy.start()
+    # buy_stock = select_buy_stocks(country="KOR")
+    # logging.info(f'buy_stock data: {buy_stock}')
+    # buy = threading.Thread(target=trading_buy, args=(ki_api, buy_stock,))
+    # buy.start()
 
 
 def usa_trading():
     ki_api = KoreaInvestmentAPI(app_key=setting_env.APP_KEY, app_secret=setting_env.APP_SECRET, account_number=setting_env.ACCOUNT_NUMBER, account_code=setting_env.ACCOUNT_CODE)
 
-    usa_stock = select_buy_stocks(country="USA")
-    usa_buy = threading.Thread(target=trading_buy, args=(ki_api, usa_stock,))
-    usa_buy.start()
+    # usa_stock = select_buy_stocks(country="USA")
+    # usa_buy = threading.Thread(target=trading_buy, args=(ki_api, usa_stock,))
+    # usa_buy.start()
 
     sell_stock = select_sell_overseas_stocks(ki_api)
     sell_queue = {}
