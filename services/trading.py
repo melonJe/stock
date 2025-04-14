@@ -9,10 +9,10 @@ import numpy as np
 import pandas
 import pandas as pd
 from peewee import fn
-from ta.momentum import rsi
-from ta.trend import adx
-from ta.volatility import AverageTrueRange
-from ta.volume import ChaikinMoneyFlowIndicator
+from ta.momentum import rsi, RSIIndicator
+from ta.trend import MACD
+from ta.volatility import AverageTrueRange, BollingerBands
+from ta.volume import OnBalanceVolumeIndicator
 
 from apis.korea_investment import KoreaInvestmentAPI
 from config import setting_env
@@ -45,45 +45,41 @@ def select_buy_stocks(country: str = "KOR") -> dict:
                       .where(table.date.between(datetime.datetime.now() - datetime.timedelta(days=365), datetime.datetime.now()) & (table.symbol == symbol))
                       .order_by(table.date)).dicts())
             ))
-            if len(df) < 200:
-                continue
-
             if not str(df.iloc[-1]['date']) == anchor_date:  # 마지막 데이터가 오늘이 아니면 pass
                 continue
 
-            df['ma120'] = df['close'].rolling(window=120).mean()
-            df['ma60'] = df['close'].rolling(window=60).mean()
-            df['ma20'] = df['close'].rolling(window=20).mean()
-
-            days = 5
-            recent_days = df.tail(days)
-            if np.sum(np.sum([
-                recent_days['ma120'] <= recent_days['ma60'],
-                recent_days['ma60'] <= recent_days['ma20'],
-                recent_days['ma20'] <= recent_days['close']
-            ], axis=0)) < int(days * 3 * 0.95):
+            if len(df) < 200:
+                continue
+                
+            df['Vol_Avg'] = df['Volume'].rolling(window=5).mean()
+            if not df['Volume'] > (df['Vol_Avg'] * 1.5):
                 continue
 
-            df['RSI'] = rsi(df['close'], window=9)
-            if df.iloc[-1]['RSI'] > 80:
+            bollinger = BollingerBands(close=df['Close'], window=10, window_dev=2)
+            df['BB_Mavg'] = bollinger.bollinger_mavg()
+            df['BB_Upper'] = bollinger.bollinger_hband()
+            df['BB_Lower'] = bollinger.bollinger_lband()
+            if not df.iloc[-1]['Close'] < df.iloc[-1]['BB_Lower']:
                 continue
 
-            df[['high', 'low', 'close']] = df[['high', 'low', 'close']].apply(pd.to_numeric, errors='coerce')
-            df['ADX'] = adx(df['high'], df['low'], df['close'], window=14)
-            if df.iloc[-1]['ADX'] < 20 or df.iloc[-1]['ADX'] < df.iloc[-2]['ADX']:
+            obv_indicator = OnBalanceVolumeIndicator(close=df['Close'], volume=df['Volume']).on_balance_volume()
+            if not obv_indicator.iloc[-1] > obv_indicator.iloc[-4]:
                 continue
 
-            df['CMF'] = ChaikinMoneyFlowIndicator(high=df['high'].astype('float64'), low=df['low'].astype('float64'), close=df['close'].astype('float64'), volume=df['volume'].astype('float64'), window=10).chaikin_money_flow()
-            if df['CMF'].rolling(5).mean().iloc[-1] < 0.125:
+            df['RSI'] = RSIIndicator(close=df['close'], window=7).rsi()
+            latest_rsi = df.iloc[-1]['RSI']
+            rsi_condition = latest_rsi >= 30
+            macd_indicator = MACD(close=df['Close'], window_fast=12, window_slow=26, window_sign=9)
+            df['MACD'] = macd_indicator.macd()
+            df['MACD_Signal'] = macd_indicator.macd_signal()
+            prev = df.iloc[-2]
+            curr = df.iloc[-1]
+            prev_macd_condition = prev['MACD'] >= prev['MACD_Signal']
+            curr_macd_condition = curr['MACD'] <= curr['MACD_Signal']
+            if rsi_condition and (prev_macd_condition or curr_macd_condition):
                 continue
 
-            df['ATR5'] = AverageTrueRange(high=df['high'].astype('float64'), low=df['low'].astype('float64'), close=df['close'].astype('float64'), window=5).average_true_range()
-            df['ATR10'] = AverageTrueRange(high=df['high'].astype('float64'), low=df['low'].astype('float64'), close=df['close'].astype('float64'), window=10).average_true_range()
-            df['ATR20'] = AverageTrueRange(high=df['high'].astype('float64'), low=df['low'].astype('float64'), close=df['close'].astype('float64'), window=20).average_true_range()
             atr = max(df.iloc[-1]['ATR5'], df.iloc[-1]['ATR10'], df.iloc[-1]['ATR20'])
-            if atr / df.iloc[-1]['close'] > 0.05:
-                continue
-
             volume = int(min(10000 // atr, np.average(df['volume'][-20:]) // (atr ** (1 / 2))))
             if country == "USA":
                 volume //= 1000
@@ -358,11 +354,6 @@ def korea_trading():
         logging.info(f'{datetime.datetime.now()} 휴장일')
         return
 
-    # usa_stock = select_buy_stocks(country="USA")
-    # discord.send_message(f"usa_stock: {usa_stock}")
-    # usa_buy = threading.Thread(target=trading_buy, args=(ki_api, usa_stock,))
-    # usa_buy.start()
-
     stop_loss = threading.Thread(target=stop_loss_notify, args=(ki_api,))
     stop_loss.start()
 
@@ -384,18 +375,18 @@ def korea_trading():
     sell = threading.Thread(target=trading_sell, args=(ki_api, sell_queue,))
     sell.start()
 
-    # buy_stock = select_buy_stocks(country="KOR")
-    # logging.info(f'buy_stock data: {buy_stock}')
-    # buy = threading.Thread(target=trading_buy, args=(ki_api, buy_stock,))
-    # buy.start()
+    buy_stock = select_buy_stocks(country="KOR")
+    logging.info(f'buy_stock data: {buy_stock}')
+    buy = threading.Thread(target=trading_buy, args=(ki_api, buy_stock,))
+    buy.start()
 
 
 def usa_trading():
     ki_api = KoreaInvestmentAPI(app_key=setting_env.APP_KEY, app_secret=setting_env.APP_SECRET, account_number=setting_env.ACCOUNT_NUMBER, account_code=setting_env.ACCOUNT_CODE)
 
-    # usa_stock = select_buy_stocks(country="USA")
-    # usa_buy = threading.Thread(target=trading_buy, args=(ki_api, usa_stock,))
-    # usa_buy.start()
+    usa_stock = select_buy_stocks(country="USA")
+    usa_buy = threading.Thread(target=trading_buy, args=(ki_api, usa_stock,))
+    usa_buy.start()
 
     sell_stock = select_sell_overseas_stocks(ki_api)
     sell_queue = {}
