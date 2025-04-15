@@ -12,7 +12,6 @@ from peewee import fn
 from ta.momentum import rsi, RSIIndicator
 from ta.trend import MACD
 from ta.volatility import AverageTrueRange, BollingerBands
-from ta.volume import OnBalanceVolumeIndicator
 
 from apis.korea_investment import KoreaInvestmentAPI
 from config import setting_env
@@ -51,9 +50,9 @@ def select_buy_stocks(country: str = "KOR") -> dict:
             if len(df) < 200:
                 continue
 
-            df['Vol_Avg'] = df['volume'].rolling(window=5).mean()
-            if not df.iloc[-1]['volume'] > (df.iloc[-1]['Vol_Avg'] * 1.5):
-                continue
+            # df['Vol_Avg'] = df['volume'].rolling(window=5).mean()
+            # if not df.iloc[-1]['volume'] > (df.iloc[-1]['Vol_Avg'] * 1.5):
+            #     continue
 
             bollinger = BollingerBands(close=df['close'], window=10, window_dev=2)
             df['BB_Mavg'] = bollinger.bollinger_mavg()
@@ -62,9 +61,9 @@ def select_buy_stocks(country: str = "KOR") -> dict:
             if df.iloc[-1]['close'] > df.iloc[-1]['BB_Lower'] * 1.05 and df.iloc[-1]['low'] > df.iloc[-1]['BB_Lower'] * 1.05:
                 continue
 
-            obv_indicator = OnBalanceVolumeIndicator(close=df['close'], volume=df['volume']).on_balance_volume()
-            if not obv_indicator.iloc[-1] > obv_indicator.iloc[-4]:
-                continue
+            # obv_indicator = OnBalanceVolumeIndicator(close=df['close'], volume=df['volume']).on_balance_volume()
+            # if not obv_indicator.iloc[-1] > obv_indicator.iloc[-4]:
+            #     continue
 
             df['RSI'] = RSIIndicator(close=df['close'], window=7).rsi()
             latest_rsi = df.iloc[-1]['RSI']
