@@ -9,9 +9,9 @@ import numpy as np
 import pandas
 import pandas as pd
 from peewee import fn
-from ta.momentum import rsi, RSIIndicator
+from ta.momentum import RSIIndicator
 from ta.trend import MACD
-from ta.volatility import AverageTrueRange, BollingerBands
+from ta.volatility import BollingerBands
 
 from apis.korea_investment import KoreaInvestmentAPI
 from config import setting_env
@@ -75,7 +75,7 @@ def select_buy_stocks(country: str = "KOR") -> dict:
             curr = df.iloc[-1]
             prev_macd_condition = prev['MACD'] <= prev['MACD_Signal']
             curr_macd_condition = curr['MACD'] >= curr['MACD_Signal']
-            if not rsi_condition or (prev_macd_condition and curr_macd_condition):
+            if not (rsi_condition or (prev_macd_condition and curr_macd_condition)):
                 continue
 
             atr = max(df.iloc[-1]['ATR5'], df.iloc[-1]['ATR10'], df.iloc[-1]['ATR20'])
@@ -96,21 +96,25 @@ def select_buy_stocks(country: str = "KOR") -> dict:
 def filter_sell_stocks(df: pandas.DataFrame, volume) -> Union[dict, None]:
     if len(df) < 200:
         return None
-    df['MA20'] = df['close'].rolling(20).mean()
-    df['StdDev'] = df['close'].rolling(20).std()
-    df['UpperBB'] = df['MA20'] + 2 * df['StdDev']
-    df['LowerBB'] = df['MA20'] - 2 * df['StdDev']
-    df['Bandlength'] = df['UpperBB'] - df['LowerBB']
 
-    if not (df.iloc[-10]['Bandlength'] < df.iloc[-5]['Bandlength'] < df.iloc[-1]['Bandlength']):
+    bollinger = BollingerBands(close=df['close'], window=10, window_dev=2)
+    df['BB_Mavg'] = bollinger.bollinger_mavg()
+    df['BB_Upper'] = bollinger.bollinger_hband()
+    df['BB_Lower'] = bollinger.bollinger_lband()
+    if df.iloc[-1]['close'] < df.iloc[-1]['BB_Upper'] * 0.95 and df.iloc[-1]['low'] < df.iloc[-1]['BB_Upper'] * 0.95:
         return None
 
-    df['ATR'] = AverageTrueRange(high=df['high'], low=df['low'], close=df['close']).average_true_range()
-    if not (df.iloc[-10]['ATR'] < df.iloc[-5]['ATR'] < df.iloc[-1]['ATR']):
-        return None
-
-    df['RSI'] = rsi(df['close'], window=9)
-    if df.iloc[-1]['RSI'] > 20:
+    df['RSI'] = RSIIndicator(close=df['close'], window=7).rsi()
+    latest_rsi = df.iloc[-1]['RSI']
+    rsi_condition = latest_rsi > 70
+    macd_indicator = MACD(close=df['close'], window_fast=12, window_slow=26, window_sign=9)
+    df['MACD'] = macd_indicator.macd()
+    df['MACD_Signal'] = macd_indicator.macd_signal()
+    prev = df.iloc[-2]
+    curr = df.iloc[-1]
+    prev_macd_condition = prev['MACD'] >= prev['MACD_Signal']
+    curr_macd_condition = curr['MACD'] <= curr['MACD_Signal']
+    if not (rsi_condition or (prev_macd_condition and curr_macd_condition)):
         return None
 
     return {
