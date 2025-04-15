@@ -68,15 +68,15 @@ def select_buy_stocks(country: str = "KOR") -> dict:
 
             df['RSI'] = RSIIndicator(close=df['close'], window=7).rsi()
             latest_rsi = df.iloc[-1]['RSI']
-            rsi_condition = latest_rsi >= 30
+            rsi_condition = latest_rsi < 30
             macd_indicator = MACD(close=df['close'], window_fast=12, window_slow=26, window_sign=9)
             df['MACD'] = macd_indicator.macd()
             df['MACD_Signal'] = macd_indicator.macd_signal()
             prev = df.iloc[-2]
             curr = df.iloc[-1]
-            prev_macd_condition = prev['MACD'] >= prev['MACD_Signal']
-            curr_macd_condition = curr['MACD'] <= curr['MACD_Signal']
-            if rsi_condition and (prev_macd_condition or curr_macd_condition):
+            prev_macd_condition = prev['MACD'] <= prev['MACD_Signal']
+            curr_macd_condition = curr['MACD'] >= curr['MACD_Signal']
+            if not rsi_condition or (prev_macd_condition and curr_macd_condition):
                 continue
 
             atr = max(df.iloc[-1]['ATR5'], df.iloc[-1]['ATR10'], df.iloc[-1]['ATR20'])
