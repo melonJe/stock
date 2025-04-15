@@ -50,26 +50,26 @@ def select_buy_stocks(country: str = "KOR") -> dict:
 
             if len(df) < 200:
                 continue
-                
-            df['Vol_Avg'] = df['Volume'].rolling(window=5).mean()
-            if not df['Volume'] > (df['Vol_Avg'] * 1.5):
+
+            df['Vol_Avg'] = df['volume'].rolling(window=5).mean()
+            if not df.iloc[-1]['volume'] > (df.iloc[-1]['Vol_Avg'] * 1.5):
                 continue
 
-            bollinger = BollingerBands(close=df['Close'], window=10, window_dev=2)
+            bollinger = BollingerBands(close=df['close'], window=10, window_dev=2)
             df['BB_Mavg'] = bollinger.bollinger_mavg()
             df['BB_Upper'] = bollinger.bollinger_hband()
             df['BB_Lower'] = bollinger.bollinger_lband()
-            if not df.iloc[-1]['Close'] < df.iloc[-1]['BB_Lower']:
+            if not df.iloc[-1]['close'] < df.iloc[-1]['BB_Lower']:
                 continue
 
-            obv_indicator = OnBalanceVolumeIndicator(close=df['Close'], volume=df['Volume']).on_balance_volume()
+            obv_indicator = OnBalanceVolumeIndicator(close=df['close'], volume=df['volume']).on_balance_volume()
             if not obv_indicator.iloc[-1] > obv_indicator.iloc[-4]:
                 continue
 
             df['RSI'] = RSIIndicator(close=df['close'], window=7).rsi()
             latest_rsi = df.iloc[-1]['RSI']
             rsi_condition = latest_rsi >= 30
-            macd_indicator = MACD(close=df['Close'], window_fast=12, window_slow=26, window_sign=9)
+            macd_indicator = MACD(close=df['close'], window_fast=12, window_slow=26, window_sign=9)
             df['MACD'] = macd_indicator.macd()
             df['MACD_Signal'] = macd_indicator.macd_signal()
             prev = df.iloc[-2]
