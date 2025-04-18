@@ -69,17 +69,14 @@ def select_buy_stocks(country: str = "KOR") -> dict:
             latest_rsi = df.iloc[-1]['RSI']
             rsi_condition = latest_rsi < 30
             macd_indicator = MACD(close=df['close'], window_fast=12, window_slow=26, window_sign=9)
-            df['MACD'] = macd_indicator.macd()
-            df['MACD_Signal'] = macd_indicator.macd_signal()
-            prev = df.iloc[-2]
-            curr = df.iloc[-1]
-            prev_macd_condition = prev['MACD'] <= prev['MACD_Signal']
-            curr_macd_condition = curr['MACD'] >= curr['MACD_Signal']
-            if not (rsi_condition or (prev_macd_condition and curr_macd_condition)):
+            df['MACD'], df['MACD_Signal'] = macd_indicator.macd(), macd_indicator.macd_signal()
+            prev, curr = df.iloc[-2], df.iloc[-1]
+            macd_condition = prev['MACD'] <= prev['MACD_Signal'] and curr['MACD'] >= curr['MACD_Signal']
+            if not (rsi_condition or macd_condition):
                 continue
 
             atr = max(df.iloc[-1]['ATR5'], df.iloc[-1]['ATR10'], df.iloc[-1]['ATR20'])
-            volume = int(min(10000 // atr, np.average(df['volume'][-20:]) // (atr ** (1 / 2))))
+            volume = int(min(100000 // atr, np.average(df['volume'][-20:]) // (atr ** (1 / 2))))
             if country == "USA":
                 volume //= 1000
             buy_levels[symbol] = {
