@@ -190,6 +190,7 @@ def update_subscription_stock():
 
         for future in as_completed(futures):
             future.result()  # Ensure any raised exceptions are handled
+    data_to_insert.extend([{'symbol': symbol} for symbol in set(FinanceDataReader.StockListing('KRX').iloc[0:100]['Code'])])
 
     # 미국 주식 프로세스
     with ThreadPoolExecutor(max_workers=min(os.cpu_count(), 10)) as executor:
@@ -358,7 +359,8 @@ def add_price_for_symbol(symbol: str, start_date: datetime.datetime = None, end_
 
 
 if __name__ == "__main__":
-    # update_stock_listings()
-    # add_stock_price(start_date=datetime.datetime.now() - relativedelta(years=5), end_date=datetime.datetime.now())
-    update_subscription_stock()
-    # add_stock_price(country="KOR", start_date=datetime.datetime.now() - datetime.timedelta(days=5), end_date=datetime.datetime.now())
+    data_to_insert = []
+    data_to_insert.extend([{'symbol': symbol} for symbol in set(FinanceDataReader.StockListing('KRX').iloc[0:100]['Code'])])
+    if data_to_insert:
+        logging.info(f"{len(data_to_insert)}개 주식")
+        upsert_many(Subscription, data_to_insert, [Subscription.symbol])
