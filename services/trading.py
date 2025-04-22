@@ -80,10 +80,9 @@ def select_buy_stocks(country: str = "KOR") -> dict:
             if country == "USA":
                 volume //= 1000
             buy_levels[symbol] = {
-                df.iloc[-1]['ma120']: volume // 10 * 4,
-                df.iloc[-1]['ma60']: volume // 10 * 3,
-                df.iloc[-1]['ma20']: volume // 10 * 2,
-                df.iloc[-1]['close']: volume // 10 * 1
+                df.iloc[-1]['low']: volume // 9 * 5,
+                (df.iloc[-1]['open'] + df.iloc[-1]['close']) / 2: volume // 3,
+                df.iloc[-1]['high']: volume // 9
             }
         except Exception as e:
             logging.error(f"Error occurred: {e}")
