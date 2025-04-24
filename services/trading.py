@@ -75,9 +75,9 @@ def select_buy_stocks(country: str = "KOR") -> dict:
             if not (rsi_condition or macd_condition):
                 continue
 
-            df['ATR5'] = AverageTrueRange(high=df['high'], low=df['low'], close=df['close'], window=5)
-            df['ATR10'] = AverageTrueRange(high=df['high'], low=df['low'], close=df['close'], window=10)
-            df['ATR20'] = AverageTrueRange(high=df['high'], low=df['low'], close=df['close'], window=20)
+            df['ATR5'] = AverageTrueRange(high=df['high'], low=df['low'], close=df['close'], window=5).average_true_range()
+            df['ATR10'] = AverageTrueRange(high=df['high'], low=df['low'], close=df['close'], window=10).average_true_range()
+            df['ATR20'] = AverageTrueRange(high=df['high'], low=df['low'], close=df['close'], window=20).average_true_range()
             atr = max(df.iloc[-1]['ATR5'], df.iloc[-1]['ATR10'], df.iloc[-1]['ATR20'])
             volume = int(min(100000 // atr, np.average(df['volume'][-20:]) // (atr ** (1 / 2))))
             if country == "USA":
@@ -399,22 +399,4 @@ def usa_trading():
 
 
 if __name__ == "__main__":
-    ki_api = KoreaInvestmentAPI(app_key=setting_env.APP_KEY, app_secret=setting_env.APP_SECRET, account_number=setting_env.ACCOUNT_NUMBER, account_code=setting_env.ACCOUNT_CODE)
-    update_sell_queue(ki_api=ki_api)
-    add_stock_price(country="KOR", start_date=datetime.datetime.now() - datetime.timedelta(days=5), end_date=datetime.datetime.now())
-    for stock in ki_api.get_owned_stock_info():
-        stop_loss_insert(stock.pdno, float(stock.pchs_avg_pric))
-
-    sell_stock = select_sell_korea_stocks(ki_api)
-    sell_queue = {}
-    for sell in SellQueue.select().join(Stock, on=(SellQueue.symbol == Stock.symbol)).where(Stock.country == 'KOR'):
-        if sell.symbol not in sell_queue.keys():
-            sell_queue[sell.symbol] = {}
-        sell_queue[sell.symbol][sell.price] = sell.volume
-    sell_queue.update(sell_stock)
-    sell = threading.Thread(target=trading_sell, args=(ki_api, sell_queue,))
-    sell.start()
-    buy_stock = select_buy_stocks(country="KOR")
-    logging.info(f'buy_stock data: {buy_stock}')
-    buy = threading.Thread(target=trading_buy, args=(ki_api, buy_stock,))
-    buy.start()
+    pass
