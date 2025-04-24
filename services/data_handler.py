@@ -198,6 +198,8 @@ def update_subscription_stock():
 
         for future in as_completed(futures):
             future.result()  # Ensure any raised exceptions are handled
+    for stockList in (FinanceDataReader.StockListing('S&P500'), FinanceDataReader.StockListing('NASDAQ'), FinanceDataReader.StockListing('NYSE')):
+        data_to_insert.extend([{'symbol': symbol} for symbol in set(stockList.iloc[0:33]['Symbol'])])
 
     if data_to_insert:
         logging.info(f"{len(data_to_insert)}개 주식")
@@ -359,8 +361,4 @@ def add_price_for_symbol(symbol: str, start_date: datetime.datetime = None, end_
 
 
 if __name__ == "__main__":
-    data_to_insert = []
-    data_to_insert.extend([{'symbol': symbol} for symbol in set(FinanceDataReader.StockListing('KRX').iloc[0:100]['Code'])])
-    if data_to_insert:
-        logging.info(f"{len(data_to_insert)}개 주식")
-        upsert_many(Subscription, data_to_insert, [Subscription.symbol])
+    pass
