@@ -58,7 +58,7 @@ def select_buy_stocks(country: str = "KOR") -> dict:
             df['BB_Mavg'] = bollinger.bollinger_mavg()
             df['BB_Upper'] = bollinger.bollinger_hband()
             df['BB_Lower'] = bollinger.bollinger_lband()
-            if df.iloc[-1]['close'] > df.iloc[-1]['BB_Lower'] * 1.05 and df.iloc[-1]['low'] > df.iloc[-1]['BB_Lower'] * 1.05:
+            if df.iloc[-1]['close'] > df.iloc[-1]['BB_Lower'] and df.iloc[-1]['low'] > df.iloc[-1]['BB_Lower']:
                 continue
 
             # obv_indicator = OnBalanceVolumeIndicator(close=df['close'], volume=df['volume']).on_balance_volume()
@@ -67,7 +67,7 @@ def select_buy_stocks(country: str = "KOR") -> dict:
 
             df['RSI'] = RSIIndicator(close=df['close'], window=7).rsi()
             rsi_curr, rsi_prev = df.iloc[-1]['RSI'], df.iloc[-2]['RSI']
-            rsi_condition = rsi_prev < rsi_curr
+            rsi_condition = rsi_prev < rsi_curr < 40
             macd_indicator = MACD(close=df['close'], window_fast=12, window_slow=26, window_sign=9)
             df['MACD'], df['MACD_Signal'] = macd_indicator.macd(), macd_indicator.macd_signal()
             macd_curr, macd_prev = df.iloc[-1], df.iloc[-2]
@@ -399,4 +399,6 @@ def usa_trading():
 
 
 if __name__ == "__main__":
-    pass
+    ki_api = KoreaInvestmentAPI(app_key=setting_env.APP_KEY, app_secret=setting_env.APP_SECRET, account_number=setting_env.ACCOUNT_NUMBER, account_code=setting_env.ACCOUNT_CODE)
+    buy_stock = select_buy_stocks(country="KOR")
+    trading_buy(ki_api, buy_stock)
