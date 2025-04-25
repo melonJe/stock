@@ -54,7 +54,7 @@ def select_buy_stocks(country: str = "KOR") -> dict:
             # if not df.iloc[-1]['volume'] > (df.iloc[-1]['Vol_Avg'] * 1.5):
             #     continue
 
-            bollinger = BollingerBands(close=df['close'], window=10, window_dev=2)
+            bollinger = BollingerBands(close=df['close'], window=20, window_dev=2)
             df['BB_Mavg'] = bollinger.bollinger_mavg()
             df['BB_Upper'] = bollinger.bollinger_hband()
             df['BB_Lower'] = bollinger.bollinger_lband()
