@@ -22,6 +22,7 @@ from utils.operations import price_refine
 
 
 def select_buy_stocks(country: str = "KOR") -> dict:
+    # TODO 한국 미국 주식 분리 필요
     buy_levels = dict()
     anchor_date = datetime.datetime.now()
     if country == 'USA':
@@ -44,6 +45,13 @@ def select_buy_stocks(country: str = "KOR") -> dict:
                       .where(table.date.between(datetime.datetime.now() - datetime.timedelta(days=365), datetime.datetime.now()) & (table.symbol == symbol))
                       .order_by(table.date)).dicts())
             ))
+
+            if country == 'USA':
+                df['open'] = df['open'].astype(float)
+                df['high'] = df['high'].astype(float)
+                df['close'] = df['close'].astype(float)
+                df['low'] = df['low'].astype(float)
+
             if not str(df.iloc[-1]['date']) == anchor_date:  # 마지막 데이터가 오늘이 아니면 pass
                 continue
 
@@ -67,7 +75,7 @@ def select_buy_stocks(country: str = "KOR") -> dict:
 
             df['RSI'] = RSIIndicator(close=df['close'], window=7).rsi()
             rsi_curr, rsi_prev = df.iloc[-1]['RSI'], df.iloc[-2]['RSI']
-            rsi_condition = rsi_prev < rsi_curr < 40
+            rsi_condition = rsi_prev < rsi_curr < 50 or rsi_curr < 30
             macd_indicator = MACD(close=df['close'], window_fast=12, window_slow=26, window_sign=9)
             df['MACD'], df['MACD_Signal'] = macd_indicator.macd(), macd_indicator.macd_signal()
             macd_curr, macd_prev = df.iloc[-1], df.iloc[-2]
@@ -88,7 +96,7 @@ def select_buy_stocks(country: str = "KOR") -> dict:
                 df.iloc[-1]['high']: volume // 9
             }
         except Exception as e:
-            logging.error(f"Error occurred: {e}")
+            logging.error(f"select_buy_stocks Error occurred: {e}")
     return buy_levels
 
 
@@ -157,7 +165,7 @@ def select_sell_overseas_stocks(korea_investment: KoreaInvestmentAPI, country: s
             if data:
                 sell_levels[stock.pdno] = data
         except Exception as e:
-            logging.error(f"Error occurred: {e}")
+            logging.error(f"select_sell_overseas_stocks Error occurred: {e}")
     return sell_levels
 
 
@@ -399,6 +407,4 @@ def usa_trading():
 
 
 if __name__ == "__main__":
-    ki_api = KoreaInvestmentAPI(app_key=setting_env.APP_KEY, app_secret=setting_env.APP_SECRET, account_number=setting_env.ACCOUNT_NUMBER, account_code=setting_env.ACCOUNT_CODE)
-    buy_stock = select_buy_stocks(country="KOR")
-    trading_buy(ki_api, buy_stock)
+    print(select_buy_stocks(country="USA"))
