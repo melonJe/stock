@@ -87,9 +87,9 @@ def select_buy_stocks(country: str = "KOR") -> dict:
             df['ATR10'] = AverageTrueRange(high=df['high'], low=df['low'], close=df['close'], window=10).average_true_range()
             df['ATR20'] = AverageTrueRange(high=df['high'], low=df['low'], close=df['close'], window=20).average_true_range()
             atr = max(df.iloc[-1]['ATR5'], df.iloc[-1]['ATR10'], df.iloc[-1]['ATR20'])
-            volume = int(min(100000 // atr, np.average(df['volume'][-20:]) // (atr ** (1 / 2))))
+            volume = int(min(25000 // atr, np.average(df['volume'][-20:]) // (atr ** (1 / 2))))
             if country == "USA":
-                volume //= 1000
+                volume = int(min(25000 / 1500 // atr, np.average(df['volume'][-20:]) // (atr ** (1 / 2))))
             buy_levels[symbol] = {
                 df.iloc[-1]['low']: volume // 9 * 5,
                 (df.iloc[-1]['open'] + df.iloc[-1]['close']) / 2: volume // 3,
