@@ -75,7 +75,7 @@ def select_buy_stocks(country: str = "KOR") -> dict:
 
             df['RSI'] = RSIIndicator(close=df['close'], window=7).rsi()
             rsi_curr, rsi_prev = df.iloc[-1]['RSI'], df.iloc[-2]['RSI']
-            rsi_condition = rsi_prev < rsi_curr < 50 or rsi_curr < 30
+            rsi_condition = rsi_prev < rsi_curr < 50
             macd_indicator = MACD(close=df['close'], window_fast=12, window_slow=26, window_sign=9)
             df['MACD'], df['MACD_Signal'] = macd_indicator.macd(), macd_indicator.macd_signal()
             macd_curr, macd_prev = df.iloc[-1], df.iloc[-2]
@@ -112,8 +112,8 @@ def filter_sell_stocks(df: pandas.DataFrame, volume) -> Union[dict, None]:
         return None
 
     df['RSI'] = RSIIndicator(close=df['close'], window=7).rsi()
-    curr_rsi, prev_rsi = df.iloc[-1]['RSI'], df.iloc[-2]['RSI']
-    rsi_condition = curr_rsi < prev_rsi
+    rsi_curr, rsi_prev = df.iloc[-1]['RSI'], df.iloc[-2]['RSI']
+    rsi_condition = rsi_curr < rsi_prev
     macd_indicator = MACD(close=df['close'], window_fast=12, window_slow=26, window_sign=9)
     df['MACD'], df['MACD_Signal'] = macd_indicator.macd(), macd_indicator.macd_signal()
     macd_curr, macd_prev = df.iloc[-1], df.iloc[-2]
