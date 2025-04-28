@@ -10,7 +10,7 @@ from config import setting_env
 from config.country_config import COUNTRY_CONFIG_ORDER
 from data.dto.account_dto import InquireBalanceRequestDTO, AccountResponseDTO, StockResponseDTO, OverseesStockResponseDTO, convert_overseas_to_domestic
 from data.dto.holiday_dto import HolidayResponseDTO, HolidayRequestDTO
-from data.dto.stock_trade_dto import StockTradeListRequestDTO, StockTradeListResponseDTO
+from data.dto.stock_trade_dto import StockTradeListRequestDTO, StockTradeListResponseDTO, OverseasStockTradeListRequestDTO, OverseasStockTradeListResponseDTO
 from utils import discord
 from utils.operations import find_nth_open_day
 
@@ -74,6 +74,24 @@ class KoreaInvestmentAPI:
             logging.error("Authentication failed: Invalid response.")
             raise Exception("Authentication failed.")
 
+    def _get_request_raw(
+            self,
+            path: str,
+            params: Dict,
+            headers: Optional[Dict] = None,
+            error_log_prefix: str = "HTTP 요청 실패"
+    ) -> Optional[requests.Response]:
+        sleep(0.5)
+        url = f"{setting_env.DOMAIN}{path}?{urllib.parse.urlencode(params)}"
+        effective_headers = self._headers if headers is None else headers
+        try:
+            resp = requests.get(url, headers=effective_headers)
+            resp.raise_for_status()
+            return resp
+        except requests.RequestException as e:
+            logging.info(f"{error_log_prefix}. URL: {url}, 예외: {e}")
+            return None
+
     def _get_request(
             self,
             path: str,
@@ -81,25 +99,8 @@ class KoreaInvestmentAPI:
             headers: Optional[Dict] = None,
             error_log_prefix: str = "HTTP 요청 실패"
     ) -> Optional[Dict]:
-        """
-        Send a GET request to the specified API endpoint.
-
-        :param path: API endpoint path.
-        :param params: Query parameters.
-        :param headers: Optional headers to override default headers.
-        :param error_log_prefix: Prefix for error logging.
-        :return: JSON response as a dictionary or None if failed.
-        """
-        sleep(0.5)
-        full_url = f"{setting_env.DOMAIN}{path}?{urllib.parse.urlencode(params)}"
-        effective_headers = self._headers if headers is None else headers
-        try:
-            response = requests.get(full_url, headers=effective_headers)
-            response.raise_for_status()
-            return response.json()
-        except requests.RequestException as e:
-            logging.info(f"{error_log_prefix}. URL: {full_url}, 예외: {e}")
-            return None
+        raw = self._get_request_raw(path, params, headers, error_log_prefix)
+        return raw.json() if raw else None
 
     def _post_request(
             self,
@@ -408,16 +409,20 @@ class KoreaInvestmentAPI:
         holiday = holidays.get(date)
         return holiday.opnd_yn == "N" if holiday else False
 
-    def get_stock_order_list(self, start_date: str = None, end_date: str = None) -> Union[List[StockTradeListResponseDTO], None]:
+    def get_stock_order_list(
+            self,
+            start_date: str = None,
+            end_date: str = None
+    ) -> Union[List[StockTradeListResponseDTO], None]:
         """
-        Retrieve the list of stock trades within a date range.
+        날짜 범위 내 국내주식 주문 목록 조회 (모든 페이지 통합 반환)
         """
-        if not start_date:
-            start_date = datetime.now().strftime("%Y%m%d")
-        if not end_date:
-            end_date = datetime.now().strftime("%Y%m%d")
+        # 1) 기본 날짜 세팅
+        today = datetime.now().strftime("%Y%m%d")
+        start_date = start_date or today
+        end_date = end_date or today
 
-        # 최근 90일 여부에 따른 tr_id 결정
+        # 2) tr_id 결정 (최근 90일 vs 그 이상)
         ninety_days_ago = datetime.now() - timedelta(days=90)
         if datetime.strptime(end_date, "%Y%m%d") >= ninety_days_ago:
             tr_id = "TTTC0081R"
@@ -425,35 +430,114 @@ class KoreaInvestmentAPI:
             tr_id = "CTSC9215R"
 
         headers = self._add_tr_id_to_headers(tr_id, use_prefix=False)
-        params = StockTradeListRequestDTO(
-            CANO=self._account_number,
-            ACNT_PRDT_CD=self._account_code,
-            INQR_STRT_DT=start_date,
-            INQR_END_DT=end_date,
-            CCLD_DVSN='01'
-        ).__dict__
+        all_trades: List[StockTradeListResponseDTO] = []
+        ctx_nk, ctx_fk = None, None
 
-        response_data = self._get_request(
-            "/uapi/domestic-stock/v1/trading/inquire-daily-ccld",
-            params,
-            headers
-        )
+        # 3) 페이지네이션 루프
+        while True:
+            params = StockTradeListRequestDTO(
+                CANO=self._account_number,
+                ACNT_PRDT_CD=self._account_code,
+                INQR_STRT_DT=start_date,
+                INQR_END_DT=end_date,
+                CCLD_DVSN='01',
+                CTX_AREA_NK100=ctx_nk or '',
+                CTX_AREA_FK100=ctx_fk or '',
+            ).__dict__
 
-        if response_data:
+            resp = self._get_request_raw(
+                "/uapi/domestic-stock/v1/trading/inquire-daily-ccld",
+                params,
+                headers
+            )
+            if not resp:
+                discord.error_message("stock_order_list HTTP 요청 실패.")
+                return None
+
+            # 4) 데이터 파싱
             try:
-                response_list = [StockTradeListResponseDTO(**item) for item in response_data.get("output1", [])]
-                return response_list
-            except KeyError as e:
-                logging.error(f"KeyError: {e} - response data: {response_data}")
-                discord.error_message(f"KeyError: {e} - response data: {response_data}")
-                return None
+                items = resp.json().get("output1", [])
+                all_trades.extend(StockTradeListResponseDTO(**item) for item in items)
             except Exception as e:
-                logging.error(f"Unexpected error: {e} - response data: {response_data}")
-                discord.error_message(f"Unexpected error: {e} - response data: {response_data}")
+                logging.error(f"JSON 파싱 오류: {e} | 응답 본문: {resp.text}")
+                discord.error_message(f"JSON 파싱 오류: {e}")
                 return None
-        else:
-            discord.error_message("stock_trade_list HTTP 요청 실패.")
-            return None
+
+            # 5) 다음 페이지 계속 여부 확인
+            tr_cont = resp.headers.get('tr_cont')
+            if tr_cont in ['F', 'M']:
+                ctx_nk = resp.headers.get('ctx_area_nk100')
+                ctx_fk = resp.headers.get('ctx_area_fk100')
+                continue
+
+            # 'D','E' 등이 오면 종료
+            break
+
+        return all_trades
+
+    def get_overseas_stock_order_list(
+            self,
+            symbol: Optional[str] = None,
+            country: Optional[str] = None,
+            start_date: Optional[str] = None,
+            end_date: Optional[str] = None,
+    ) -> List[OverseasStockTradeListResponseDTO]:
+        """
+        날짜 범위 내 해외주식 주문 목록 조회 (모든 페이지 통합 반환)
+        """
+        # 1) 기본 날짜 세팅
+        today = datetime.now().strftime("%Y%m%d")
+        start_date = start_date or today
+        end_date = end_date or today
+
+        tr_id = "TTS3035R"
+        headers = self._add_tr_id_to_headers(tr_id, use_prefix=True)
+
+        all_trades: List[OverseasStockTradeListResponseDTO] = []
+        ctx_nk, ctx_fk = None, None
+
+        while True:
+            params = OverseasStockTradeListRequestDTO(
+                cano=self._account_number,
+                acnt_prdt_cd=self._account_code,
+                pdno=symbol or '%',
+                ord_strt_dt=start_date,
+                ord_end_dt=end_date,
+                sll_buy_dvsn='00',
+                ccld_nccs_dvsn='01',
+                ovrs_excg_cd=country or '%',
+                sort_sqn="DS",
+                ctx_area_nk200=ctx_nk or '',
+                ctx_area_fk200=ctx_fk or '',
+            ).__dict__
+
+            resp = self._get_request_raw(
+                "/uapi/overseas-stock/v1/trading/inquire-ccnl",
+                params,
+                headers
+            )
+            if not resp:
+                logging.error("stock_trade_list HTTP 요청 실패.")
+                break
+
+            # 2) 페이로드 추출
+            try:
+                data = resp.json().get("output1", [])
+                all_trades.extend(OverseasStockTradeListResponseDTO(**item) for item in data)
+            except Exception as e:
+                logging.error(f"JSON 파싱 에러: {e}, 응답: {resp.text}")
+                break
+
+            # 3) 다음 페이지 여부
+            tr_cont = resp.headers.get('tr_cont')
+            if tr_cont in ['F', 'M']:
+                ctx_nk = resp.headers.get('ctx_area_nk200')
+                ctx_fk = resp.headers.get('ctx_area_fk200')
+                continue
+            # tr_cont in ['D','E'] 또는 기타 종료 조건
+            break
+
+        return all_trades
 
     def submit_overseas_reservation_order(self, country: str, action: str, symbol: str, volume: str, price: str) -> Optional[Dict]:
         """
@@ -522,3 +606,8 @@ class KoreaInvestmentAPI:
                 error_msg = f"{symbol} 해외 예약 주문 실패: {response_data}"
                 logging.error(error_msg)
                 continue
+
+
+if __name__ == "__main__":
+    ki_api = KoreaInvestmentAPI(app_key=setting_env.APP_KEY, app_secret=setting_env.APP_SECRET, account_number=setting_env.ACCOUNT_NUMBER, account_code=setting_env.ACCOUNT_CODE)
+    print(ki_api.get_stock_order_list())
