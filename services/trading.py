@@ -15,6 +15,8 @@ from ta.volatility import BollingerBands, AverageTrueRange
 
 from apis.korea_investment import KoreaInvestmentAPI
 from config import setting_env
+from data.dto.account_dto import convert_overseas_to_domestic
+from data.dto.stock_trade_dto import convert_overseas_to_stock_trade
 from data.models import Blacklist, Stock, StopLoss, Subscription, PriceHistory, PriceHistoryUS, SellQueue
 from services.data_handler import stop_loss_insert, get_history_table, get_country_by_symbol, add_stock_price
 from utils import discord
@@ -228,44 +230,40 @@ def trading_sell(korea_investment: KoreaInvestmentAPI, sell_levels):
                 korea_investment.submit_overseas_reservation_order(country=country, action="sell", symbol=symbol, price=str(round(float(price), 2)), volume=str(volume))
 
 
-def update_sell_queue(ki_api: KoreaInvestmentAPI):
+def update_sell_queue(ki_api: KoreaInvestmentAPI, country: str = "KOR"):
+    # TODO 뭔가가 뭔가뭔가 한데 어떻게 수정해야 될지 모르겠다...
     today_str = datetime.datetime.now().strftime("%Y%m%d")
-    response_data = ki_api.get_stock_order_list(start_date=today_str, end_date=today_str)
+    response_data = []
+    if country == "KOR":
+        response_data = ki_api.get_stock_order_list(start_date=today_str, end_date=today_str)
+    elif country == "USA":
+        response_data = convert_overseas_to_stock_trade(ki_api.get_overseas_stock_order_list(start_date=today_str, end_date=today_str))
 
     sell_queue_entries = {}
     for trade in response_data:
-        stock = Stock.get(Stock.symbol == trade.pdno)
-        table = get_history_table(get_country_by_symbol(stock.symbol))
         volume = int(trade.tot_ccld_qty)
         price = int(trade.avg_prvs)
         trade_type = trade.sll_buy_dvsn_cd
 
         if trade_type == "02":
-            df = pd.DataFrame(
-                list(table.select().where(
-                    (table.date.between(datetime.datetime.now() - datetime.timedelta(days=600), datetime.datetime.now())) &
-                    (table.symbol == stock.symbol)
-                ).order_by(table.date).dicts())
-            )
-            df['ma60'] = df['close'].rolling(window=60).mean()
             volumes_and_prices = []
-            if stock.country == 'KOR':
+            if country == 'KOR':
                 volumes_and_prices = [
                     (volume - int(volume * 0.5), price_refine(math.ceil(price * 1.105))),
                     (int(volume * 0.5), price_refine(math.ceil(price * 1.255)))
                 ]
-            elif stock.country == 'USA':
+            elif country == 'USA':
                 volumes_and_prices = [
-                    (volume - int(volume * 0.5), round(float(stock.pchs_avg_pric) * 1.105, 2)),
-                    (int(volume * 0.5), round(float(stock.pchs_avg_pric) * 1.255, 2))
+                    (volume - int(volume * 0.5), round(float(trade.pchs_avg_pric) * 1.105, 2)),
+                    (int(volume * 0.5), round(float(trade.pchs_avg_pric) * 1.255, 2))
                 ]
 
             for vol, prc in volumes_and_prices:
                 if vol > 0:
-                    sell_queue_entries[(stock.symbol, prc)] = sell_queue_entries.get((stock.symbol, prc), 0) + vol
+                    sell_queue_entries[(trade.pdno, prc)] = sell_queue_entries.get((trade.pdno, prc), 0) + vol
 
         elif trade_type == "01":
-            sell_queue_entries[(stock.symbol, price)] = sell_queue_entries.get((stock.symbol, price), 0) - volume
+            sell_queue_entries[(trade.pdno, price)] = sell_queue_entries.get((trade.pdno, price), 0) - volume
 
     for (symbol, price), volume in sell_queue_entries.items():
         sell_entry = SellQueue.get_or_none((SellQueue.symbol == symbol) & (SellQueue.price == price))
@@ -278,10 +276,13 @@ def update_sell_queue(ki_api: KoreaInvestmentAPI):
         elif volume > 0:
             SellQueue.create(symbol=symbol, volume=volume, price=price)
 
-    owned_stock_info = ki_api.get_owned_stock_info()
+    owned_stock_info = []
+    if country == "KOR":
+        owned_stock_info = ki_api.get_korea_owned_stock_info()
+    else:
+        owned_stock_info = convert_overseas_to_domestic(ki_api.get_oversea_owned_stock_info(country=country))
     for stock in owned_stock_info:
         stock_db = Stock.get(Stock.symbol == stock.pdno)
-        table = get_history_table(get_country_by_symbol(stock_db.symbol))
         owned_volume = int(stock.hldg_qty)
         total_db_volume = SellQueue.select(fn.SUM(SellQueue.volume)).where(SellQueue.symbol == stock_db.symbol).scalar() or 0
 
@@ -301,14 +302,6 @@ def update_sell_queue(ki_api: KoreaInvestmentAPI):
             additional_volume = owned_volume - total_db_volume
             avg_price = float(stock.pchs_avg_pric)
 
-            df = pd.DataFrame(
-                list(table.select().where(
-                    (table.date.between(datetime.datetime.now() - datetime.timedelta(days=600), datetime.datetime.now())) &
-                    (table.symbol == stock_db.symbol)
-                ).order_by(table.date).dicts())
-            )
-            df['ma60'] = df['close'].rolling(window=60).mean()
-
             volumes_and_prices = []
             if stock_db.country == 'KOR':
                 volumes_and_prices = [
@@ -317,8 +310,8 @@ def update_sell_queue(ki_api: KoreaInvestmentAPI):
                 ]
             elif stock_db.country == 'USA':
                 volumes_and_prices = [
-                    (additional_volume - int(additional_volume * 0.5), round(float(avg_price * 1.105))),
-                    (int(additional_volume * 0.5), round(float(avg_price * 1.255)))
+                    (additional_volume - int(additional_volume * 0.5), round(float(avg_price * 1.105), 2)),
+                    (int(additional_volume * 0.5), round(float(avg_price * 1.255), 2))
                 ]
             for vol, prc in volumes_and_prices:
                 if vol > 0:
@@ -390,7 +383,7 @@ def korea_trading():
 
 def usa_trading():
     ki_api = KoreaInvestmentAPI(app_key=setting_env.APP_KEY, app_secret=setting_env.APP_SECRET, account_number=setting_env.ACCOUNT_NUMBER, account_code=setting_env.ACCOUNT_CODE)
-
+    update_sell_queue(ki_api=ki_api, country="USA")
     usa_stock = select_buy_stocks(country="USA")
     usa_buy = threading.Thread(target=trading_buy, args=(ki_api, usa_stock,))
     usa_buy.start()
@@ -407,4 +400,5 @@ def usa_trading():
 
 
 if __name__ == "__main__":
-    print(select_buy_stocks(country="USA"))
+    ki_api = KoreaInvestmentAPI(app_key=setting_env.APP_KEY, app_secret=setting_env.APP_SECRET, account_number=setting_env.ACCOUNT_NUMBER, account_code=setting_env.ACCOUNT_CODE)
+    update_sell_queue(ki_api=ki_api, country="USA")
