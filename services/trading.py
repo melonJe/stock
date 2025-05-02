@@ -249,13 +249,13 @@ def update_sell_queue(ki_api: KoreaInvestmentAPI, country: str = "KOR"):
             volumes_and_prices = []
             if country == 'KOR':
                 volumes_and_prices = [
-                    (volume - int(volume * 0.5), price_refine(math.ceil(price * 1.105))),
-                    (int(volume * 0.5), price_refine(math.ceil(price * 1.255)))
+                    (volume - int(volume * 0.5), price_refine(math.ceil(price * 1.055))),
+                    (int(volume * 0.5), price_refine(math.ceil(price * 1.105)))
                 ]
             elif country == 'USA':
                 volumes_and_prices = [
-                    (volume - int(volume * 0.5), round(float(trade.pchs_avg_pric) * 1.105, 2)),
-                    (int(volume * 0.5), round(float(trade.pchs_avg_pric) * 1.255, 2))
+                    (volume - int(volume * 0.5), round(float(trade.pchs_avg_pric) * 1.055, 2)),
+                    (int(volume * 0.5), round(float(trade.pchs_avg_pric) * 1.105, 2))
                 ]
 
             for vol, prc in volumes_and_prices:
@@ -305,13 +305,13 @@ def update_sell_queue(ki_api: KoreaInvestmentAPI, country: str = "KOR"):
             volumes_and_prices = []
             if stock_db.country == 'KOR':
                 volumes_and_prices = [
-                    (additional_volume - int(additional_volume * 0.5), price_refine(math.ceil(avg_price * 1.105))),
-                    (int(additional_volume * 0.5), price_refine(math.ceil(avg_price * 1.255)))
+                    (additional_volume - int(additional_volume * 0.5), price_refine(math.ceil(avg_price * 1.055))),
+                    (int(additional_volume * 0.5), price_refine(math.ceil(avg_price * 1.105)))
                 ]
             elif stock_db.country == 'USA':
                 volumes_and_prices = [
-                    (additional_volume - int(additional_volume * 0.5), round(float(avg_price * 1.105), 2)),
-                    (int(additional_volume * 0.5), round(float(avg_price * 1.255), 2))
+                    (additional_volume - int(additional_volume * 0.5), round(float(avg_price * 1.055), 2)),
+                    (int(additional_volume * 0.5), round(float(avg_price * 1.105), 2))
                 ]
             for vol, prc in volumes_and_prices:
                 if vol > 0:
