@@ -57,7 +57,7 @@ def start():
 
     scheduler.add_job(
         usa_trading,
-        trigger=CronTrigger(day_of_week="tue-sat", hour=18, minute=20, second=0),
+        trigger=CronTrigger(day_of_week="tue-sat", hour=14, minute=0, second=0),
         id="usa_trading",
         max_instances=1,
         replace_existing=True,
