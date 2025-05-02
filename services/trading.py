@@ -249,13 +249,13 @@ def update_sell_queue(ki_api: KoreaInvestmentAPI, country: str = "KOR"):
             volumes_and_prices = []
             if country == 'KOR':
                 volumes_and_prices = [
-                    (volume - int(volume * 0.5), price_refine(math.ceil(price * 1.055))),
-                    (int(volume * 0.5), price_refine(math.ceil(price * 1.105)))
+                    (volume - int(volume * 0.5), price_refine(math.ceil(price * 1.080))),
+                    (int(volume * 0.5), price_refine(math.ceil(price * 1.155)))
                 ]
             elif country == 'USA':
                 volumes_and_prices = [
-                    (volume - int(volume * 0.5), round(float(trade.pchs_avg_pric) * 1.055, 2)),
-                    (int(volume * 0.5), round(float(trade.pchs_avg_pric) * 1.105, 2))
+                    (volume - int(volume * 0.5), round(float(trade.pchs_avg_pric) * 1.080, 2)),
+                    (int(volume * 0.5), round(float(trade.pchs_avg_pric) * 1.155, 2))
                 ]
 
             for vol, prc in volumes_and_prices:
@@ -305,13 +305,13 @@ def update_sell_queue(ki_api: KoreaInvestmentAPI, country: str = "KOR"):
             volumes_and_prices = []
             if stock_db.country == 'KOR':
                 volumes_and_prices = [
-                    (additional_volume - int(additional_volume * 0.5), price_refine(math.ceil(avg_price * 1.055))),
-                    (int(additional_volume * 0.5), price_refine(math.ceil(avg_price * 1.105)))
+                    (additional_volume - int(additional_volume * 0.5), price_refine(math.ceil(avg_price * 1.080))),
+                    (int(additional_volume * 0.5), price_refine(math.ceil(avg_price * 1.155)))
                 ]
             elif stock_db.country == 'USA':
                 volumes_and_prices = [
-                    (additional_volume - int(additional_volume * 0.5), round(float(avg_price * 1.055), 2)),
-                    (int(additional_volume * 0.5), round(float(avg_price * 1.105), 2))
+                    (additional_volume - int(additional_volume * 0.5), round(float(avg_price * 1.080), 2)),
+                    (int(additional_volume * 0.5), round(float(avg_price * 1.155), 2))
                 ]
             for vol, prc in volumes_and_prices:
                 if vol > 0:
@@ -354,8 +354,8 @@ def korea_trading():
         logging.info(f'{datetime.datetime.now()} 휴장일')
         return
 
-    stop_loss = threading.Thread(target=stop_loss_notify, args=(ki_api,))
-    stop_loss.start()
+    # stop_loss = threading.Thread(target=stop_loss_notify, args=(ki_api,))
+    # stop_loss.start()
 
     while datetime.datetime.now().time() < datetime.time(18, 15, 00):
         sleep(1 * 60)
