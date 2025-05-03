@@ -185,21 +185,21 @@ def update_subscription_stock():
     data_to_insert = []
 
     # 한국 주식 프로세스
-    with ThreadPoolExecutor(max_workers=min(os.cpu_count(), 10)) as executor:
-        futures = [executor.submit(update_subscription_kor, stock, data_to_insert) for stock in Stock.select().where(Stock.country == 'KOR')]
-
-        for future in as_completed(futures):
-            future.result()  # Ensure any raised exceptions are handled
-    data_to_insert.extend([{'symbol': symbol} for symbol in set(FinanceDataReader.StockListing('KRX').iloc[0:100]['Code'])])
+    # with ThreadPoolExecutor(max_workers=min(os.cpu_count(), 10)) as executor:
+    #     futures = [executor.submit(update_subscription_kor, stock, data_to_insert) for stock in Stock.select().where(Stock.country == 'KOR')]
+    #
+    #     for future in as_completed(futures):
+    #         future.result()  # Ensure any raised exceptions are handled
+    data_to_insert.extend([{'symbol': symbol} for symbol in set(FinanceDataReader.StockListing('KRX').iloc[0:75]['Code'])])
 
     # 미국 주식 프로세스
-    with ThreadPoolExecutor(max_workers=min(os.cpu_count(), 10)) as executor:
-        futures = [executor.submit(update_subscription_usa, stock, data_to_insert, 5, 5) for stock in Stock.select().where(Stock.country == 'USA')]
-
-        for future in as_completed(futures):
-            future.result()  # Ensure any raised exceptions are handled
+    # with ThreadPoolExecutor(max_workers=min(os.cpu_count(), 10)) as executor:
+    #     futures = [executor.submit(update_subscription_usa, stock, data_to_insert, 5, 5) for stock in Stock.select().where(Stock.country == 'USA')]
+    #
+    #     for future in as_completed(futures):
+    #         future.result()  # Ensure any raised exceptions are handled
     for stockList in (FinanceDataReader.StockListing('S&P500'), FinanceDataReader.StockListing('NASDAQ'), FinanceDataReader.StockListing('NYSE')):
-        data_to_insert.extend([{'symbol': symbol} for symbol in set(stockList.iloc[0:33]['Symbol'])])
+        data_to_insert.extend([{'symbol': symbol} for symbol in set(stockList.iloc[0:25]['Symbol'])])
 
     if data_to_insert:
         logging.info(f"{len(data_to_insert)}개 주식")
@@ -361,4 +361,4 @@ def add_price_for_symbol(symbol: str, start_date: datetime.datetime = None, end_
 
 
 if __name__ == "__main__":
-    pass
+    update_subscription_stock()
