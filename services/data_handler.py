@@ -94,26 +94,26 @@ def update_subscription_kor(stock: Stock, data_to_insert):
         try:
             if not (pd.to_numeric(df_highlight['매출액'].str.replace(",", ""), errors="coerce")[-2:] > 0).all():
                 return
-            # if not (pd.to_numeric(df_highlight['매출액'].str.replace(",", ""), errors="coerce").diff()[-1:] >= 0).all():
-            #     return
+            if not (pd.to_numeric(df_highlight['매출액'].str.replace(",", ""), errors="coerce").diff()[-1:] >= 0).all():
+                return
         except Exception as e:
-            raise ValueError(f"not find 매출액")
+            logging.info(f"not find 매출액")
 
         if not (pd.to_numeric(df_highlight['영업이익'].str.replace(",", ""), errors="coerce")[-2:] >= 0).all():
             return
         if not (pd.to_numeric(df_highlight['당기순이익'].str.replace(",", ""), errors="coerce")[-2:] >= 0).all():
             return
-        # if not (pd.to_numeric(df_highlight['영업이익'].str.replace(",", ""), errors="coerce").diff()[-1:] >= 0).all():
-        #     return
-        # if not (pd.to_numeric(df_highlight['당기순이익'].str.replace(",", ""), errors="coerce").diff()[-1:] >= 0).all():
-        #     return
+        if not (pd.to_numeric(df_highlight['영업이익'].str.replace(",", ""), errors="coerce").diff()[-1:] >= 0).all():
+            return
+        if not (pd.to_numeric(df_highlight['당기순이익'].str.replace(",", ""), errors="coerce").diff()[-1:] >= 0).all():
+            return
 
-        # if not summary_dict["ROE"] > 10:
-        #     return
-        # if not summary_dict["ROA"] > 10:
-        #     return
-        # if not summary_dict["PER"] * summary_dict["PBR"] <= 22.5:
-        #     return
+        if not summary_dict["ROE"] > 10:
+            return
+        if not summary_dict["ROA"] > 10:
+            return
+        if not summary_dict["PER"] * summary_dict["PBR"] <= 22.5:
+            return
         if not summary_dict["부채비율"] < 200:
             return
         if not summary_dict["배당수익률"] > 2:
@@ -137,26 +137,26 @@ def update_subscription_usa(stock: Stock, data_to_insert, retries=5, delay=5):
             try:
                 if not (df_income['quarterlyTotalRevenue'][-2:] > 0).all():
                     return
-                # if not (df_income['quarterlyTotalRevenue'].diff()[-1:] >= 0).all():
-                #     return
+                if not (df_income['quarterlyTotalRevenue'].diff()[-1:] >= 0).all():
+                    return
             except Exception as e:
-                raise ValueError(f"not find 매출액")
+                logging.info(f"not find 매출액")
 
             if not (df_income['quarterlyOperatingIncome'][-2:] >= 0).all():
                 return
             if not (df_income['quarterlyNetIncome'][-2:] >= 0).all():
                 return
-            # if not (df_income['quarterlyOperatingIncome'].diff()[-1:] >= 0).all():
-            #     return
-            # if not (df_income['quarterlyNetIncome'].diff()[-1:] >= 0).all():
-            #     return
+            if not (df_income['quarterlyOperatingIncome'].diff()[-1:] >= 0).all():
+                return
+            if not (df_income['quarterlyNetIncome'].diff()[-1:] >= 0).all():
+                return
 
-            # if not summary_dict["ROE"] > 10:
-            #     return
-            # if not summary_dict["ROA"] > 10:
-            #     return
-            # if not summary_dict["PER"] * summary_dict["PBR"] <= 22.5:
-            #     return
+            if not summary_dict["ROE"] > 10:
+                return
+            if not summary_dict["ROA"] > 10:
+                return
+            if not summary_dict["PER"] * summary_dict["PBR"] <= 22.5:
+                return
             if not summary_dict["Debt Ratio"] < 200:
                 return
             if not summary_dict["Dividend Rate"] > 2:
