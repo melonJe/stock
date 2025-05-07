@@ -97,7 +97,8 @@ def update_subscription_kor(stock: Stock, data_to_insert):
             if not (pd.to_numeric(df_highlight['매출액'].str.replace(",", ""), errors="coerce").diff()[-1:] >= 0).all():
                 return
         except Exception as e:
-            logging.info(f"not find 매출액")
+            pass
+            # logging.info(f"not find 매출액")
 
         if not (pd.to_numeric(df_highlight['영업이익'].str.replace(",", ""), errors="coerce")[-2:] >= 0).all():
             return
@@ -108,12 +109,12 @@ def update_subscription_kor(stock: Stock, data_to_insert):
         if not (pd.to_numeric(df_highlight['당기순이익'].str.replace(",", ""), errors="coerce").diff()[-1:] >= 0).all():
             return
 
-        if not summary_dict["ROE"] > 10:
-            return
-        if not summary_dict["ROA"] > 10:
-            return
-        if not summary_dict["PER"] * summary_dict["PBR"] <= 22.5:
-            return
+        # if not summary_dict["ROE"] > 10:
+        #     return
+        # if not summary_dict["ROA"] > 10:
+        #     return
+        # if not summary_dict["PER"] * summary_dict["PBR"] <= 22.5:
+        #     return
         if not summary_dict["부채비율"] < 200:
             return
         if not summary_dict["배당수익률"] > 2:
@@ -151,12 +152,12 @@ def update_subscription_usa(stock: Stock, data_to_insert, retries=5, delay=5):
             if not (df_income['quarterlyNetIncome'].diff()[-1:] >= 0).all():
                 return
 
-            if not summary_dict["ROE"] > 10:
-                return
-            if not summary_dict["ROA"] > 10:
-                return
-            if not summary_dict["PER"] * summary_dict["PBR"] <= 22.5:
-                return
+            # if not summary_dict["ROE"] > 10:
+            #     return
+            # if not summary_dict["ROA"] > 10:
+            #     return
+            # if not summary_dict["PER"] * summary_dict["PBR"] <= 22.5:
+            #     return
             if not summary_dict["Debt Ratio"] < 200:
                 return
             if not summary_dict["Dividend Rate"] > 2:
@@ -185,19 +186,19 @@ def update_subscription_stock():
     data_to_insert = []
 
     # 한국 주식 프로세스
-    # with ThreadPoolExecutor(max_workers=min(os.cpu_count(), 10)) as executor:
-    #     futures = [executor.submit(update_subscription_kor, stock, data_to_insert) for stock in Stock.select().where(Stock.country == 'KOR')]
-    #
-    #     for future in as_completed(futures):
-    #         future.result()  # Ensure any raised exceptions are handled
+    with ThreadPoolExecutor(max_workers=min(os.cpu_count(), 10)) as executor:
+        futures = [executor.submit(update_subscription_kor, stock, data_to_insert) for stock in Stock.select().where(Stock.country == 'KOR')]
+
+        for future in as_completed(futures):
+            future.result()  # Ensure any raised exceptions are handled
     data_to_insert.extend([{'symbol': symbol} for symbol in set(FinanceDataReader.StockListing('KRX').iloc[0:75]['Code'])])
 
     # 미국 주식 프로세스
-    # with ThreadPoolExecutor(max_workers=min(os.cpu_count(), 10)) as executor:
-    #     futures = [executor.submit(update_subscription_usa, stock, data_to_insert, 5, 5) for stock in Stock.select().where(Stock.country == 'USA')]
-    #
-    #     for future in as_completed(futures):
-    #         future.result()  # Ensure any raised exceptions are handled
+    with ThreadPoolExecutor(max_workers=min(os.cpu_count(), 10)) as executor:
+        futures = [executor.submit(update_subscription_usa, stock, data_to_insert, 5, 5) for stock in Stock.select().where(Stock.country == 'USA')]
+
+        for future in as_completed(futures):
+            future.result()  # Ensure any raised exceptions are handled
     for stockList in (FinanceDataReader.StockListing('S&P500'), FinanceDataReader.StockListing('NASDAQ'), FinanceDataReader.StockListing('NYSE')):
         data_to_insert.extend([{'symbol': symbol} for symbol in set(stockList.iloc[0:25]['Symbol'])])
 
