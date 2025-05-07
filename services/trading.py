@@ -12,6 +12,7 @@ from peewee import fn
 from ta.momentum import RSIIndicator
 from ta.trend import MACD
 from ta.volatility import BollingerBands, AverageTrueRange
+from ta.volume import OnBalanceVolumeIndicator
 
 from apis.korea_investment import KoreaInvestmentAPI
 from config import setting_env
@@ -35,7 +36,7 @@ def select_buy_stocks(country: str = "KOR") -> dict:
     sub_symbols = Subscription.select(Subscription.symbol)
     stocks_query = Stock.select(Stock.symbol).where(
         (Stock.country == country)
-        & (Stock.symbol.in_(sub_symbols))
+        # & (Stock.symbol.in_(sub_symbols))
         & ~(Stock.symbol.in_(blacklist_symbols))
     )
     stocks = {row.symbol for row in stocks_query}
@@ -60,9 +61,14 @@ def select_buy_stocks(country: str = "KOR") -> dict:
             if len(df) < 200:
                 continue
 
-            # df['Vol_Avg'] = df['volume'].rolling(window=5).mean()
-            # if not df.iloc[-1]['volume'] > (df.iloc[-1]['Vol_Avg'] * 1.5):
-            #     continue
+            if country == 'KOR' and df.iloc[-1]['close'] * df['volume'].rolling(window=50).mean().iloc[-1] < 20000000 * 1500:
+                continue
+            if country == 'USA' and df.iloc[-1]['close'] * df['volume'].rolling(window=50).mean().iloc[-1] < 20000000:
+                continue
+
+            df['Vol_Avg'] = df['volume'].rolling(window=5).mean()
+            if not df.iloc[-1]['volume'] > (df.iloc[-1]['Vol_Avg'] * 1.5):
+                continue
 
             bollinger = BollingerBands(close=df['close'], window=20, window_dev=2)
             df['BB_Mavg'] = bollinger.bollinger_mavg()
@@ -71,9 +77,9 @@ def select_buy_stocks(country: str = "KOR") -> dict:
             if df.iloc[-1]['close'] > df.iloc[-1]['BB_Lower'] and df.iloc[-1]['low'] > df.iloc[-1]['BB_Lower']:
                 continue
 
-            # obv_indicator = OnBalanceVolumeIndicator(close=df['close'], volume=df['volume']).on_balance_volume()
-            # if not obv_indicator.iloc[-1] > obv_indicator.iloc[-4]:
-            #     continue
+            obv_indicator = OnBalanceVolumeIndicator(close=df['close'], volume=df['volume']).on_balance_volume()
+            if not obv_indicator.iloc[-1] > obv_indicator.iloc[-4]:
+                continue
 
             df['RSI'] = RSIIndicator(close=df['close'], window=7).rsi()
             rsi_curr, rsi_prev = df.iloc[-1]['RSI'], df.iloc[-2]['RSI']
@@ -400,5 +406,5 @@ def usa_trading():
 
 
 if __name__ == "__main__":
-    ki_api = KoreaInvestmentAPI(app_key=setting_env.APP_KEY, app_secret=setting_env.APP_SECRET, account_number=setting_env.ACCOUNT_NUMBER, account_code=setting_env.ACCOUNT_CODE)
-    update_sell_queue(ki_api=ki_api, country="USA")
+    # ki_api = KoreaInvestmentAPI(app_key=setting_env.APP_KEY, app_secret=setting_env.APP_SECRET, account_number=setting_env.ACCOUNT_NUMBER, account_code=setting_env.ACCOUNT_CODE)
+    print(select_buy_stocks(country="KOR"))
