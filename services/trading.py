@@ -61,20 +61,20 @@ def select_buy_stocks(country: str = "KOR") -> dict:
             if len(df) < 200:
                 continue
 
-            if country == 'KOR' and df.iloc[-1]['close'] * df['volume'].rolling(window=50).mean().iloc[-1] < 20000000 * 1500:
+            if country == 'KOR' and df.iloc[-1]['close'] * df['volume'].rolling(window=50).mean().iloc[-1] < 20000000 * 1400:
                 continue
             if country == 'USA' and df.iloc[-1]['close'] * df['volume'].rolling(window=50).mean().iloc[-1] < 20000000:
                 continue
 
-            df['Vol_Avg'] = df['volume'].rolling(window=5).mean()
-            if not df.iloc[-1]['volume'] > (df.iloc[-1]['Vol_Avg'] * 1.5):
-                continue
+            # df['Vol_Avg'] = df['volume'].rolling(window=5).mean()
+            # if not df.iloc[-1]['volume'] > (df.iloc[-1]['Vol_Avg'] * 1.5):
+            #     continue
 
             bollinger = BollingerBands(close=df['close'], window=20, window_dev=2)
             df['BB_Mavg'] = bollinger.bollinger_mavg()
             df['BB_Upper'] = bollinger.bollinger_hband()
             df['BB_Lower'] = bollinger.bollinger_lband()
-            if df.iloc[-1]['close'] > df.iloc[-1]['BB_Lower'] and df.iloc[-1]['low'] > df.iloc[-1]['BB_Lower']:
+            if df.iloc[-1]['close'] > df.iloc[-1]['BB_Lower'] * 1.05 and df.iloc[-1]['low'] > df.iloc[-1]['BB_Lower'] * 1.05:
                 continue
 
             obv_indicator = OnBalanceVolumeIndicator(close=df['close'], volume=df['volume']).on_balance_volume()
@@ -83,7 +83,7 @@ def select_buy_stocks(country: str = "KOR") -> dict:
 
             df['RSI'] = RSIIndicator(close=df['close'], window=7).rsi()
             rsi_curr, rsi_prev = df.iloc[-1]['RSI'], df.iloc[-2]['RSI']
-            rsi_condition = rsi_prev < rsi_curr < 50
+            rsi_condition = rsi_prev < rsi_curr < 40
             macd_indicator = MACD(close=df['close'], window_fast=12, window_slow=26, window_sign=9)
             df['MACD'], df['MACD_Signal'] = macd_indicator.macd(), macd_indicator.macd_signal()
             macd_curr, macd_prev = df.iloc[-1], df.iloc[-2]
@@ -99,9 +99,9 @@ def select_buy_stocks(country: str = "KOR") -> dict:
             if country == "USA":
                 volume = int(min(25000 / 1500 // atr, np.average(df['volume'][-20:]) // (atr ** (1 / 2))))
             buy_levels[symbol] = {
-                df.iloc[-1]['low']: volume // 9 * 5,
+                df.iloc[-1]['high']: volume // 9,
                 (df.iloc[-1]['open'] + df.iloc[-1]['close']) / 2: volume // 3,
-                df.iloc[-1]['high']: volume // 9
+                df.iloc[-1]['low']: (volume * 5) // 9,
             }
         except Exception as e:
             logging.error(f"select_buy_stocks Error occurred: {e}")
@@ -406,5 +406,7 @@ def usa_trading():
 
 
 if __name__ == "__main__":
-    # ki_api = KoreaInvestmentAPI(app_key=setting_env.APP_KEY, app_secret=setting_env.APP_SECRET, account_number=setting_env.ACCOUNT_NUMBER, account_code=setting_env.ACCOUNT_CODE)
-    print(select_buy_stocks(country="KOR"))
+    ki_api = KoreaInvestmentAPI(app_key=setting_env.APP_KEY, app_secret=setting_env.APP_SECRET, account_number=setting_env.ACCOUNT_NUMBER, account_code=setting_env.ACCOUNT_CODE)
+    buy_stock = select_buy_stocks(country="KOR")
+    logging.info(f'buy_stock data: {buy_stock}')
+    trading_buy(ki_api, buy_stock)
