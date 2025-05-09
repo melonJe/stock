@@ -2,7 +2,6 @@ import datetime
 import logging
 import os
 import re
-import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from urllib.parse import urlparse, parse_qs
 
@@ -15,8 +14,7 @@ from ta.volatility import AverageTrueRange
 
 from custom_exception.exception import NotFoundUrl
 from data.models import Stock, PriceHistory, PriceHistoryUS, Subscription, Blacklist, StopLoss
-from utils.data_util import upsert_many, get_yahoo_finance_data
-from utils.financial_statement import get_financial_summary_for_update_stock, get_finance_from_fnguide, fetch_financial_timeseries, get_financial_summary_for_update_stock_usa
+from utils.data_util import upsert_many
 
 
 def get_company_name(symbol: str):
@@ -81,124 +79,14 @@ def insert_stock(symbol: str, company_name: str = None, country: str = None):
     return new_stock
 
 
-def update_subscription_kor(stock: Stock, data_to_insert):
-    try:
-        # print(stock.symbol)
-        summary_dict = get_financial_summary_for_update_stock(stock.symbol)
-        df_highlight = get_finance_from_fnguide(stock.symbol, 'highlight', period='Q', include_estimates=False)
-        df_cash = get_finance_from_fnguide(stock.symbol, 'cash', period='Q', include_estimates=False)
-
-        if not (pd.to_numeric(df_cash['영업활동으로인한현금흐름'].str.replace(",", ""), errors="coerce")[-2:] > 0).all():
-            return
-
-        try:
-            if not (pd.to_numeric(df_highlight['매출액'].str.replace(",", ""), errors="coerce")[-2:] > 0).all():
-                return
-            if not (pd.to_numeric(df_highlight['매출액'].str.replace(",", ""), errors="coerce").diff()[-1:] >= 0).all():
-                return
-        except Exception as e:
-            pass
-            # logging.info(f"not find 매출액")
-
-        if not (pd.to_numeric(df_highlight['영업이익'].str.replace(",", ""), errors="coerce")[-2:] >= 0).all():
-            return
-        if not (pd.to_numeric(df_highlight['당기순이익'].str.replace(",", ""), errors="coerce")[-2:] >= 0).all():
-            return
-        if not (pd.to_numeric(df_highlight['영업이익'].str.replace(",", ""), errors="coerce").diff()[-1:] >= 0).all():
-            return
-        if not (pd.to_numeric(df_highlight['당기순이익'].str.replace(",", ""), errors="coerce").diff()[-1:] >= 0).all():
-            return
-
-        # if not summary_dict["ROE"] > 10:
-        #     return
-        # if not summary_dict["ROA"] > 10:
-        #     return
-        # if not summary_dict["PER"] * summary_dict["PBR"] <= 22.5:
-        #     return
-        if not summary_dict["부채비율"] < 200:
-            return
-        if not summary_dict["배당수익률"] > 2:
-            return
-
-        data_to_insert.append({'symbol': stock})
-    except Exception as e:
-        pass
-
-
-def update_subscription_usa(stock: Stock, data_to_insert, retries=5, delay=5):
-    # print(stock.symbol)
-    for attempt in range(retries):
-        try:
-            summary_dict = get_financial_summary_for_update_stock_usa(stock.symbol)
-            df_income = fetch_financial_timeseries(stock.symbol)
-            df_cash = fetch_financial_timeseries(stock.symbol, report='cash')
-
-            if not (df_cash['quarterlyOperatingCashFlow'][-2:] > 0).all():
-                return
-            try:
-                if not (df_income['quarterlyTotalRevenue'][-2:] > 0).all():
-                    return
-                if not (df_income['quarterlyTotalRevenue'].diff()[-1:] >= 0).all():
-                    return
-            except Exception as e:
-                logging.info(f"not find 매출액")
-
-            if not (df_income['quarterlyOperatingIncome'][-2:] >= 0).all():
-                return
-            if not (df_income['quarterlyNetIncome'][-2:] >= 0).all():
-                return
-            if not (df_income['quarterlyOperatingIncome'].diff()[-1:] >= 0).all():
-                return
-            if not (df_income['quarterlyNetIncome'].diff()[-1:] >= 0).all():
-                return
-
-            # if not summary_dict["ROE"] > 10:
-            #     return
-            # if not summary_dict["ROA"] > 10:
-            #     return
-            # if not summary_dict["PER"] * summary_dict["PBR"] <= 22.5:
-            #     return
-            if not summary_dict["Debt Ratio"] < 200:
-                return
-            if not summary_dict["Dividend Rate"] > 2:
-                return
-
-            data_to_insert.append({'symbol': stock})
-            return
-
-        except requests.exceptions.RequestException as e:
-            logging.info(f"`Attempt {attempt + 1} failed: {stock.symbol}")
-            if attempt < retries - 1:
-                time.sleep(delay)
-            else:
-                # logging.info(f"{stock.symbol} All retries failed.")
-                return
-        except KeyError as e:
-            # logging.info(f"{stock.symbol} KeyError: {e}")
-            return
-        except Exception as e:
-            # logging.info(f"{stock.symbol} Unexpected error occurred: {e}")
-            return
-
-
 def update_subscription_stock():
     logging.info(f'{datetime.datetime.now()} update_subscription_stock 시작')
     data_to_insert = []
 
     # 한국 주식 프로세스
-    with ThreadPoolExecutor(max_workers=min(os.cpu_count(), 10)) as executor:
-        futures = [executor.submit(update_subscription_kor, stock, data_to_insert) for stock in Stock.select().where(Stock.country == 'KOR')]
-
-        for future in as_completed(futures):
-            future.result()  # Ensure any raised exceptions are handled
     data_to_insert.extend([{'symbol': symbol} for symbol in set(FinanceDataReader.StockListing('KRX').iloc[0:75]['Code'])])
 
     # 미국 주식 프로세스
-    with ThreadPoolExecutor(max_workers=min(os.cpu_count(), 10)) as executor:
-        futures = [executor.submit(update_subscription_usa, stock, data_to_insert, 5, 5) for stock in Stock.select().where(Stock.country == 'USA')]
-
-        for future in as_completed(futures):
-            future.result()  # Ensure any raised exceptions are handled
     for stockList in (FinanceDataReader.StockListing('S&P500'), FinanceDataReader.StockListing('NASDAQ'), FinanceDataReader.StockListing('NYSE')):
         data_to_insert.extend([{'symbol': symbol} for symbol in set(stockList.iloc[0:25]['Symbol'])])
 
@@ -311,14 +199,12 @@ def add_stock_price(symbol: str = None, country: str = None, start_date: datetim
 
 
 def add_price_for_symbol(symbol: str, start_date: datetime.datetime = None, end_date: datetime.datetime = None):
-    # print(symbol)
+    start_date = (datetime.datetime.now() - relativedelta(days=5)).strftime('%Y-%m-%d') if not start_date else start_date.strftime('%Y-%m-%d')
     try:
         country = get_country_by_symbol(symbol)
         table = get_history_table(country)
         data_to_insert = None
         if country == "KOR":
-            start_date = (datetime.datetime.now() - relativedelta(years=2)).strftime('%Y-%m-%d') if not start_date else start_date.strftime('%Y-%m-%d')
-            end_date = (datetime.datetime.now() + relativedelta(days=5)).strftime('%Y-%m-%d') if not end_date else end_date.strftime('%Y-%m-%d')
             df_krx = FinanceDataReader.DataReader(
                 symbol=f'NAVER:{symbol}',
                 start=start_date,
@@ -326,7 +212,7 @@ def add_price_for_symbol(symbol: str, start_date: datetime.datetime = None, end_
             )
             data_to_insert = [
                 {'symbol': symbol,
-                 'date': idx.strftime('%Y-%m-%d'),
+                 'date': idx.date(),
                  'open': row['Open'],
                  'high': row['High'],
                  'close': row['Close'],
@@ -335,17 +221,15 @@ def add_price_for_symbol(symbol: str, start_date: datetime.datetime = None, end_
                 for idx, row in df_krx.iterrows()
             ]
         elif country == "USA":
-            unix_start_date = int((datetime.datetime.now() - relativedelta(years=2)).timestamp()) if not start_date else int(start_date.timestamp())
-            unix_end_date = int(datetime.datetime.now().timestamp()) if not end_date else int(end_date.timestamp())
-            df_krx = get_yahoo_finance_data(symbol, unix_start_date, unix_end_date)
+            df_krx = FinanceDataReader.DataReader(symbol=symbol, start=start_date, end=end_date)
             data_to_insert = [
                 {'symbol': symbol,
-                 'date': idx.strftime('%Y-%m-%d'),
-                 'open': row['Open'].item(),
-                 'high': row['High'].item(),
-                 'close': row['Close'].item(),
-                 'low': row['Low'].item(),
-                 'volume': row['Volume']}
+                 'date': idx.date(),
+                 'open': float(row['Open']),
+                 'high': float(row['High']),
+                 'close': float(row['Close']),
+                 'low': float(row['Low']),
+                 'volume': int(row['Volume']) if not pd.isna(row['Volume']) else None}
                 for idx, row in df_krx.iterrows()
             ]
 
@@ -362,4 +246,4 @@ def add_price_for_symbol(symbol: str, start_date: datetime.datetime = None, end_
 
 
 if __name__ == "__main__":
-    update_subscription_stock()
+    add_stock_price(country="USA", start_date=(datetime.datetime.now() - relativedelta(years=2)))
