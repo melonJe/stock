@@ -74,7 +74,7 @@ def select_buy_stocks(country: str = "KOR") -> dict:
             df['BB_Mavg'] = bollinger.bollinger_mavg()
             df['BB_Upper'] = bollinger.bollinger_hband()
             df['BB_Lower'] = bollinger.bollinger_lband()
-            if df.iloc[-1]['close'] > df.iloc[-1]['BB_Lower'] * 1.05 and df.iloc[-1]['low'] > df.iloc[-1]['BB_Lower'] * 1.05:
+            if df.iloc[-1]['close'] > df.iloc[-1]['BB_Lower'] and df.iloc[-1]['low'] > df.iloc[-1]['BB_Lower']:
                 continue
 
             obv_indicator = OnBalanceVolumeIndicator(close=df['close'], volume=df['volume']).on_balance_volume()
@@ -407,6 +407,12 @@ def usa_trading():
 
 if __name__ == "__main__":
     ki_api = KoreaInvestmentAPI(app_key=setting_env.APP_KEY, app_secret=setting_env.APP_SECRET, account_number=setting_env.ACCOUNT_NUMBER, account_code=setting_env.ACCOUNT_CODE)
-    buy_stock = select_buy_stocks(country="KOR")
-    logging.info(f'buy_stock data: {buy_stock}')
-    trading_buy(ki_api, buy_stock)
+    update_sell_queue(ki_api=ki_api, country="USA")
+    sell_stock = select_sell_overseas_stocks(ki_api)
+    sell_queue = {}
+    for sell in SellQueue.select().join(Stock, on=(SellQueue.symbol == Stock.symbol)).where(Stock.country == 'USA'):
+        if sell.symbol not in sell_queue.keys():
+            sell_queue[sell.symbol] = {}
+        sell_queue[sell.symbol][sell.price] = sell.volume
+    sell_queue.update(sell_stock)
+    trading_sell(ki_api, sell_queue)
