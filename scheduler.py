@@ -7,6 +7,7 @@ from apscheduler.triggers.cron import CronTrigger
 from config import setting_env
 from services import data_handler
 from services.data_handler import add_stock_price
+from services.trading import usa_trading, korea_trading
 
 
 def start():
@@ -46,21 +47,21 @@ def start():
             replace_existing=True,
         )
 
-    # scheduler.add_job(
-    #     korea_trading,
-    #     trigger=CronTrigger(day_of_week="mon-fri", hour=8, minute=50, second=0),
-    #     id="korea_trading",
-    #     max_instances=1,
-    #     replace_existing=True,
-    # )
-    #
-    # scheduler.add_job(
-    #     usa_trading,
-    #     trigger=CronTrigger(day_of_week="tue-sat", hour=14, minute=0, second=0),
-    #     id="usa_trading",
-    #     max_instances=1,
-    #     replace_existing=True,
-    # )
+    scheduler.add_job(
+        korea_trading,
+        trigger=CronTrigger(day_of_week="mon-fri", hour=8, minute=50, second=0),
+        id="korea_trading",
+        max_instances=1,
+        replace_existing=True,
+    )
+
+    scheduler.add_job(
+        usa_trading,
+        trigger=CronTrigger(day_of_week="tue-sat", hour=14, minute=0, second=0),
+        id="usa_trading",
+        max_instances=1,
+        replace_existing=True,
+    )
 
     try:
         scheduler.start()

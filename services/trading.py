@@ -381,10 +381,10 @@ def korea_trading():
     sell = threading.Thread(target=trading_sell, args=(ki_api, sell_queue,))
     sell.start()
 
-    buy_stock = select_buy_stocks(country="KOR")
-    logging.info(f'buy_stock data: {buy_stock}')
-    buy = threading.Thread(target=trading_buy, args=(ki_api, buy_stock,))
-    buy.start()
+    # buy_stock = select_buy_stocks(country="KOR")
+    # logging.info(f'buy_stock data: {buy_stock}')
+    # buy = threading.Thread(target=trading_buy, args=(ki_api, buy_stock,))
+    # buy.start()
 
 
 def usa_trading():
