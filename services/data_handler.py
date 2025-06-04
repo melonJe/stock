@@ -84,11 +84,11 @@ def update_subscription_stock():
     data_to_insert = []
 
     # 한국 주식 프로세스
-    data_to_insert.extend([{'symbol': symbol} for symbol in set(FinanceDataReader.StockListing('KRX').iloc[0:75]['Code'])])
+    data_to_insert.extend([{'symbol': symbol} for symbol in set(FinanceDataReader.StockListing('KRX').iloc[0:300]['Code'])])
 
     # 미국 주식 프로세스
     for stockList in (FinanceDataReader.StockListing('S&P500'), FinanceDataReader.StockListing('NASDAQ'), FinanceDataReader.StockListing('NYSE')):
-        data_to_insert.extend([{'symbol': symbol} for symbol in set(stockList.iloc[0:25]['Symbol'])])
+        data_to_insert.extend([{'symbol': symbol} for symbol in set(stockList.iloc[0:100]['Symbol'])])
 
     if data_to_insert:
         logging.info(f"{len(data_to_insert)}개 주식")
@@ -246,4 +246,4 @@ def add_price_for_symbol(symbol: str, start_date: datetime.datetime = None, end_
 
 
 if __name__ == "__main__":
-    add_stock_price(country="USA", start_date=(datetime.datetime.now() - relativedelta(years=2)))
+    update_subscription_stock()
