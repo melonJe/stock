@@ -6,7 +6,6 @@ from time import sleep
 from typing import Union
 
 import numpy as np
-import pandas
 import pandas as pd
 from peewee import fn
 from ta.momentum import RSIIndicator
@@ -61,7 +60,7 @@ def select_buy_stocks(country: str = "KOR") -> dict:
             if len(df) < 200:
                 continue
 
-            if country == 'KOR' and df.iloc[-1]['close'] * df['volume'].rolling(window=50).mean().iloc[-1] < 20000000 * 1400:
+            if country == 'KOR' and df.iloc[-1]['close'] * df['volume'].rolling(window=50).mean().iloc[-1] < 20000000 * fdr.DataReader('USD/KRW').iloc[-1]["Adj Close"]:
                 continue
             if country == 'USA' and df.iloc[-1]['close'] * df['volume'].rolling(window=50).mean().iloc[-1] < 20000000:
                 continue
@@ -108,7 +107,7 @@ def select_buy_stocks(country: str = "KOR") -> dict:
     return buy_levels
 
 
-def filter_sell_stocks(df: pandas.DataFrame, volume) -> Union[dict, None]:
+def filter_sell_stocks(df: pd.DataFrame, volume) -> Union[dict, None]:
     if len(df) < 200:
         return None
 
