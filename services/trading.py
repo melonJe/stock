@@ -5,6 +5,7 @@ import threading
 from time import sleep
 from typing import Union
 
+import FinanceDataReader
 import numpy as np
 import pandas as pd
 from peewee import fn
@@ -60,7 +61,7 @@ def select_buy_stocks(country: str = "KOR") -> dict:
             if len(df) < 200:
                 continue
 
-            if country == 'KOR' and df.iloc[-1]['close'] * df['volume'].rolling(window=50).mean().iloc[-1] < 20000000 * fdr.DataReader('USD/KRW').iloc[-1]["Adj Close"]:
+            if country == 'KOR' and df.iloc[-1]['close'] * df['volume'].rolling(window=50).mean().iloc[-1] < 20000000 * FinanceDataReader.DataReader('USD/KRW').iloc[-1]["Adj Close"]:
                 continue
             if country == 'USA' and df.iloc[-1]['close'] * df['volume'].rolling(window=50).mean().iloc[-1] < 20000000:
                 continue
