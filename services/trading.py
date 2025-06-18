@@ -19,37 +19,38 @@ from config import setting_env
 from data.dto.account_dto import convert_overseas_to_domestic
 from data.dto.stock_trade_dto import convert_overseas_to_stock_trade
 from data.models import Blacklist, Stock, StopLoss, Subscription, PriceHistory, PriceHistoryUS, SellQueue
-from services.data_handler import stop_loss_insert, get_history_table, get_country_by_symbol, add_stock_price
+from services.data_handler import stop_loss_insert, get_country_by_symbol, add_stock_price
+from services.trading_helpers import fetch_price_dataframe, calc_adjusted_volumes
 from utils import discord
 from utils.operations import price_refine
 
 
 def select_buy_stocks(country: str = "KOR") -> dict:
-    # TODO 한국 미국 주식 분리 필요
-    buy_levels = dict()
+    """Return candidate buy levels filtered by several indicators."""
+
+    buy_levels: dict[str, dict[float, int]] = {}
     money = 50000
-    usd_krw = FinanceDataReader.DataReader('USD/KRW').iloc[-1]["Adj Close"]
+    usd_krw = FinanceDataReader.DataReader("USD/KRW").iloc[-1]["Adj Close"]
     anchor_date = datetime.datetime.now()
-    if country == 'USA':
-        anchor_date = anchor_date - datetime.timedelta(days=1)
-    anchor_date = anchor_date.strftime('%Y-%m-%d')
+    if country == "USA":
+        anchor_date -= datetime.timedelta(days=1)
+    anchor_date = anchor_date.strftime("%Y-%m-%d")
 
     blacklist_symbols = Blacklist.select(Blacklist.symbol)
     sub_symbols = Subscription.select(Subscription.symbol)
-    stocks_query = Stock.select(Stock.symbol).where(
-        (Stock.country == country)
-        & (Stock.symbol.in_(sub_symbols))
-        & ~(Stock.symbol.in_(blacklist_symbols))
+    stocks_query = (
+        Stock.select(Stock.symbol)
+        .where(
+            (Stock.country == country)
+            & (Stock.symbol.in_(sub_symbols))
+            & ~(Stock.symbol.in_(blacklist_symbols))
+        )
     )
     stocks = {row.symbol for row in stocks_query}
+
     for symbol in stocks:
         try:
-            table = get_history_table(get_country_by_symbol(symbol))
-            df = pd.DataFrame((
-                list((table.select()
-                      .where(table.date.between(datetime.datetime.now() - datetime.timedelta(days=365), datetime.datetime.now()) & (table.symbol == symbol))
-                      .order_by(table.date)).dicts())
-            ))
+            df = fetch_price_dataframe(symbol)
 
             if country == 'USA':
                 df['open'] = df['open'].astype(float)
@@ -180,6 +181,7 @@ def select_sell_overseas_stocks(korea_investment: KoreaInvestmentAPI, country: s
 
 
 def trading_buy(korea_investment: KoreaInvestmentAPI, buy_levels):
+    """Submit buy orders for calculated levels."""
     try:
         end_date = korea_investment.get_nth_open_day(3)
     except Exception as e:
@@ -220,6 +222,7 @@ def trading_buy(korea_investment: KoreaInvestmentAPI, buy_levels):
 
 
 def trading_sell(korea_investment: KoreaInvestmentAPI, sell_levels):
+    """Place sell orders for stocks present in the queue."""
     end_date = korea_investment.get_nth_open_day(1)
 
     for symbol, levels in sell_levels.items():
@@ -239,7 +242,7 @@ def trading_sell(korea_investment: KoreaInvestmentAPI, sell_levels):
 
 
 def update_sell_queue(ki_api: KoreaInvestmentAPI, country: str = "KOR"):
-    # TODO 뭔가가 뭔가뭔가 한데 어떻게 수정해야 될지 모르겠다...
+    """Synchronize recent trade history with internal sell queue."""
     today_str = datetime.datetime.now().strftime("%Y%m%d")
     response_data = []
     if country == "KOR":
@@ -254,17 +257,8 @@ def update_sell_queue(ki_api: KoreaInvestmentAPI, country: str = "KOR"):
         trade_type = trade.sll_buy_dvsn_cd
 
         if trade_type == "02":
-            volumes_and_prices = []
-            if country == 'KOR':
-                volumes_and_prices = [
-                    (volume - int(volume * 0.5), price_refine(math.ceil(price * 1.080))),
-                    (int(volume * 0.5), price_refine(math.ceil(price * 1.155)))
-                ]
-            elif country == 'USA':
-                volumes_and_prices = [
-                    (volume - int(volume * 0.5), round(float(trade.pchs_avg_pric) * 1.080, 2)),
-                    (int(volume * 0.5), round(float(trade.pchs_avg_pric) * 1.155, 2))
-                ]
+            base = float(getattr(trade, "pchs_avg_pric", price))
+            volumes_and_prices = calc_adjusted_volumes(volume, base, country)
 
             for vol, prc in volumes_and_prices:
                 if vol > 0:
@@ -288,9 +282,17 @@ def update_sell_queue(ki_api: KoreaInvestmentAPI, country: str = "KOR"):
     if country == "KOR":
         owned_stock_info = ki_api.get_korea_owned_stock_info()
     else:
-        owned_stock_info = convert_overseas_to_domestic(ki_api.get_oversea_owned_stock_info(country=country))
+        owned_stock_info = convert_overseas_to_domestic(
+            ki_api.get_oversea_owned_stock_info(country=country)
+        )
+
+    symbols = [s.pdno for s in owned_stock_info]
+    stock_map = {s.symbol: s for s in Stock.select().where(Stock.symbol.in_(symbols))}
+
     for stock in owned_stock_info:
-        stock_db = Stock.get(Stock.symbol == stock.pdno)
+        stock_db = stock_map.get(stock.pdno)
+        if not stock_db:
+            continue
         owned_volume = int(stock.hldg_qty)
         total_db_volume = SellQueue.select(fn.SUM(SellQueue.volume)).where(SellQueue.symbol == stock_db.symbol).scalar() or 0
 
@@ -310,17 +312,7 @@ def update_sell_queue(ki_api: KoreaInvestmentAPI, country: str = "KOR"):
             additional_volume = owned_volume - total_db_volume
             avg_price = float(stock.pchs_avg_pric)
 
-            volumes_and_prices = []
-            if stock_db.country == 'KOR':
-                volumes_and_prices = [
-                    (additional_volume - int(additional_volume * 0.5), price_refine(math.ceil(avg_price * 1.080))),
-                    (int(additional_volume * 0.5), price_refine(math.ceil(avg_price * 1.155)))
-                ]
-            elif stock_db.country == 'USA':
-                volumes_and_prices = [
-                    (additional_volume - int(additional_volume * 0.5), round(float(avg_price * 1.080), 2)),
-                    (int(additional_volume * 0.5), round(float(avg_price * 1.155), 2))
-                ]
+            volumes_and_prices = calc_adjusted_volumes(additional_volume, avg_price, stock_db.country)
             for vol, prc in volumes_and_prices:
                 if vol > 0:
                     sell_entry = SellQueue.get_or_none((SellQueue.symbol == stock_db.symbol) & (SellQueue.price == prc))
@@ -357,6 +349,7 @@ def stop_loss_notify(korea_investment: KoreaInvestmentAPI):
 
 
 def korea_trading():
+    """Main entry to run daily domestic trading tasks."""
     ki_api = KoreaInvestmentAPI(app_key=setting_env.APP_KEY, app_secret=setting_env.APP_SECRET, account_number=setting_env.ACCOUNT_NUMBER, account_code=setting_env.ACCOUNT_CODE)
     if ki_api.check_holiday(datetime.datetime.now().strftime("%Y%m%d")):
         logging.info(f'{datetime.datetime.now()} 휴장일')
@@ -390,6 +383,7 @@ def korea_trading():
 
 
 def usa_trading():
+    """Execute U.S. market trading workflow."""
     ki_api = KoreaInvestmentAPI(app_key=setting_env.APP_KEY, app_secret=setting_env.APP_SECRET, account_number=setting_env.ACCOUNT_NUMBER, account_code=setting_env.ACCOUNT_CODE)
     update_sell_queue(ki_api=ki_api, country="USA")
     usa_stock = select_buy_stocks(country="USA")
