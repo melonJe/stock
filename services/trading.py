@@ -27,6 +27,8 @@ from utils.operations import price_refine
 def select_buy_stocks(country: str = "KOR") -> dict:
     # TODO 한국 미국 주식 분리 필요
     buy_levels = dict()
+    money = 50000
+    usd_krw = FinanceDataReader.DataReader('USD/KRW').iloc[-1]["Adj Close"]
     anchor_date = datetime.datetime.now()
     if country == 'USA':
         anchor_date = anchor_date - datetime.timedelta(days=1)
@@ -61,7 +63,7 @@ def select_buy_stocks(country: str = "KOR") -> dict:
             if len(df) < 200:
                 continue
 
-            if country == 'KOR' and df.iloc[-1]['close'] * df['volume'].rolling(window=50).mean().iloc[-1] < 20000000 * FinanceDataReader.DataReader('USD/KRW').iloc[-1]["Adj Close"]:
+            if country == 'KOR' and df.iloc[-1]['close'] * df['volume'].rolling(window=50).mean().iloc[-1] < 20000000 * usd_krw:
                 continue
             if country == 'USA' and df.iloc[-1]['close'] * df['volume'].rolling(window=50).mean().iloc[-1] < 20000000:
                 continue
@@ -95,9 +97,9 @@ def select_buy_stocks(country: str = "KOR") -> dict:
             df['ATR10'] = AverageTrueRange(high=df['high'], low=df['low'], close=df['close'], window=10).average_true_range()
             df['ATR20'] = AverageTrueRange(high=df['high'], low=df['low'], close=df['close'], window=20).average_true_range()
             atr = max(df.iloc[-1]['ATR5'], df.iloc[-1]['ATR10'], df.iloc[-1]['ATR20'])
-            volume = int(min(25000 // atr, np.average(df['volume'][-20:]) // (atr ** (1 / 2))))
+            volume = int(min(money // atr, np.average(df['volume'][-20:]) // (atr ** (1 / 2))))
             if country == "USA":
-                volume = int(min(25000 / 1500 // atr, np.average(df['volume'][-20:]) // (atr ** (1 / 2))))
+                volume = int(min(money / usd_krw // atr, np.average(df['volume'][-20:]) // (atr ** (1 / 2))))
             buy_levels[symbol] = {
                 df.iloc[-1]['high']: volume // 9,
                 (df.iloc[-1]['open'] + df.iloc[-1]['close']) / 2: volume // 3,
