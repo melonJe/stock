@@ -1,7 +1,9 @@
 import datetime
 import logging
 import os
+import random
 import re
+import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from urllib.parse import urlparse, parse_qs
 
@@ -75,8 +77,94 @@ def insert_stock(symbol: str, company_name: str = None, country: str = None):
         country = get_country_by_symbol(symbol)
 
     new_stock = Stock.create(symbol=symbol, company_name=company_name, country=country)
-    add_price_for_symbol(symbol, start_date=datetime.datetime.now() - relativedelta(years=5), end_date=datetime.datetime.now())
+    add_price_for_symbol(symbol, start_date=datetime.datetime.now() - relativedelta(years=5),
+                         end_date=datetime.datetime.now())
     return new_stock
+
+
+def get_high_dividend_stocks():
+    base_url = "https://finance.naver.com/sise/dividend_list.naver"
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'}
+
+    high_dividend_tickers = set()
+    for page in range(1, 30):
+        try:
+            # URL 파라미터 설정
+            params = {'field': 'dividend_rate', 'sosok': '', 'ordering': 'desc', 'page': page}
+
+            response = requests.get(base_url, params=params, headers=headers)
+            response.raise_for_status()
+
+            soup = BeautifulSoup(response.content, 'html.parser')
+            rows = soup.find_all('tr', class_=['', 'tr_even'])
+            if not rows:
+                print("더 이상 데이터가 없습니다.")
+                break
+
+            found_valid_data = False
+
+            for row in rows:
+                try:
+                    # 회사명과 티커 추출
+                    company_cell = row.find('td', class_='txt frst')
+                    if not company_cell:
+                        continue
+
+                    company_link = company_cell.find('a')
+                    if not company_link:
+                        continue
+
+                    # 티커 코드 추출 (href에서 code= 부분)
+                    href = company_link.get('href', '')
+                    ticker_match = re.search(r'code=(\d+)', href)
+                    if not ticker_match:
+                        continue
+
+                    ticker = ticker_match.group(1)
+                    company_name = company_link.text.strip()
+
+                    # 배당수익률 추출 (5번째 num 클래스)
+                    num_cells = row.find_all('td', class_='num')
+                    if len(num_cells) < 3:
+                        continue
+
+                    dividend_rate_text = num_cells[2].text.strip()
+
+                    # 배당수익률이 숫자가 아니면 건너뛰기
+                    try:
+                        dividend_rate = float(dividend_rate_text)
+                    except (ValueError, TypeError):
+                        continue
+
+                    found_valid_data = True
+                    # 배당수익률이 2% 이상이면 set에 추가
+                    if dividend_rate >= 2.0:
+                        high_dividend_tickers.add(ticker)
+                    else:
+                        # ordering=desc이므로 2% 미만이 나오면 종료
+                        return high_dividend_tickers
+
+                except Exception as e:
+                    print(f"행 처리 중 오류 발생: {e}")
+                    continue
+
+            # 유효한 데이터가 없으면 종료
+            if not found_valid_data:
+                print("유효한 데이터가 없습니다.")
+                break
+
+            page += 1
+
+            # 요청 간 딜레이 (서버 부하 방지)
+            time.sleep(random.uniform(1.0, 3.0))
+        except requests.RequestException as e:
+            print(f"페이지 {page} 요청 실패: {e}")
+            break
+        except Exception as e:
+            print(f"예상치 못한 오류 발생: {e}")
+            break
+    return high_dividend_tickers
 
 
 def update_subscription_stock():
@@ -84,10 +172,14 @@ def update_subscription_stock():
     data_to_insert = []
 
     # 한국 주식 프로세스
-    data_to_insert.extend([{'symbol': symbol} for symbol in set(FinanceDataReader.StockListing('KRX').iloc[0:300]['Code'])])
+    data_to_insert.extend(
+        [{'symbol': symbol} for symbol in get_high_dividend_stocks()])
+    # data_to_insert.extend(
+    #     [{'symbol': symbol} for symbol in set(FinanceDataReader.StockListing('KRX').iloc[0:300]['Code'])])
 
     # 미국 주식 프로세스
-    for stockList in (FinanceDataReader.StockListing('S&P500'), FinanceDataReader.StockListing('NASDAQ'), FinanceDataReader.StockListing('NYSE')):
+    for stockList in (FinanceDataReader.StockListing('S&P500'), FinanceDataReader.StockListing('NASDAQ'),
+                      FinanceDataReader.StockListing('NYSE')):
         data_to_insert.extend([{'symbol': symbol} for symbol in set(stockList.iloc[0:100]['Symbol'])])
 
     if data_to_insert:
@@ -97,8 +189,10 @@ def update_subscription_stock():
 
 
 def update_blacklist():
-    urls = ('https://finance.naver.com/sise/management.naver', 'https://finance.naver.com/sise/trading_halt.naver', 'https://finance.naver.com/sise/investment_alert.naver?type=caution',
-            'https://finance.naver.com/sise/investment_alert.naver?type=warning', 'https://finance.naver.com/sise/investment_alert.naver?type=risk')
+    urls = ('https://finance.naver.com/sise/management.naver', 'https://finance.naver.com/sise/trading_halt.naver',
+            'https://finance.naver.com/sise/investment_alert.naver?type=caution',
+            'https://finance.naver.com/sise/investment_alert.naver?type=warning',
+            'https://finance.naver.com/sise/investment_alert.naver?type=risk')
     symbol = set()
     for url in urls:
         page = requests.get(url, timeout=30).text
@@ -117,12 +211,17 @@ def stop_loss_insert(symbol: str, pchs_avg_pric: float):
     table = get_history_table(get_country_by_symbol(symbol))
     df = pd.DataFrame((
         list((table.select()
-              .where(table.date.between(datetime.datetime.now() - datetime.timedelta(days=550), datetime.datetime.now()) & (table.symbol == symbol))
+              .where(
+            table.date.between(datetime.datetime.now() - datetime.timedelta(days=550), datetime.datetime.now()) & (
+                    table.symbol == symbol))
               .order_by(table.date)).dicts())
     ))
-    df['ATR5'] = AverageTrueRange(high=df['high'].astype('float64'), low=df['low'].astype('float64'), close=df['close'].astype('float64'), window=5).average_true_range()
-    df['ATR10'] = AverageTrueRange(high=df['high'].astype('float64'), low=df['low'].astype('float64'), close=df['close'].astype('float64'), window=10).average_true_range()
-    df['ATR20'] = AverageTrueRange(high=df['high'].astype('float64'), low=df['low'].astype('float64'), close=df['close'].astype('float64'), window=20).average_true_range()
+    df['ATR5'] = AverageTrueRange(high=df['high'].astype('float64'), low=df['low'].astype('float64'),
+                                  close=df['close'].astype('float64'), window=5).average_true_range()
+    df['ATR10'] = AverageTrueRange(high=df['high'].astype('float64'), low=df['low'].astype('float64'),
+                                   close=df['close'].astype('float64'), window=10).average_true_range()
+    df['ATR20'] = AverageTrueRange(high=df['high'].astype('float64'), low=df['low'].astype('float64'),
+                                   close=df['close'].astype('float64'), window=20).average_true_range()
     atr = max(df.iloc[-1]['ATR5'], df.iloc[-1]['ATR10'], df.iloc[-1]['ATR20'])  # 주가 변동성 체크
     stop_loss = pchs_avg_pric - 1.2 * atr  # 20일(보통), 60일(필수) 손절선
     StopLoss.insert(symbol=symbol, price=stop_loss)
@@ -169,7 +268,8 @@ def update_stock_listings():
         logging.error(f"Error loading US data: {e}")
 
 
-def add_stock_price(symbol: str = None, country: str = None, start_date: datetime.datetime = None, end_date: datetime.datetime = None):
+def add_stock_price(symbol: str = None, country: str = None, start_date: datetime.datetime = None,
+                    end_date: datetime.datetime = None):
     if start_date is None:
         start_date = datetime.datetime.now()
 
@@ -199,7 +299,8 @@ def add_stock_price(symbol: str = None, country: str = None, start_date: datetim
 
 
 def add_price_for_symbol(symbol: str, start_date: datetime.datetime = None, end_date: datetime.datetime = None):
-    start_date = (datetime.datetime.now() - relativedelta(days=5)).strftime('%Y-%m-%d') if not start_date else start_date.strftime('%Y-%m-%d')
+    start_date = (datetime.datetime.now() - relativedelta(days=5)).strftime(
+        '%Y-%m-%d') if not start_date else start_date.strftime('%Y-%m-%d')
     try:
         country = get_country_by_symbol(symbol)
         table = get_history_table(country)
