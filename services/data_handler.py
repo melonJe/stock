@@ -88,6 +88,7 @@ def korea_subscription_stock():
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'}
 
     high_dividend_tickers = set()
+    one_year_ago_date = (datetime.datetime.now() - relativedelta(years=1)).date()
     for page in range(1, 30):
         try:
             params = {'field': 'dividend_rate', 'sosok': '', 'ordering': 'desc', 'page': page}
@@ -98,7 +99,6 @@ def korea_subscription_stock():
             if not rows:
                 print("더 이상 데이터가 없습니다.")
                 break
-            found_valid_data = False
             for row in rows:
                 try:
                     company_cell = row.find('td', class_='txt frst')
@@ -115,20 +115,17 @@ def korea_subscription_stock():
                     num_cells = row.find_all('td', class_='num')
                     if len(num_cells) < 3:
                         continue
-                    year, month = num_cells[1].text.strip().split('.')
                     try:
-                        year, month = float(year), float(month)
-                    except (ValueError, TypeError):
+                        dividend_day = datetime.datetime.strptime(num_cells[1].text.strip(), "%y.%m").date()
+                    except ValueError:
                         continue
-                    one_year_ago = datetime.datetime.now() - relativedelta(years=1)
-                    if year < one_year_ago.year or month < one_year_ago.month:
+                    if dividend_day < one_year_ago_date:
                         continue
                     dividend_rate_text = num_cells[2].text.strip()
                     try:
                         dividend_rate = float(dividend_rate_text)
                     except (ValueError, TypeError):
                         continue
-                    found_valid_data = True
                     if dividend_rate >= 2.0:
                         high_dividend_tickers.add(ticker)
                     else:
@@ -136,7 +133,7 @@ def korea_subscription_stock():
                 except Exception as e:
                     print(f"행 처리 중 오류 발생: {e}")
                     continue
-            if not found_valid_data:
+            if not high_dividend_tickers:
                 print("유효한 데이터가 없습니다.")
                 break
             page += 1
