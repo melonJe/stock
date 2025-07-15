@@ -1,4 +1,5 @@
 import datetime
+import json
 import logging
 import os
 import random
@@ -147,6 +148,110 @@ def korea_subscription_stock():
     return high_dividend_tickers
 
 
+def america_high_dividend_tickers(min_yield=2.0, max_count=20000):
+    url = "https://scanner.tradingview.com/america/scan?label-product=screener-stock"
+    headers = {
+        "Content-Type": "text/plain;charset=UTF-8",
+        "Accept": "application/json",
+        "Origin": "https://kr.tradingview.com",
+        "Referer": "https://kr.tradingview.com/",
+        "User-Agent": "Mozilla/5.0"
+    }
+
+    payload = {
+        "symbols": {},
+        "columns": [
+            "name", "dividends_yield"
+        ],
+        "filter": [
+            {"left": "is_primary", "operation": "equal", "right": True}
+        ],
+        "filter2": {
+            "operator": "and",
+            "operands": [
+                {
+                    "operation": {
+                        "operator": "or",
+                        "operands": [
+                            {
+                                "operation": {
+                                    "operator": "and",
+                                    "operands": [
+                                        {"expression": {"left": "type", "operation": "equal", "right": "stock"}},
+                                        {"expression": {"left": "typespecs", "operation": "has", "right": ["common"]}}
+                                    ]
+                                }
+                            },
+                            {
+                                "operation": {
+                                    "operator": "and",
+                                    "operands": [
+                                        {"expression": {"left": "type", "operation": "equal", "right": "stock"}},
+                                        {"expression": {"left": "typespecs", "operation": "has",
+                                                        "right": ["preferred"]}}
+                                    ]
+                                }
+                            },
+                            {
+                                "operation": {
+                                    "operator": "and",
+                                    "operands": [
+                                        {"expression": {"left": "type", "operation": "equal", "right": "dr"}}
+                                    ]
+                                }
+                            },
+                            {
+                                "operation": {
+                                    "operator": "and",
+                                    "operands": [
+                                        {"expression": {"left": "type", "operation": "equal", "right": "fund"}},
+                                        {"expression": {"left": "typespecs", "operation": "has_none_of",
+                                                        "right": ["etf"]}}
+                                    ]
+                                }
+                            }
+                        ]
+                    }
+                }
+            ]
+        },
+        "ignore_unknown_fields": False,
+        "markets": ["america"],
+        "options": {"lang": "ko"},
+        "range": [0, max_count],
+        "sort": {
+            "sortBy": "dividends_yield",
+            "sortOrder": "desc"
+        }
+    }
+
+    try:
+        response = requests.post(url, headers=headers, data=json.dumps(payload))
+        response.raise_for_status()
+        result = response.json()
+
+        tickers = set()
+        for item in result.get("data", []):
+            symbol = item.get("s")  # 예: NASDAQ:AAPL
+            values = item.get("d", [])
+            if len(values) < 2:
+                continue
+            try:
+                yield_value = float(values[1])
+                if yield_value >= min_yield:
+                    tickers.add(symbol)
+            except (ValueError, TypeError):
+                continue
+        return tickers
+
+    except requests.RequestException as e:
+        print(f"요청 실패: {e}")
+        return set()
+    except Exception as e:
+        print(f"오류 발생: {e}")
+        return set()
+
+
 def update_subscription_stock():
     logging.info(f'{datetime.datetime.now()} update_subscription_stock 시작')
     data_to_insert = []
@@ -158,9 +263,11 @@ def update_subscription_stock():
     #     [{'symbol': symbol} for symbol in set(FinanceDataReader.StockListing('KRX').iloc[0:300]['Code'])])
 
     # 미국 주식 프로세스
-    for stockList in (FinanceDataReader.StockListing('S&P500'), FinanceDataReader.StockListing('NASDAQ'),
-                      FinanceDataReader.StockListing('NYSE')):
-        data_to_insert.extend([{'symbol': symbol} for symbol in set(stockList.iloc[0:100]['Symbol'])])
+    data_to_insert.extend(
+        [{'symbol': symbol} for symbol in america_high_dividend_tickers()])
+    # for stockList in (FinanceDataReader.StockListing('S&P500'), FinanceDataReader.StockListing('NASDAQ'),
+    #                   FinanceDataReader.StockListing('NYSE')):
+    #     data_to_insert.extend([{'symbol': symbol} for symbol in set(stockList.iloc[0:100]['Symbol'])])
 
     if data_to_insert:
         logging.info(f"{len(data_to_insert)}개 주식")
