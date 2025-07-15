@@ -171,7 +171,7 @@ def select_sell_overseas_stocks(korea_investment: KoreaInvestmentAPI, country: s
                 list((PriceHistoryUS.select()
                       .where(PriceHistoryUS.date.between(datetime.datetime.now() - datetime.timedelta(days=365),
                                                          datetime.datetime.now()) & (
-                                         PriceHistoryUS.symbol == stock.ovrs_pdno))
+                                     PriceHistoryUS.symbol == stock.ovrs_pdno))
                       .order_by(PriceHistoryUS.date)).dicts())
             ))
             df['open'] = df['open'].astype(float)
@@ -409,10 +409,10 @@ def usa_trading():
 
     sell_stock = select_sell_overseas_stocks(ki_api)
     sell_queue = {}
-    for sell in SellQueue.select().join(Stock, on=(SellQueue.symbol == Stock.symbol)).where(Stock.country == 'USA'):
-        if sell.symbol not in sell_queue.keys():
-            sell_queue[sell.symbol] = {}
-        sell_queue[sell.symbol][sell.price] = sell.volume
+    # for sell in SellQueue.select().join(Stock, on=(SellQueue.symbol == Stock.symbol)).where(Stock.country == 'USA'):
+    #     if sell.symbol not in sell_queue.keys():
+    #         sell_queue[sell.symbol] = {}
+    #     sell_queue[sell.symbol][sell.price] = sell.volume
     sell_queue.update(sell_stock)
     sell = threading.Thread(target=trading_sell, args=(ki_api, sell_queue,))
     sell.start()
