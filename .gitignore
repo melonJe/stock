@@ -491,3 +491,4 @@ $RECYCLE.BIN/
 .env*
 .idea
 nohup.out
+.DS_Store
