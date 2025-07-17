@@ -14,13 +14,13 @@ def start():
     scheduler = BackgroundScheduler(misfire_grace_time=3600, coalesce=True, timezone='Asia/Seoul')
 
     if not setting_env.SIMULATE:
-        # scheduler.add_job(
-        #     data_handler.update_subscription_stock,
-        #     trigger=CronTrigger(day=1, hour=2),
-        #     id="update_defensive_subscription_stock",
-        #     max_instances=1,
-        #     replace_existing=True,
-        # )
+        scheduler.add_job(
+            data_handler.update_subscription_stock,
+            trigger=CronTrigger(day=1, hour=4),
+            id="update_defensive_subscription_stock",
+            max_instances=1,
+            replace_existing=True,
+        )
 
         scheduler.add_job(
             data_handler.update_stock_listings,
