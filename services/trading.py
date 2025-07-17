@@ -73,6 +73,12 @@ def select_buy_stocks(country: str = "KOR") -> dict:
             # if not df.iloc[-1]['volume'] > (df.iloc[-1]['Vol_Avg'] * 1.5):
             #     continue
 
+            df['Change'] = df['Close'].diff()
+            df['Down'] = df['Change'] < 0  # 하락한 날은 True
+            recent_down_days = df['Down'].iloc[-5:].sum()  # 최근 5일 중 하락일 수 계산
+            if recent_down_days >= 3:
+                continue
+
             bollinger = BollingerBands(close=df['close'], window=20, window_dev=2)
             df['BB_Mavg'] = bollinger.bollinger_mavg()
             df['BB_Upper'] = bollinger.bollinger_hband()
