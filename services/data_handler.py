@@ -232,7 +232,7 @@ def america_high_dividend_tickers(min_yield=2.0, max_count=20000):
 
         tickers = set()
         for item in result.get("data", []):
-            symbol = item.get("s")  # 예: NASDAQ:AAPL
+            symbol = item.get("s").split(":")[-1]  # 예: NASDAQ:AAPL
             values = item.get("d", [])
             if len(values) < 2:
                 continue
