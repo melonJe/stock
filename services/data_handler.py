@@ -2,9 +2,7 @@ import datetime
 import json
 import logging
 import os
-import random
 import re
-import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from urllib.parse import urlparse, parse_qs
 
@@ -83,73 +81,9 @@ def insert_stock(symbol: str, company_name: str = None, country: str = None):
     return new_stock
 
 
-def korea_subscription_stock():
-    base_url = "https://finance.naver.com/sise/dividend_list.naver"
-    headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'}
-
-    high_dividend_tickers = set()
-    one_year_ago_date = (datetime.datetime.now() - relativedelta(years=1)).date()
-    for page in range(1, 30):
-        try:
-            params = {'field': 'dividend_rate', 'sosok': '', 'ordering': 'desc', 'page': page}
-            response = requests.get(base_url, params=params, headers=headers)
-            response.raise_for_status()
-            soup = BeautifulSoup(response.content, 'html.parser')
-            rows = soup.find_all('tr', class_=['', 'tr_even'])
-            if not rows:
-                print("더 이상 데이터가 없습니다.")
-                break
-            for row in rows:
-                try:
-                    company_cell = row.find('td', class_='txt frst')
-                    if not company_cell:
-                        continue
-                    company_link = company_cell.find('a')
-                    if not company_link:
-                        continue
-                    href = company_link.get('href', '')
-                    ticker_match = re.search(r'code=(\d+)', href)
-                    if not ticker_match:
-                        continue
-                    ticker = ticker_match.group(1)
-                    num_cells = row.find_all('td', class_='num')
-                    if len(num_cells) < 3:
-                        continue
-                    try:
-                        dividend_day = datetime.datetime.strptime(num_cells[1].text.strip(), "%y.%m").date()
-                    except ValueError:
-                        continue
-                    if dividend_day < one_year_ago_date:
-                        continue
-                    dividend_rate_text = num_cells[2].text.strip()
-                    try:
-                        dividend_rate = float(dividend_rate_text)
-                    except (ValueError, TypeError):
-                        continue
-                    if dividend_rate >= 2.0:
-                        high_dividend_tickers.add(ticker)
-                    else:
-                        return high_dividend_tickers
-                except Exception as e:
-                    print(f"행 처리 중 오류 발생: {e}")
-                    continue
-            if not high_dividend_tickers:
-                print("유효한 데이터가 없습니다.")
-                break
-            page += 1
-            time.sleep(random.uniform(1.0, 3.0))
-        except requests.RequestException as e:
-            print(f"페이지 {page} 요청 실패: {e}")
-            break
-        except Exception as e:
-            print(f"예상치 못한 오류 발생: {e}")
-            break
-    return high_dividend_tickers
-
-
-def america_high_dividend_tickers(min_yield=2.0, max_count=20000):
-    url = "https://scanner.tradingview.com/america/scan?label-product=screener-stock"
+def stock_dividend_filter(country="korea", min_yield=2.0, min_continuous_dividend_payout=10, min_payout_ratio=30.0,
+                          max_payout_ratio=60.0, max_count=20000):
+    url = f"https://scanner.tradingview.com/{country}/scan?label-product=screener-stock"
     headers = {
         "Content-Type": "text/plain;charset=UTF-8",
         "Accept": "application/json",
@@ -160,9 +94,12 @@ def america_high_dividend_tickers(min_yield=2.0, max_count=20000):
 
     payload = {
         "symbols": {},
-        "columns": [
-            "name", "dividends_yield"
-        ],
+        "columns": ["name", "description", "logoid", "update_mode", "type", "typespecs",
+                    "dps_common_stock_prim_issue_fy", "fundamental_currency_code", "dps_common_stock_prim_issue_fq",
+                    "dividends_yield_current", "dividends_yield", "dividend_payout_ratio_ttm",
+                    "dps_common_stock_prim_issue_yoy_growth_fy", "continuous_dividend_payout",
+                    "continuous_dividend_growth", "exchange"
+                    ],
         "filter": [
             {"left": "is_primary", "operation": "equal", "right": True}
         ],
@@ -229,20 +166,40 @@ def america_high_dividend_tickers(min_yield=2.0, max_count=20000):
         response = requests.post(url, headers=headers, data=json.dumps(payload))
         response.raise_for_status()
         result = response.json()
-
-        tickers = set()
+        # 데이터를 pandas DataFrame으로 변환
+        data_list = []
         for item in result.get("data", []):
-            symbol = item.get("s").split(":")[-1]  # 예: NASDAQ:AAPL
             values = item.get("d", [])
-            if len(values) < 2:
-                continue
             try:
-                yield_value = float(values[1])
-                if yield_value >= min_yield:
-                    tickers.add(symbol)
-            except (ValueError, TypeError):
+                data_dict = {
+                    'ticker': values[0] if len(values) > 0 else None,  # 주식 티커
+                    'dividend_yield': float(values[10]) if values[10] is not None else None,  # 배당 수익률
+                    'dividend_payout_ratio_ttm': int(values[11]) if values[11] is not None else None,  # 배당 지급률
+                    'continuous_dividend_payout': float(values[13]) if values[13] is not None else None  # 연속 배당 지불 (1년)
+                }
+                data_list.append(data_dict)
+            except (ValueError, TypeError, IndexError):
                 continue
-        return tickers
+
+        # DataFrame 생성
+        df = pd.DataFrame(data_list)
+
+        if df.empty:
+            print("데이터가 없습니다.")
+            return set()
+
+        # 결측값 제거
+        df = df.dropna(subset=['dividend_yield', 'dividend_payout_ratio_ttm', 'continuous_dividend_payout'])
+
+        # 조건 필터링
+        filtered_df = df[
+            (df['dividend_yield'] >= min_yield) &
+            (df['continuous_dividend_payout'] >= min_continuous_dividend_payout) &
+            (df['dividend_payout_ratio_ttm'] >= min_payout_ratio) &
+            (df['dividend_payout_ratio_ttm'] <= max_payout_ratio)
+            ]
+
+        return set(filtered_df['ticker'].tolist())
 
     except requests.RequestException as e:
         print(f"요청 실패: {e}")
@@ -258,13 +215,13 @@ def update_subscription_stock():
 
     # 한국 주식 프로세스
     data_to_insert.extend(
-        [{'symbol': symbol} for symbol in korea_subscription_stock()])
+        [{'symbol': symbol} for symbol in stock_dividend_filter()])
     # data_to_insert.extend(
     #     [{'symbol': symbol} for symbol in set(FinanceDataReader.StockListing('KRX').iloc[0:300]['Code'])])
 
     # 미국 주식 프로세스
     data_to_insert.extend(
-        [{'symbol': symbol} for symbol in america_high_dividend_tickers()])
+        [{'symbol': symbol} for symbol in stock_dividend_filter(country="america")])
     # for stockList in (FinanceDataReader.StockListing('S&P500'), FinanceDataReader.StockListing('NASDAQ'),
     #                   FinanceDataReader.StockListing('NYSE')):
     #     data_to_insert.extend([{'symbol': symbol} for symbol in set(stockList.iloc[0:100]['Symbol'])])
