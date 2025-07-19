@@ -82,7 +82,7 @@ def insert_stock(symbol: str, company_name: str = None, country: str = None):
 
 
 def stock_dividend_filter(country="korea", min_yield=2.0, min_continuous_dividend_payout=10, min_payout_ratio=30.0,
-                          max_payout_ratio=60.0, max_count=20000):
+                          max_payout_ratio=60.0, min_conversion_ratio=1, max_count=20000):
     url = f"https://scanner.tradingview.com/{country}/scan?label-product=screener-stock"
     headers = {
         "Content-Type": "text/plain;charset=UTF-8",
@@ -95,10 +95,12 @@ def stock_dividend_filter(country="korea", min_yield=2.0, min_continuous_dividen
     payload = {
         "symbols": {},
         "columns": ["name", "description", "logoid", "update_mode", "type", "typespecs",
-                    "dps_common_stock_prim_issue_fy", "fundamental_currency_code", "dps_common_stock_prim_issue_fq",
-                    "dividends_yield_current", "dividends_yield", "dividend_payout_ratio_ttm",
-                    "dps_common_stock_prim_issue_yoy_growth_fy", "continuous_dividend_payout",
-                    "continuous_dividend_growth", "exchange"
+                    "dividends_yield",
+                    "dividend_payout_ratio_ttm",
+                    "continuous_dividend_payout",
+                    "cash_f_operating_activities_ttm",
+                    "net_income_fy",
+                    "exchange"
                     ],
         "filter": [
             {"left": "is_primary", "operation": "equal", "right": True}
@@ -173,9 +175,10 @@ def stock_dividend_filter(country="korea", min_yield=2.0, min_continuous_dividen
             try:
                 data_dict = {
                     'ticker': values[0] if len(values) > 0 else None,  # 주식 티커
-                    'dividend_yield': float(values[10]) if values[10] is not None else None,  # 배당 수익률
-                    'dividend_payout_ratio_ttm': int(values[11]) if values[11] is not None else None,  # 배당 지급률
-                    'continuous_dividend_payout': float(values[13]) if values[13] is not None else None  # 연속 배당 지불 (1년)
+                    'dividend_yield': float(values[6]) if values[6] is not None else None,  # 배당 수익률
+                    'dividend_payout_ratio_ttm': float(values[7]) if values[7] is not None else None,  # 배당금 / 주당 순이익
+                    'continuous_dividend_payout': int(values[8]) if values[8] is not None else None,  # 연속 배당 지불 (1년)
+                    'cash_conversion_ratio': float(values[9]) / float(values[10]) if values[10] else None
                 }
                 data_list.append(data_dict)
             except (ValueError, TypeError, IndexError):
@@ -188,15 +191,16 @@ def stock_dividend_filter(country="korea", min_yield=2.0, min_continuous_dividen
             print("데이터가 없습니다.")
             return set()
 
-        # 결측값 제거
-        df = df.dropna(subset=['dividend_yield', 'dividend_payout_ratio_ttm', 'continuous_dividend_payout'])
-
         # 조건 필터링
         filtered_df = df[
             (df['dividend_yield'] >= min_yield) &
-            (df['continuous_dividend_payout'] >= min_continuous_dividend_payout) &
             (df['dividend_payout_ratio_ttm'] >= min_payout_ratio) &
-            (df['dividend_payout_ratio_ttm'] <= max_payout_ratio)
+            (df['dividend_payout_ratio_ttm'] <= max_payout_ratio) &
+            (df['continuous_dividend_payout'] >= min_continuous_dividend_payout)
+            ]
+        if country == "america":
+            filtered_df = filtered_df[
+                (filtered_df['cash_conversion_ratio'] >= min_conversion_ratio)
             ]
 
         return set(filtered_df['ticker'].tolist())
