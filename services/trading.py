@@ -119,7 +119,7 @@ def filter_sell_stocks(df: pd.DataFrame, volume) -> Union[dict, None]:
     df['BB_Mavg'] = bollinger.bollinger_mavg()
     df['BB_Upper'] = bollinger.bollinger_hband()
     df['BB_Lower'] = bollinger.bollinger_lband()
-    if df.iloc[-1]['close'] < df.iloc[-1]['BB_Upper'] * 0.95 and df.iloc[-1]['low'] < df.iloc[-1]['BB_Upper'] * 0.95:
+    if df.iloc[-1]['close'] < df.iloc[-1]['BB_Upper'] and df.iloc[-1]['low'] < df.iloc[-1]['BB_Upper']:
         return None
 
     df['RSI'] = RSIIndicator(close=df['close'], window=7).rsi()
