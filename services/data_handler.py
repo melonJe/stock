@@ -76,13 +76,11 @@ def insert_stock(symbol: str, company_name: str = None, country: str = None):
         country = get_country_by_symbol(symbol)
 
     new_stock = Stock.create(symbol=symbol, company_name=company_name, country=country)
-    add_price_for_symbol(symbol, start_date=datetime.datetime.now() - relativedelta(years=5),
-                         end_date=datetime.datetime.now())
+    add_price_for_symbol(symbol, start_date=datetime.datetime.now() - relativedelta(years=5), end_date=datetime.datetime.now())
     return new_stock
 
 
-def stock_dividend_filter(country="korea", min_yield=2.0, min_continuous_dividend_payout=10, min_payout_ratio=30.0,
-                          max_payout_ratio=60.0, min_conversion_ratio=1, max_count=20000):
+def stock_dividend_filter(country="korea", min_yield=2.0, min_continuous_dividend_payout=10, min_payout_ratio=20.0, max_payout_ratio=60.0, min_conversion_ratio=1, max_count=20000):
     url = f"https://scanner.tradingview.com/{country}/scan?label-product=screener-stock"
     headers = {
         "Content-Type": "text/plain;charset=UTF-8",
@@ -193,15 +191,13 @@ def stock_dividend_filter(country="korea", min_yield=2.0, min_continuous_dividen
 
         # 조건 필터링
         filtered_df = df[
-            (df['dividend_yield'] >= min_yield) &
+            (df['dividend_yield'] > min_yield) &
             (df['dividend_payout_ratio_ttm'] >= min_payout_ratio) &
             (df['dividend_payout_ratio_ttm'] <= max_payout_ratio) &
             (df['continuous_dividend_payout'] >= min_continuous_dividend_payout)
             ]
         if country == "america":
-            filtered_df = filtered_df[
-                (filtered_df['cash_conversion_ratio'] >= min_conversion_ratio)
-            ]
+            filtered_df = filtered_df[(filtered_df['cash_conversion_ratio'] >= min_conversion_ratio)]
 
         return set(filtered_df['ticker'].tolist())
 
@@ -218,14 +214,12 @@ def update_subscription_stock():
     data_to_insert = []
 
     # 한국 주식 프로세스
-    data_to_insert.extend(
-        [{'symbol': symbol} for symbol in stock_dividend_filter()])
+    data_to_insert.extend([{'symbol': symbol} for symbol in stock_dividend_filter(min_yield=0.0, min_continuous_dividend_payout=5)])
     # data_to_insert.extend(
     #     [{'symbol': symbol} for symbol in set(FinanceDataReader.StockListing('KRX').iloc[0:300]['Code'])])
 
     # 미국 주식 프로세스
-    data_to_insert.extend(
-        [{'symbol': symbol} for symbol in stock_dividend_filter(country="america")])
+    data_to_insert.extend([{'symbol': symbol} for symbol in stock_dividend_filter(country="america", min_yield=0.0, min_continuous_dividend_payout=5)])
     # for stockList in (FinanceDataReader.StockListing('S&P500'), FinanceDataReader.StockListing('NASDAQ'),
     #                   FinanceDataReader.StockListing('NYSE')):
     #     data_to_insert.extend([{'symbol': symbol} for symbol in set(stockList.iloc[0:100]['Symbol'])])
@@ -259,17 +253,12 @@ def stop_loss_insert(symbol: str, pchs_avg_pric: float):
     table = get_history_table(get_country_by_symbol(symbol))
     df = pd.DataFrame((
         list((table.select()
-              .where(
-            table.date.between(datetime.datetime.now() - datetime.timedelta(days=550), datetime.datetime.now()) & (
-                    table.symbol == symbol))
+              .where(table.date.between(datetime.datetime.now() - datetime.timedelta(days=550), datetime.datetime.now()) & (table.symbol == symbol))
               .order_by(table.date)).dicts())
     ))
-    df['ATR5'] = AverageTrueRange(high=df['high'].astype('float64'), low=df['low'].astype('float64'),
-                                  close=df['close'].astype('float64'), window=5).average_true_range()
-    df['ATR10'] = AverageTrueRange(high=df['high'].astype('float64'), low=df['low'].astype('float64'),
-                                   close=df['close'].astype('float64'), window=10).average_true_range()
-    df['ATR20'] = AverageTrueRange(high=df['high'].astype('float64'), low=df['low'].astype('float64'),
-                                   close=df['close'].astype('float64'), window=20).average_true_range()
+    df['ATR5'] = AverageTrueRange(high=df['high'].astype('float64'), low=df['low'].astype('float64'), close=df['close'].astype('float64'), window=5).average_true_range()
+    df['ATR10'] = AverageTrueRange(high=df['high'].astype('float64'), low=df['low'].astype('float64'), close=df['close'].astype('float64'), window=10).average_true_range()
+    df['ATR20'] = AverageTrueRange(high=df['high'].astype('float64'), low=df['low'].astype('float64'), close=df['close'].astype('float64'), window=20).average_true_range()
     atr = max(df.iloc[-1]['ATR5'], df.iloc[-1]['ATR10'], df.iloc[-1]['ATR20'])  # 주가 변동성 체크
     stop_loss = pchs_avg_pric - 1.2 * atr  # 20일(보통), 60일(필수) 손절선
     StopLoss.insert(symbol=symbol, price=stop_loss)
@@ -316,8 +305,7 @@ def update_stock_listings():
         logging.error(f"Error loading US data: {e}")
 
 
-def add_stock_price(symbol: str = None, country: str = None, start_date: datetime.datetime = None,
-                    end_date: datetime.datetime = None):
+def add_stock_price(symbol: str = None, country: str = None, start_date: datetime.datetime = None, end_date: datetime.datetime = None):
     if start_date is None:
         start_date = datetime.datetime.now()
 
@@ -334,9 +322,7 @@ def add_stock_price(symbol: str = None, country: str = None, start_date: datetim
         with ThreadPoolExecutor(max_workers=min(os.cpu_count(), 10)) as executor:
             futures = []
             for stock in stocks:
-                futures.append(
-                    executor.submit(add_price_for_symbol, stock.symbol, start_date, end_date)
-                )
+                futures.append(executor.submit(add_price_for_symbol, stock.symbol, start_date, end_date))
 
             # 모든 작업이 완료될 때까지 대기하며 에러 확인
             for future in as_completed(futures):
@@ -347,8 +333,7 @@ def add_stock_price(symbol: str = None, country: str = None, start_date: datetim
 
 
 def add_price_for_symbol(symbol: str, start_date: datetime.datetime = None, end_date: datetime.datetime = None):
-    start_date = (datetime.datetime.now() - relativedelta(days=5)).strftime(
-        '%Y-%m-%d') if not start_date else start_date.strftime('%Y-%m-%d')
+    start_date = (datetime.datetime.now() - relativedelta(days=5)).strftime('%Y-%m-%d') if not start_date else start_date.strftime('%Y-%m-%d')
     try:
         country = get_country_by_symbol(symbol)
         table = get_history_table(country)

@@ -86,17 +86,13 @@ def select_buy_stocks(country: str = "KOR") -> dict:
             macd_indicator = MACD(close=df['close'], window_fast=12, window_slow=26, window_sign=9)
             df['MACD'], df['MACD_Signal'] = macd_indicator.macd(), macd_indicator.macd_signal()
             macd_curr, macd_prev = df.iloc[-1], df.iloc[-2]
-            macd_condition = macd_prev['MACD'] <= macd_prev['MACD_Signal'] and macd_curr['MACD'] >= macd_curr[
-                'MACD_Signal']
+            macd_condition = macd_prev['MACD'] <= macd_prev['MACD_Signal'] and macd_curr['MACD'] >= macd_curr['MACD_Signal']
             if not (rsi_condition or macd_condition):
                 continue
 
-            df['ATR5'] = AverageTrueRange(high=df['high'], low=df['low'], close=df['close'],
-                                          window=5).average_true_range()
-            df['ATR10'] = AverageTrueRange(high=df['high'], low=df['low'], close=df['close'],
-                                           window=10).average_true_range()
-            df['ATR20'] = AverageTrueRange(high=df['high'], low=df['low'], close=df['close'],
-                                           window=20).average_true_range()
+            df['ATR5'] = AverageTrueRange(high=df['high'], low=df['low'], close=df['close'], window=5).average_true_range()
+            df['ATR10'] = AverageTrueRange(high=df['high'], low=df['low'], close=df['close'], window=10).average_true_range()
+            df['ATR20'] = AverageTrueRange(high=df['high'], low=df['low'], close=df['close'], window=20).average_true_range()
             atr = max(df.iloc[-1]['ATR5'], df.iloc[-1]['ATR10'], df.iloc[-1]['ATR20'])
             volume = int(min(money // atr, np.average(df['volume'][-20:]) // (atr ** (1 / 2))))
             if country == "USA":
@@ -146,8 +142,7 @@ def select_sell_korea_stocks(korea_investment: KoreaInvestmentAPI) -> dict:
         try:
             df = pd.DataFrame((
                 list((PriceHistory.select()
-                      .where(PriceHistory.date.between(datetime.datetime.now() - datetime.timedelta(days=365),
-                                                       datetime.datetime.now()) & (PriceHistory.symbol == stock.pdno))
+                      .where(PriceHistory.date.between(datetime.datetime.now() - datetime.timedelta(days=365), datetime.datetime.now()) & (PriceHistory.symbol == stock.pdno))
                       .order_by(PriceHistory.date)).dicts())
             ))
             data = filter_sell_stocks(df, stock.ord_psbl_qty)
@@ -165,9 +160,7 @@ def select_sell_overseas_stocks(korea_investment: KoreaInvestmentAPI, country: s
         try:
             df = pd.DataFrame((
                 list((PriceHistoryUS.select()
-                      .where(PriceHistoryUS.date.between(datetime.datetime.now() - datetime.timedelta(days=365),
-                                                         datetime.datetime.now()) & (
-                                     PriceHistoryUS.symbol == stock.ovrs_pdno))
+                      .where(PriceHistoryUS.date.between(datetime.datetime.now() - datetime.timedelta(days=365), datetime.datetime.now()) & (PriceHistoryUS.symbol == stock.ovrs_pdno))
                       .order_by(PriceHistoryUS.date)).dicts())
             ))
             df['open'] = df['open'].astype(float)
@@ -209,9 +202,7 @@ def trading_buy(korea_investment: KoreaInvestmentAPI, buy_levels):
                         korea_investment.buy_reserve(symbol=symbol, price=price, volume=volume, end_date=end_date)
                         money += price * volume
                     elif country == "USA":
-                        korea_investment.submit_overseas_reservation_order(country=country, action="buy", symbol=symbol,
-                                                                           price=str(round(price, 2)),
-                                                                           volume=str(volume))
+                        korea_investment.submit_overseas_reservation_order(country=country, action="buy", symbol=symbol, price=str(round(price, 2)), volume=str(volume))
                         money += price * volume
 
                 except Exception as e:
@@ -243,9 +234,7 @@ def trading_sell(korea_investment: KoreaInvestmentAPI, sell_levels):
             elif country == "USA":
                 if price < float(stock.pchs_avg_pric):
                     price = round(float(stock.pchs_avg_pric) * 1.025, 2)
-                korea_investment.submit_overseas_reservation_order(country=country, action="sell", symbol=symbol,
-                                                                   price=str(round(float(price), 2)),
-                                                                   volume=str(volume))
+                korea_investment.submit_overseas_reservation_order(country=country, action="sell", symbol=symbol, price=str(round(float(price), 2)), volume=str(volume))
 
 
 def update_sell_queue(ki_api: KoreaInvestmentAPI, country: str = "KOR"):
@@ -290,9 +279,7 @@ def update_sell_queue(ki_api: KoreaInvestmentAPI, country: str = "KOR"):
     if country == "KOR":
         owned_stock_info = ki_api.get_korea_owned_stock_info()
     else:
-        owned_stock_info = convert_overseas_to_domestic(
-            ki_api.get_oversea_owned_stock_info(country=country)
-        )
+        owned_stock_info = convert_overseas_to_domestic(ki_api.get_oversea_owned_stock_info(country=country))
 
     symbols = [s.pdno for s in owned_stock_info]
     stock_map = {s.symbol: s for s in Stock.select().where(Stock.symbol.in_(symbols))}
@@ -302,14 +289,12 @@ def update_sell_queue(ki_api: KoreaInvestmentAPI, country: str = "KOR"):
         if not stock_db:
             continue
         owned_volume = int(stock.hldg_qty)
-        total_db_volume = SellQueue.select(fn.SUM(SellQueue.volume)).where(
-            SellQueue.symbol == stock_db.symbol).scalar() or 0
+        total_db_volume = SellQueue.select(fn.SUM(SellQueue.volume)).where(SellQueue.symbol == stock_db.symbol).scalar() or 0
 
         if owned_volume < total_db_volume:
             excess_volume = total_db_volume - owned_volume
             while excess_volume > 0:
-                smallest_price_entry = SellQueue.select().where(SellQueue.symbol == stock_db.symbol).order_by(
-                    SellQueue.price).first()
+                smallest_price_entry = SellQueue.select().where(SellQueue.symbol == stock_db.symbol).order_by(SellQueue.price).first()
                 if smallest_price_entry:
                     if smallest_price_entry.volume <= excess_volume:
                         excess_volume -= smallest_price_entry.volume
@@ -360,8 +345,7 @@ def stop_loss_notify(korea_investment: KoreaInvestmentAPI):
 
 def korea_trading():
     """Main entry to run daily domestic trading tasks."""
-    ki_api = KoreaInvestmentAPI(app_key=setting_env.APP_KEY, app_secret=setting_env.APP_SECRET,
-                                account_number=setting_env.ACCOUNT_NUMBER, account_code=setting_env.ACCOUNT_CODE)
+    ki_api = KoreaInvestmentAPI(app_key=setting_env.APP_KEY, app_secret=setting_env.APP_SECRET, account_number=setting_env.ACCOUNT_NUMBER, account_code=setting_env.ACCOUNT_CODE)
     if ki_api.check_holiday(datetime.datetime.now().strftime("%Y%m%d")):
         logging.info(f'{datetime.datetime.now()} 휴장일')
         return
@@ -373,8 +357,7 @@ def korea_trading():
         sleep(1 * 60)
 
     update_sell_queue(ki_api=ki_api)
-    add_stock_price(country="KOR", start_date=datetime.datetime.now() - datetime.timedelta(days=5),
-                    end_date=datetime.datetime.now())
+    add_stock_price(country="KOR", start_date=datetime.datetime.now() - datetime.timedelta(days=5), end_date=datetime.datetime.now())
     for stock in ki_api.get_owned_stock_info():
         stop_loss_insert(stock.pdno, float(stock.pchs_avg_pric))
 
@@ -396,8 +379,7 @@ def korea_trading():
 
 def usa_trading():
     """Execute U.S. market trading workflow."""
-    ki_api = KoreaInvestmentAPI(app_key=setting_env.APP_KEY, app_secret=setting_env.APP_SECRET,
-                                account_number=setting_env.ACCOUNT_NUMBER, account_code=setting_env.ACCOUNT_CODE)
+    ki_api = KoreaInvestmentAPI(app_key=setting_env.APP_KEY, app_secret=setting_env.APP_SECRET, account_number=setting_env.ACCOUNT_NUMBER, account_code=setting_env.ACCOUNT_CODE)
     update_sell_queue(ki_api=ki_api, country="USA")
     usa_stock = select_buy_stocks(country="USA")
     usa_buy = threading.Thread(target=trading_buy, args=(ki_api, usa_stock,))
@@ -428,8 +410,7 @@ def usa_trading():
 
 
 if __name__ == "__main__":
-    ki_api = KoreaInvestmentAPI(app_key=setting_env.APP_KEY, app_secret=setting_env.APP_SECRET,
-                                account_number=setting_env.ACCOUNT_NUMBER, account_code=setting_env.ACCOUNT_CODE)
+    ki_api = KoreaInvestmentAPI(app_key=setting_env.APP_KEY, app_secret=setting_env.APP_SECRET, account_number=setting_env.ACCOUNT_NUMBER, account_code=setting_env.ACCOUNT_CODE)
 
     usa_stock = select_buy_stocks(country="USA")
     usa_buy = threading.Thread(target=trading_buy, args=(ki_api, usa_stock,))
