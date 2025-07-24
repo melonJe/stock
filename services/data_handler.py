@@ -13,6 +13,8 @@ from bs4 import BeautifulSoup
 from dateutil.relativedelta import relativedelta
 from ta.volatility import AverageTrueRange
 
+from apis.korea_investment import KoreaInvestmentAPI
+from config import setting_env
 from custom_exception.exception import NotFoundUrl
 from data.models import Stock, PriceHistory, PriceHistoryUS, Subscription, Blacklist, StopLoss
 from utils.data_util import upsert_many
@@ -223,6 +225,15 @@ def update_subscription_stock():
     # for stockList in (FinanceDataReader.StockListing('S&P500'), FinanceDataReader.StockListing('NASDAQ'),
     #                   FinanceDataReader.StockListing('NYSE')):
     #     data_to_insert.extend([{'symbol': symbol} for symbol in set(stockList.iloc[0:100]['Symbol'])])
+
+    ki_api = KoreaInvestmentAPI(app_key=setting_env.APP_KEY, app_secret=setting_env.APP_SECRET, account_number=setting_env.ACCOUNT_NUMBER, account_code=setting_env.ACCOUNT_CODE)
+    stock_data = ki_api.get_owned_stock_info()
+    if stock_data is None:
+        pass
+    elif isinstance(stock_data, list):
+        data_to_insert.extend([{'symbol': symbol} for symbol in [item.pdno for item in stock_data]])
+    else:  # 단일 객체
+        data_to_insert.extend([{'symbol': stock_data.pdno}])
 
     if data_to_insert:
         logging.info(f"{len(data_to_insert)}개 주식")
