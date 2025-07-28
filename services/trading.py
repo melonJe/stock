@@ -350,9 +350,6 @@ def korea_trading():
         logging.info(f'{datetime.datetime.now()} 휴장일')
         return
 
-    # stop_loss = threading.Thread(target=stop_loss_notify, args=(ki_api,))
-    # stop_loss.start()
-
     while datetime.datetime.now().time() < datetime.time(18, 15, 00):
         sleep(1 * 60)
 
@@ -361,13 +358,7 @@ def korea_trading():
     for stock in ki_api.get_owned_stock_info():
         stop_loss_insert(stock.pdno, float(stock.pchs_avg_pric))
 
-    sell_stock = select_sell_korea_stocks(ki_api)
-    sell_queue = {}
-    for sell in SellQueue.select().join(Stock, on=(SellQueue.symbol == Stock.symbol)).where(Stock.country == 'KOR'):
-        if sell.symbol not in sell_queue.keys():
-            sell_queue[sell.symbol] = {}
-        sell_queue[sell.symbol][sell.price] = sell.volume
-    sell_queue.update(sell_stock)
+    sell_queue = select_sell_korea_stocks(ki_api)
     sell = threading.Thread(target=trading_sell, args=(ki_api, sell_queue,))
     sell.start()
 
@@ -385,33 +376,10 @@ def usa_trading():
     usa_buy = threading.Thread(target=trading_buy, args=(ki_api, usa_stock,))
     usa_buy.start()
 
-    sell_stock = select_sell_overseas_stocks(ki_api)
-    sell_queue = {}
-
-    query = (SellQueue
-             .select()
-             .join(Stock, on=(SellQueue.symbol == Stock.symbol))
-             .where(Stock.country == 'USA')
-             .order_by(SellQueue.symbol, SellQueue.price))
-
-    last_price_per_symbol = {}
-    for sell in query:
-        last_price_per_symbol[sell.symbol] = sell.price
-    for sell in query:
-        if sell.price == last_price_per_symbol[sell.symbol]:
-            continue
-        if sell.symbol not in sell_queue.keys():
-            sell_queue[sell.symbol] = {}
-        sell_queue[sell.symbol][sell.price] = sell.volume
-
-    sell_queue.update(sell_stock)
+    sell_queue = select_sell_overseas_stocks(ki_api)
     sell = threading.Thread(target=trading_sell, args=(ki_api, sell_queue,))
     sell.start()
 
 
 if __name__ == "__main__":
-    ki_api = KoreaInvestmentAPI(app_key=setting_env.APP_KEY, app_secret=setting_env.APP_SECRET, account_number=setting_env.ACCOUNT_NUMBER, account_code=setting_env.ACCOUNT_CODE)
-
-    usa_stock = select_buy_stocks(country="USA")
-    usa_buy = threading.Thread(target=trading_buy, args=(ki_api, usa_stock,))
-    usa_buy.start()
+    pass
