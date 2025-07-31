@@ -82,7 +82,12 @@ def insert_stock(symbol: str, company_name: str = None, country: str = None):
     return new_stock
 
 
-def stock_dividend_filter(country="korea", min_yield=2.0, min_continuous_dividend_payout=10, min_payout_ratio=20.0, max_payout_ratio=60.0, min_conversion_ratio=1, max_count=20000):
+def stock_dividend_filter(country="korea",
+                          min_yield=2.0,
+                          min_continuous_dividend_payout=10,
+                          payout_ratio=True, min_payout_ratio=30.0, max_payout_ratio=50.0,
+                          conversion_ratio=True, min_conversion_ratio=1,
+                          max_count=20000):
     url = f"https://scanner.tradingview.com/{country}/scan?label-product=screener-stock"
     headers = {
         "Content-Type": "text/plain;charset=UTF-8",
@@ -192,16 +197,19 @@ def stock_dividend_filter(country="korea", min_yield=2.0, min_continuous_dividen
             return set()
 
         # 조건 필터링
-        filtered_df = df[
+        df = df[
             (df['dividend_yield'] > min_yield) &
-            (df['dividend_payout_ratio_ttm'] >= min_payout_ratio) &
-            (df['dividend_payout_ratio_ttm'] <= max_payout_ratio) &
             (df['continuous_dividend_payout'] >= min_continuous_dividend_payout)
             ]
-        if country == "america":
-            filtered_df = filtered_df[(filtered_df['cash_conversion_ratio'] >= min_conversion_ratio)]
 
-        return set(filtered_df['ticker'].tolist())
+        if payout_ratio:
+            df = df[(df['dividend_payout_ratio_ttm'] >= min_payout_ratio) &
+                    (df['dividend_payout_ratio_ttm'] <= max_payout_ratio)]
+
+        if conversion_ratio:
+            df = df[(df['cash_conversion_ratio'] >= min_conversion_ratio)]
+
+        return set(df['ticker'].tolist())
 
     except requests.RequestException as e:
         print(f"요청 실패: {e}")
@@ -216,9 +224,9 @@ def update_subscription_stock():
     data_to_insert = []
 
     # 한국 주식 프로세스
-    data_to_insert.extend([{'symbol': symbol} for symbol in stock_dividend_filter(min_yield=2.0, min_continuous_dividend_payout=5)])
+    data_to_insert.extend([{'symbol': symbol} for symbol in stock_dividend_filter(min_yield=2.0, min_continuous_dividend_payout=10, min_payout_ratio=0, max_payout_ratio=50)])
     # 미국 주식 프로세스
-    data_to_insert.extend([{'symbol': symbol} for symbol in stock_dividend_filter(country="america", min_yield=2.0, min_continuous_dividend_payout=5)])
+    data_to_insert.extend([{'symbol': symbol} for symbol in stock_dividend_filter(country="america", min_yield=2.0, min_continuous_dividend_payout=10, min_payout_ratio=20, max_payout_ratio=60)])
 
     ki_api = KoreaInvestmentAPI(app_key=setting_env.APP_KEY, app_secret=setting_env.APP_SECRET, account_number=setting_env.ACCOUNT_NUMBER, account_code=setting_env.ACCOUNT_CODE)
     stock_data = ki_api.get_owned_stock_info()
