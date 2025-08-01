@@ -358,7 +358,11 @@ def korea_trading():
     for stock in ki_api.get_owned_stock_info():
         stop_loss_insert(stock.pdno, float(stock.pchs_avg_pric))
 
-    sell_queue = select_sell_korea_stocks(ki_api)
+    sell_queue = {}
+    for sell in SellQueue.select().join(Stock, on=(SellQueue.symbol == Stock.symbol)).where(Stock.country == 'KOR'):
+        if sell.symbol not in sell_queue.keys():
+            sell_queue[sell.symbol] = {}
+        sell_queue[sell.symbol][sell.price] = sell.volume
     sell = threading.Thread(target=trading_sell, args=(ki_api, sell_queue,))
     sell.start()
 
@@ -376,7 +380,11 @@ def usa_trading():
     usa_buy = threading.Thread(target=trading_buy, args=(ki_api, usa_stock,))
     usa_buy.start()
 
-    sell_queue = select_sell_overseas_stocks(ki_api)
+    sell_queue = {}
+    for sell in SellQueue.select().join(Stock, on=(SellQueue.symbol == Stock.symbol)).where(Stock.country == 'USA'):
+        if sell.symbol not in sell_queue.keys():
+            sell_queue[sell.symbol] = {}
+        sell_queue[sell.symbol][sell.price] = sell.volume
     sell = threading.Thread(target=trading_sell, args=(ki_api, sell_queue,))
     sell.start()
 
