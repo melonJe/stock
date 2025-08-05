@@ -63,9 +63,12 @@ def select_buy_stocks(country: str = "KOR") -> dict:
             if len(df) < 200:
                 continue
 
-            if country == 'KOR' and df.iloc[-1]['close'] * df['volume'].rolling(window=50).mean().iloc[
-                -1] < 20000000 * usd_krw:
+            if not df[240:-1]['close'].max() * 0.75 < df.iloc[-1]['close']:
                 continue
+
+            if country == 'KOR' and df.iloc[-1]['close'] * df['volume'].rolling(window=50).mean().iloc[-1] < 20000000 * usd_krw:
+                continue
+
             if country == 'USA' and df.iloc[-1]['close'] * df['volume'].rolling(window=50).mean().iloc[-1] < 20000000:
                 continue
 
