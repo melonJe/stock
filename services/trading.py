@@ -63,9 +63,6 @@ def select_buy_stocks(country: str = "KOR") -> dict:
             if len(df) < 200:
                 continue
 
-            if not (df.iloc[240:-1]['close'].max() + df.iloc[240:-1]['close'].min()) / 2 < df.iloc[-1]['close']:
-                continue
-
             if country == 'KOR' and df.iloc[-1]['close'] * df['volume'].rolling(window=50).mean().iloc[-1] < 20000000 * usd_krw:
                 continue
 
@@ -393,7 +390,4 @@ def usa_trading():
 
 
 if __name__ == "__main__":
-    ki_api = KoreaInvestmentAPI(app_key=setting_env.APP_KEY, app_secret=setting_env.APP_SECRET, account_number=setting_env.ACCOUNT_NUMBER, account_code=setting_env.ACCOUNT_CODE)
-    usa_stock = select_buy_stocks(country="USA")
-    usa_buy = threading.Thread(target=trading_buy, args=(ki_api, usa_stock,))
-    usa_buy.start()
+    pass
