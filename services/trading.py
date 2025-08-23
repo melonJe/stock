@@ -73,7 +73,8 @@ def select_buy_stocks(country: str = "KOR") -> dict:
             df['BB_Mavg'] = bollinger.bollinger_mavg()
             df['BB_Upper'] = bollinger.bollinger_hband()
             df['BB_Lower'] = bollinger.bollinger_lband()
-            if df.iloc[-1]['close'] > df.iloc[-1]['BB_Lower'] and df.iloc[-1]['low'] > df.iloc[-1]['BB_Lower']:
+            recent = df.tail(2)
+            if np.all(recent['close'] > recent['BB_Lower']) and np.all(recent['low'] > recent['BB_Lower']):
                 continue
 
             obv_indicator = OnBalanceVolumeIndicator(close=df['close'], volume=df['volume']).on_balance_volume()
@@ -115,7 +116,8 @@ def filter_sell_stocks(df: pd.DataFrame, volume) -> Union[dict, None]:
     df['BB_Mavg'] = bollinger.bollinger_mavg()
     df['BB_Upper'] = bollinger.bollinger_hband()
     df['BB_Lower'] = bollinger.bollinger_lband()
-    if df.iloc[-1]['close'] < df.iloc[-1]['BB_Upper'] and df.iloc[-1]['low'] < df.iloc[-1]['BB_Upper']:
+    recent = df.tail(2)
+    if np.all(recent['close'] < recent['BB_Upper']) and np.all(recent['low'] < recent['BB_Upper']):
         return None
 
     df['RSI'] = RSIIndicator(close=df['close'], window=7).rsi()
