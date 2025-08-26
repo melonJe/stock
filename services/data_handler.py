@@ -224,9 +224,9 @@ def update_subscription_stock():
     data_to_insert = []
 
     # 한국 주식 프로세스
-    data_to_insert.extend([{'symbol': symbol} for symbol in stock_dividend_filter(min_yield=2.0, min_continuous_dividend_payout=10, min_payout_ratio=0, max_payout_ratio=50)])
+    data_to_insert.extend([{'symbol': symbol} for symbol in stock_dividend_filter(min_yield=2.0, min_continuous_dividend_payout=3, min_payout_ratio=0, max_payout_ratio=50)])
     # 미국 주식 프로세스
-    data_to_insert.extend([{'symbol': symbol} for symbol in stock_dividend_filter(country="america", min_yield=2.0, min_continuous_dividend_payout=10, min_payout_ratio=20, max_payout_ratio=60)])
+    data_to_insert.extend([{'symbol': symbol} for symbol in stock_dividend_filter(country="america", min_yield=2.0, min_continuous_dividend_payout=5, min_payout_ratio=20, max_payout_ratio=60)])
 
     ki_api = KoreaInvestmentAPI(app_key=setting_env.APP_KEY, app_secret=setting_env.APP_SECRET, account_number=setting_env.ACCOUNT_NUMBER, account_code=setting_env.ACCOUNT_CODE)
     stock_data = ki_api.get_owned_stock_info()
