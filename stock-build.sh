@@ -1,45 +1,114 @@
 #!/bin/bash
 
-# 현재 위치 저장
-current_dir=$(pwd)
+# Enable strict mode
+set -euo pipefail
 
-# Branch 확인 (기본값: main)
-branch=${1:-main} # 첫 번째 인자를 사용하고, 없으면 기본값으로 'main' 사용
+# Configuration
+REPO_DIR="stock"
+REPO_URL="git@github.com:melonJe/stock.git"
+DEFAULT_BRANCH="main"
+DOCKER_IMAGE="stock:latest"
 
-# Branch 입력 확인
-echo "Selected branch: $branch"
+# Colors for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+NC='\033[0m' # No Color
 
-# stock 폴더 확인
-if [ -d "stock" ]; then
-    # 이미 폴더가 있으면 git fetch와 git status를 사용하여 업데이트 필요 여부 확인
-    echo "Checking for updates..."
-    cd "stock" || exit
-    git fetch origin "$branch"
-    # git status를 사용하여 로컬과 원격의 차이를 확인
-    if git diff --quiet "origin/$branch"; then
-        echo "Repository is already up to date. No further action required."
-        cd "$current_dir" || exit
-        exit 0
-    else
-        echo "Updates found. Pulling changes..."
-        git checkout "$branch" || { echo "Git checkout failed"; exit 1; }
-        git merge "origin/$branch" || { echo "Git merge failed"; exit 1; }
+# Logging functions
+log_info() {
+    echo -e "${GREEN}[INFO]${NC} $1"
+}
+
+log_warn() {
+    echo -e "${YELLOW}[WARN]${NC} $1"
+}
+
+log_error() {
+    echo -e "${RED}[ERROR]${NC} $1" >&2
+    exit 1
+}
+
+# Validate branch name
+validate_branch() {
+    local branch=$1
+    if ! git ls-remote --heads "$REPO_URL" "$branch" | grep -q "refs/heads/$branch"; then
+        log_error "Branch '$branch' does not exist in the repository"
     fi
-else
-    # 폴더가 없으면 git clone 실행
-    echo "Cloning repository..."
-    git clone -b "$branch" git@github.com:melonJe/stock.git "stock" || { echo "Git clone failed"; exit 1; }
-    cd "stock" || exit
-fi
+}
 
-# Docker 빌드
-docker build --tag stock:latest . || { echo "Docker build failed"; exit 1; }
+# Main execution
+main() {
+    local branch=${1:-$DEFAULT_BRANCH}
+    local current_dir
+    current_dir=$(pwd)
 
-# Docker Compose 파일 복사
-cp -f ./docker-compose.yml ../docker-compose.yml || { echo "Copy failed"; exit 1; }
+    log_info "Starting build process for branch: $branch"
+    
+    # Validate branch exists
+    log_info "Validating branch '$branch'..."
+    validate_branch "$branch"
 
-# 원래 위치로 돌아가기
-cd "$current_dir" || exit
+    # Handle repository
+    if [ -d "$REPO_DIR" ]; then
+        log_info "Repository exists, checking for updates..."
+        cd "$REPO_DIR" || log_error "Failed to enter $REPO_DIR"
+        
+        # Fetch and check for updates
+        git fetch origin "$branch" || log_error "Failed to fetch from origin"
+        
+        local local_commit
+        local remote_commit
+        local_commit=$(git rev-parse "$branch")
+        remote_commit=$(git rev-parse "origin/$branch")
+        
+        if [ "$local_commit" = "$remote_commit" ]; then
+            log_info "Repository is already up to date. No changes to pull."
+        else
+            log_info "Updates found. Pulling changes..."
+            git checkout "$branch" || log_error "Failed to checkout branch $branch"
+            git reset --hard "origin/$branch" || log_error "Failed to reset to origin/$branch"
+            git clean -fd || log_warn "Failed to clean untracked files"
+        fi
+    else
+        log_info "Cloning repository..."
+        git clone --depth 1 --branch "$branch" "$REPO_URL" "$REPO_DIR" || 
+            log_error "Failed to clone repository"
+        cd "$REPO_DIR" || log_error "Failed to enter $REPO_DIR"
+    fi
 
-# docker-compose up -d 실행하고 더 이상 사용되지 않는 이미지 제거
-docker-compose down && docker-compose up -d && docker image prune -f || { echo "Docker Compose failed"; exit 1; }
+    # Build Docker image with build cache
+    log_info "Building Docker image..."
+    docker build --pull --cache-from "$DOCKER_IMAGE" -t "$DOCKER_IMAGE" . || 
+        log_error "Docker build failed"
+
+    # Copy docker-compose.yml if it exists
+    if [ -f "docker-compose.yml" ]; then
+        log_info "Updating docker-compose.yml..."
+        cp -f ./docker-compose.yml "$current_dir/" || 
+            log_warn "Failed to update docker-compose.yml"
+    fi
+
+    # Return to original directory
+    cd "$current_dir" || log_error "Failed to return to original directory"
+
+    # Start services
+    log_info "Starting services..."
+    if command -v docker-compose &> /dev/null; then
+        docker-compose down || log_warn "Failed to stop existing containers"
+        docker-compose up -d --remove-orphans || log_error "Failed to start services"
+    else
+        docker compose down || log_warn "Failed to stop existing containers"
+        docker compose up -d --remove-orphans || log_error "Failed to start services"
+    fi
+
+    # Clean up unused images
+    log_info "Cleaning up..."
+    docker image prune -af --filter "until=24h" || 
+        log_warn "Failed to clean up unused images"
+
+    log_info "Build and deployment completed successfully!"
+}
+
+# Execute main function
+main "$@"
