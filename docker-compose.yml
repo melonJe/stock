@@ -2,7 +2,7 @@
 #docker volume create stock_db_volume
 services:
   stock_db:
-    image: postgres:16-alpine
+    image: postgres:17.6
     container_name: stock-postgres
     networks:
       - melon-net
