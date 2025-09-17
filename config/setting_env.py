@@ -61,7 +61,3 @@ ACCOUNT_CODE = get_env("ACCOUNT_CODE")
 
 # 주요 환경 변수 로그
 logger.info("환경 변수가 성공적으로 로드되었습니다.")
-logger.info("DB_HOST: %s, DB_PORT: %d", DB_HOST, DB_PORT)
-logger.info("DISCORD_MESSAGE_URL: %s", DISCORD_MESSAGE_URL)
-logger.info("DISCORD_ERROR_URL: %s", DISCORD_ERROR_URL)
-logger.info("SIMULATE: %s, DOMAIN: %s", SIMULATE, DOMAIN)
