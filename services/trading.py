@@ -69,6 +69,30 @@ def select_buy_stocks(country: str = "KOR") -> dict:
             if country == 'USA' and df.iloc[-1]['close'] * df['volume'].rolling(window=50).mean().iloc[-1] < 20000000:
                 continue
 
+            # Weekly trend filter: convert daily to weekly and ensure uptrend
+            try:
+                df_tmp = df.copy()
+                df_tmp['date'] = pd.to_datetime(df_tmp['date'])
+                df_weekly = (
+                    df_tmp.set_index('date')
+                    .resample('W-FRI')
+                    .agg({'open': 'first', 'high': 'max', 'low': 'min', 'close': 'last', 'volume': 'sum'})
+                    .dropna(subset=['open', 'high', 'low', 'close'])
+                )
+                # Require sufficient weekly history for stable trend detection
+                if len(df_weekly) < 25:
+                    continue
+                df_weekly['SMA20W'] = df_weekly['close'].rolling(window=20).mean()
+                weekly_uptrend = (
+                        (df_weekly['close'].iloc[-1] > df_weekly['SMA20W'].iloc[-1])
+                        and (df_weekly['SMA20W'].iloc[-1] > df_weekly['SMA20W'].iloc[-2])
+                )
+                if not weekly_uptrend:
+                    continue
+            except Exception as e:
+                logging.error(f"Weekly trend check error for {symbol}: {e}")
+                continue
+
             bollinger = BollingerBands(close=df['close'], window=20, window_dev=2)
             df['BB_Mavg'] = bollinger.bollinger_mavg()
             df['BB_Upper'] = bollinger.bollinger_hband()
@@ -83,7 +107,7 @@ def select_buy_stocks(country: str = "KOR") -> dict:
 
             df['RSI'] = RSIIndicator(close=df['close'], window=7).rsi()
             rsi_curr, rsi_prev = df.iloc[-1]['RSI'], df.iloc[-2]['RSI']
-            rsi_condition = rsi_prev < rsi_curr < 40
+            rsi_condition = rsi_prev < rsi_curr < 30
             macd_indicator = MACD(close=df['close'], window_fast=12, window_slow=26, window_sign=9)
             df['MACD'], df['MACD_Signal'] = macd_indicator.macd(), macd_indicator.macd_signal()
             macd_curr, macd_prev = df.iloc[-1], df.iloc[-2]
@@ -100,7 +124,7 @@ def select_buy_stocks(country: str = "KOR") -> dict:
                 volume = int(min(money / usd_krw // atr, np.average(df['volume'][-20:]) // (atr ** (1 / 2))))
             buy_levels[symbol] = {
                 df.iloc[-1]['high']: volume // 9,
-                (df.iloc[-1]['open'] + df.iloc[-1]['close']) / 2: volume // 3,
+                # (df.iloc[-1]['open'] + df.iloc[-1]['close']) / 2: volume // 3,
                 df.iloc[-1]['low']: (volume * 5) // 9,
             }
         except Exception as e:
@@ -392,4 +416,4 @@ def usa_trading():
 
 
 if __name__ == "__main__":
-    pass
+    print(select_buy_stocks(country="USA"))
