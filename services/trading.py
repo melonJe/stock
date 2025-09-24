@@ -82,10 +82,10 @@ def select_buy_stocks(country: str = "KOR") -> dict:
                 # Require sufficient weekly history for stable trend detection
                 if len(df_weekly) < 25:
                     continue
-                df_weekly['SMA20W'] = df_weekly['close'].rolling(window=20).mean()
+                df_weekly['SMA5W'] = df_weekly['close'].rolling(window=5).mean()
                 weekly_uptrend = (
-                        (df_weekly['close'].iloc[-1] > df_weekly['SMA20W'].iloc[-1])
-                        and (df_weekly['SMA20W'].iloc[-1] > df_weekly['SMA20W'].iloc[-2])
+                        (df_weekly['close'].iloc[-1] > df_weekly['SMA5W'].iloc[-1])
+                        and (df_weekly['SMA5W'].iloc[-1] > df_weekly['SMA5W'].iloc[-2])
                 )
                 if not weekly_uptrend:
                     continue
