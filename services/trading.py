@@ -69,30 +69,6 @@ def select_buy_stocks(country: str = "KOR") -> dict:
             if country == 'USA' and df.iloc[-1]['close'] * df['volume'].rolling(window=50).mean().iloc[-1] < 20000000:
                 continue
 
-            # Weekly trend filter: convert daily to weekly and ensure uptrend
-            try:
-                df_tmp = df.copy()
-                df_tmp['date'] = pd.to_datetime(df_tmp['date'])
-                df_weekly = (
-                    df_tmp.set_index('date')
-                    .resample('W-FRI')
-                    .agg({'open': 'first', 'high': 'max', 'low': 'min', 'close': 'last', 'volume': 'sum'})
-                    .dropna(subset=['open', 'high', 'low', 'close'])
-                )
-                # Require sufficient weekly history for stable trend detection
-                if len(df_weekly) < 25:
-                    continue
-                df_weekly['SMA5W'] = df_weekly['close'].rolling(window=5).mean()
-                weekly_uptrend = (
-                        (df_weekly['close'].iloc[-1] > df_weekly['SMA5W'].iloc[-1])
-                        and (df_weekly['SMA5W'].iloc[-1] > df_weekly['SMA5W'].iloc[-2])
-                )
-                if not weekly_uptrend:
-                    continue
-            except Exception as e:
-                logging.error(f"Weekly trend check error for {symbol}: {e}")
-                continue
-
             bollinger = BollingerBands(close=df['close'], window=20, window_dev=2)
             df['BB_Mavg'] = bollinger.bollinger_mavg()
             df['BB_Upper'] = bollinger.bollinger_hband()
