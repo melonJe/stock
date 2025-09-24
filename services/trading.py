@@ -25,15 +25,24 @@ from utils.operations import price_refine
 
 
 def select_buy_stocks(country: str = "KOR") -> dict:
-    """Return candidate buy levels filtered by several indicators."""
-
+    
     buy_levels: dict[str, dict[float, int]] = {}
-    money = 50000
+
+    # Risk & liquidity config (override via config.setting_env)
+    risk_pct = getattr(setting_env, "RISK_PCT", 0.0051)  # 0.51% per trade
+    risk_k = getattr(setting_env, "RISK_ATR_MULT", 12.0)  # ATR multiple for risk distance
+    adtv_limit_ratio = getattr(setting_env, "ADTV_LIMIT_RATIO", 0.015)  # 1.5% of ADTV cap
+    default_equity_krw = getattr(setting_env, "EQUITY_KRW", 10_000_000.0)
+    default_equity_usd = getattr(setting_env, "EQUITY_USD", 10_000.0)
+
     usd_krw = FinanceDataReader.DataReader("USD/KRW").iloc[-1]["Adj Close"]
     anchor_date = datetime.datetime.now()
     if country == "USA":
         anchor_date -= datetime.timedelta(days=1)
     anchor_date = anchor_date.strftime("%Y-%m-%d")
+
+    equity_base = default_equity_usd if country == "USA" else default_equity_krw
+    risk_amount_value = equity_base * risk_pct
 
     blacklist_symbols = Blacklist.select(Blacklist.symbol)
     sub_symbols = Subscription.select(Subscription.symbol)
@@ -60,7 +69,7 @@ def select_buy_stocks(country: str = "KOR") -> dict:
             if not str(df.iloc[-1]['date']) == anchor_date:  # 마지막 데이터가 오늘이 아니면 pass
                 continue
 
-            if len(df) < 200:
+            if len(df) < 100:
                 continue
 
             if country == 'KOR' and df.iloc[-1]['close'] * df['volume'].rolling(window=50).mean().iloc[-1] < 10000000 * usd_krw:
@@ -73,12 +82,15 @@ def select_buy_stocks(country: str = "KOR") -> dict:
             df['BB_Mavg'] = bollinger.bollinger_mavg()
             df['BB_Upper'] = bollinger.bollinger_hband()
             df['BB_Lower'] = bollinger.bollinger_lband()
-            recent = df.tail(2)
+            # 최근 3봉 모두 하단 밴드 위에 있으면 리버전 관점에서 제외(잡음 완화)
+            recent = df.tail(3)
             if np.all(recent['close'] > recent['BB_Lower']) and np.all(recent['low'] > recent['BB_Lower']):
                 continue
 
-            obv_indicator = OnBalanceVolumeIndicator(close=df['close'], volume=df['volume']).on_balance_volume()
-            if not obv_indicator.iloc[-1] > obv_indicator.iloc[-4]:
+            obv_series = OnBalanceVolumeIndicator(close=df['close'], volume=df['volume']).on_balance_volume()
+            obv_sma = obv_series.rolling(window=10).mean()
+            # OBV SMA가 최근 4일 대비 상승 중인지 확인(완화된 추세 확인)
+            if pd.isna(obv_sma.iloc[-1]) or pd.isna(obv_sma.iloc[-4]) or not (obv_sma.iloc[-1] > obv_sma.iloc[-4]):
                 continue
 
             df['RSI'] = RSIIndicator(close=df['close'], window=7).rsi()
@@ -95,13 +107,32 @@ def select_buy_stocks(country: str = "KOR") -> dict:
             df['ATR10'] = AverageTrueRange(high=df['high'], low=df['low'], close=df['close'], window=10).average_true_range()
             df['ATR20'] = AverageTrueRange(high=df['high'], low=df['low'], close=df['close'], window=20).average_true_range()
             atr = max(df.iloc[-1]['ATR5'], df.iloc[-1]['ATR10'], df.iloc[-1]['ATR20'])
-            volume = int(min(money // atr, np.average(df['volume'][-20:]) // (atr ** (1 / 2))))
-            if country == "USA":
-                volume = int(min(money / usd_krw // atr, np.average(df['volume'][-20:]) // (atr ** (1 / 2))))
+            if pd.isna(atr) or atr <= 0:
+                continue
+
+            # Risk-based position sizing
+            base_shares = int(risk_amount_value / (atr * risk_k))
+            if base_shares <= 0:
+                continue
+
+            # Liquidity cap by ADTV
+            adtv = float(df.iloc[-1]['close']) * float(df['volume'].rolling(window=50).mean().iloc[-1])
+            if pd.isna(adtv) or adtv <= 0:
+                continue
+            shares_adtv_cap = int((adtv * adtv_limit_ratio) / float(df.iloc[-1]['close']))
+            volume = max(0, min(base_shares, shares_adtv_cap))
+            if volume <= 0:
+                continue
+
+            # Mean-reversion buy levels: mid-price and previous close
+            price_mid = (float(df.iloc[-1]['open']) + float(df.iloc[-1]['close'])) / 2
+            price_prev_close = float(df.iloc[-2]['close'])
+
+            vol_mid = int(volume // 3)
+            vol_prev = int(volume - vol_mid)
             buy_levels[symbol] = {
-                df.iloc[-1]['high']: volume // 9,
-                # (df.iloc[-1]['open'] + df.iloc[-1]['close']) / 2: volume // 3,
-                df.iloc[-1]['low']: (volume * 5) // 9,
+                price_mid: vol_mid,
+                price_prev_close: vol_prev,
             }
         except Exception as e:
             logging.error(f"select_buy_stocks Error occurred: {e}")
@@ -179,7 +210,7 @@ def select_sell_overseas_stocks(korea_investment: KoreaInvestmentAPI, country: s
 
 
 def trading_buy(korea_investment: KoreaInvestmentAPI, buy_levels):
-    """Submit buy orders for calculated levels."""
+    """Submit buy orders for calculated levels with ATR-based stop-loss preset."""
     try:
         end_date = korea_investment.get_nth_open_day(3)
     except Exception as e:
@@ -192,7 +223,33 @@ def trading_buy(korea_investment: KoreaInvestmentAPI, buy_levels):
         try:
             country = get_country_by_symbol(symbol)
             stock = korea_investment.get_owned_stock_info(symbol=symbol)
-            stop_loss_insert(symbol, min(levels.keys()) * 0.95)
+            # Compute ATR-based stop loss (based on expected weighted entry price)
+            stop_atr_mult = getattr(setting_env, "STOP_ATR_MULT", 1.2)
+            # expected weighted average entry from planned levels
+            try:
+                total_vol = sum(int(v) for v in levels.values() if v)
+                weighted_sum = sum(float(p) * int(v) for p, v in levels.items() if v)
+                expected_entry = (weighted_sum / total_vol) if total_vol > 0 else float(min(levels.keys()))
+            except Exception:
+                expected_entry = float(min(levels.keys()))
+            try:
+                df = fetch_price_dataframe(symbol)
+                if country == "USA":
+                    df['open'] = df['open'].astype(float)
+                    df['high'] = df['high'].astype(float)
+                    df['close'] = df['close'].astype(float)
+                    df['low'] = df['low'].astype(float)
+                df['ATR5'] = AverageTrueRange(high=df['high'], low=df['low'], close=df['close'], window=5).average_true_range()
+                df['ATR10'] = AverageTrueRange(high=df['high'], low=df['low'], close=df['close'], window=10).average_true_range()
+                df['ATR20'] = AverageTrueRange(high=df['high'], low=df['low'], close=df['close'], window=20).average_true_range()
+                atr = max(df.iloc[-1]['ATR5'], df.iloc[-1]['ATR10'], df.iloc[-1]['ATR20'])
+                if pd.isna(atr) or atr <= 0:
+                    stop_loss_price = expected_entry * 0.95  # fallback to 5% below expected entry
+                else:
+                    stop_loss_price = max(0.0, expected_entry - atr * float(stop_atr_mult))
+            except Exception:
+                stop_loss_price = expected_entry * 0.95  # fallback
+            stop_loss_insert(symbol, stop_loss_price)
             for price, volume in levels.items():
                 if stock and price > float(stock.pchs_avg_pric) * 0.975:
                     continue
