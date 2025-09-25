@@ -38,8 +38,8 @@ def calc_adjusted_volumes(volume: int, base_price: float, country: str) -> Itera
     """Return tuples of ``(volume, price)`` adjusted for sell queue operations."""
     if country == "KOR":
         return [
-            (volume - int(volume * 0.5), math.ceil(base_price * 1.080)),
-            (int(volume * 0.5), math.ceil(base_price * 1.155)),
+            (volume - int(volume * 0.5), math.ceil(price_refine(base_price * 1.080))),
+            (int(volume * 0.5), math.ceil(price_refine(base_price * 1.155))),
         ]
 
     if country == "USA":

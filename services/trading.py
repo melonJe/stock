@@ -25,7 +25,6 @@ from utils.operations import price_refine
 
 
 def select_buy_stocks(country: str = "KOR") -> dict:
-    
     buy_levels: dict[str, dict[float, int]] = {}
 
     # Risk & liquidity config (override via config.setting_env)
@@ -449,4 +448,4 @@ def usa_trading():
 
 
 if __name__ == "__main__":
-    print(select_buy_stocks(country="USA"))
+    print(select_buy_stocks())
