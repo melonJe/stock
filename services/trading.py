@@ -27,14 +27,15 @@ from utils.operations import price_refine
 def select_buy_stocks(country: str = "KOR") -> dict:
     buy_levels: dict[str, dict[float, int]] = {}
 
+    usd_krw = FinanceDataReader.DataReader("USD/KRW").iloc[-1]["Adj Close"]
+
     # Risk & liquidity config (override via config.setting_env)
     risk_pct = getattr(setting_env, "RISK_PCT", 0.0051)  # 0.51% per trade
     risk_k = getattr(setting_env, "RISK_ATR_MULT", 12.0)  # ATR multiple for risk distance
     adtv_limit_ratio = getattr(setting_env, "ADTV_LIMIT_RATIO", 0.015)  # 1.5% of ADTV cap
-    default_equity_krw = getattr(setting_env, "EQUITY_KRW", 10_000_000.0)
-    default_equity_usd = getattr(setting_env, "EQUITY_USD", 10_000.0)
+    default_equity_krw = getattr(setting_env, "EQUITY_KRW", 100_000_000.0)
+    default_equity_usd = getattr(setting_env, "EQUITY_USD", 100_000.0)
 
-    usd_krw = FinanceDataReader.DataReader("USD/KRW").iloc[-1]["Adj Close"]
     anchor_date = datetime.datetime.now()
     if country == "USA":
         anchor_date -= datetime.timedelta(days=1)
@@ -82,7 +83,7 @@ def select_buy_stocks(country: str = "KOR") -> dict:
             df['BB_Upper'] = bollinger.bollinger_hband()
             df['BB_Lower'] = bollinger.bollinger_lband()
             # 최근 3봉 모두 하단 밴드 위에 있으면 리버전 관점에서 제외(잡음 완화)
-            recent = df.tail(3)
+            recent = df.tail(2)
             if np.all(recent['close'] > recent['BB_Lower']) and np.all(recent['low'] > recent['BB_Lower']):
                 continue
 
@@ -123,16 +124,40 @@ def select_buy_stocks(country: str = "KOR") -> dict:
             if volume <= 0:
                 continue
 
-            # Mean-reversion buy levels: mid-price and previous close
-            price_mid = (float(df.iloc[-1]['open']) + float(df.iloc[-1]['close'])) / 2
-            price_prev_close = float(df.iloc[-2]['close'])
+            # Support-based buy levels: recent pivot low and deeper support (BB lower or ATR-projected)
+            # 1) 최근 피벗 저점 탐지 (local minimum)
+            df['pivot_low_flag'] = (df['low'] < df['low'].shift(1)) & (df['low'] < df['low'].shift(-1))
+            pivots_window = df.tail(30)
+            pivots = pivots_window[pivots_window['pivot_low_flag']]
+            if len(pivots) > 0:
+                pivot_low_val = float(pivots.iloc[-1]['low'])
+            else:
+                # 피벗이 없으면 최근 5거래일(당일 제외) 최저가 사용
+                pivot_low_val = float(df['low'].rolling(window=5).min().iloc[-2])
 
-            vol_mid = int(volume // 3)
-            vol_prev = int(volume - vol_mid)
-            buy_levels[symbol] = {
-                price_mid: vol_mid,
-                price_prev_close: vol_prev,
-            }
+            bb_lower_today = float(df.iloc[-1]['BB_Lower']) if not pd.isna(df.iloc[-1]['BB_Lower']) else np.nan
+            # 안전한 폴백 처리
+            if pd.isna(pivot_low_val) or pivot_low_val <= 0:
+                pivot_low_val = float(df['low'].rolling(window=10).min().iloc[-2])
+            if pd.isna(bb_lower_today) or bb_lower_today <= 0:
+                # 볼린저 하단이 없으면 최근 20일 10% 분위값을 근사 하단으로 사용
+                bb_lower_today = float(df['low'].rolling(window=20).quantile(0.1).iloc[-2])
+
+            # 두 개의 지지선 가격 산정
+            price_s1 = max(0.0, float(pivot_low_val))
+            deeper_candidate = float(pivot_low_val) - 0.5 * float(atr)
+            price_s2 = max(0.0, float(min(bb_lower_today, deeper_candidate)))
+
+            # 물량 배분 (1/3, 2/3). 동일 가격이면 합산 처리
+            vol_s1 = int(volume // 3)
+            vol_s2 = int(volume - vol_s1)
+            if abs(price_s1 - price_s2) < 1e-8:
+                buy_levels[symbol] = {price_s1: int(volume)}
+            else:
+                buy_levels[symbol] = {
+                    price_s1: vol_s1,
+                    price_s2: vol_s2,
+                }
         except Exception as e:
             logging.error(f"select_buy_stocks Error occurred: {e}")
     return buy_levels
