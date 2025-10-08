@@ -19,7 +19,7 @@ from data.dto.account_dto import convert_overseas_to_domestic
 from data.dto.stock_trade_dto import convert_overseas_to_stock_trade
 from data.models import Blacklist, Stock, StopLoss, Subscription, PriceHistory, PriceHistoryUS, SellQueue
 from services.data_handler import stop_loss_insert, get_country_by_symbol, add_stock_price
-from services.trading_helpers import fetch_price_dataframe, calc_adjusted_volumes
+from services.trading_helpers import fetch_price_dataframe, calc_adjusted_volumes, compute_resistance_prices
 from utils import discord
 from utils.operations import price_refine
 
@@ -164,20 +164,29 @@ def select_buy_stocks(country: str = "KOR") -> dict:
 
 
 def filter_sell_stocks(df: pd.DataFrame, volume) -> Union[dict, None]:
-    if len(df) < 200:
+    if len(df) < 100:
         return None
 
-    bollinger = BollingerBands(close=df['close'], window=10, window_dev=2)
+    bollinger = BollingerBands(close=df['close'], window=20, window_dev=2)
     df['BB_Mavg'] = bollinger.bollinger_mavg()
     df['BB_Upper'] = bollinger.bollinger_hband()
     df['BB_Lower'] = bollinger.bollinger_lband()
     recent = df.tail(2)
-    if np.all(recent['close'] < recent['BB_Upper']) and np.all(recent['low'] < recent['BB_Upper']):
+    # 매수 필터가 하단 밴드 인접/하회 구간을 요구하는 것에 대칭되게,
+    # 매도는 상단 밴드 인접/상회 구간만 통과시킨다.
+    if np.all(recent['close'] < recent['BB_Upper']) and np.all(recent['high'] < recent['BB_Upper']):
+        return None
+
+    # OBV 10SMA가 최근 4일 대비 하락 중인지 확인(매수의 상승 확인에 대한 대칭)
+    obv_series = OnBalanceVolumeIndicator(close=df['close'], volume=df['volume']).on_balance_volume()
+    obv_sma = obv_series.rolling(window=10).mean()
+    if pd.isna(obv_sma.iloc[-1]) or pd.isna(obv_sma.iloc[-4]) or not (obv_sma.iloc[-1] < obv_sma.iloc[-4]):
         return None
 
     df['RSI'] = RSIIndicator(close=df['close'], window=7).rsi()
     rsi_curr, rsi_prev = df.iloc[-1]['RSI'], df.iloc[-2]['RSI']
-    rsi_condition = rsi_curr < rsi_prev
+    # 과매수(>70)에서 하락 전환
+    rsi_condition = (rsi_prev > rsi_curr) and (rsi_curr > 70)
     macd_indicator = MACD(close=df['close'], window_fast=12, window_slow=26, window_sign=9)
     df['MACD'], df['MACD_Signal'] = macd_indicator.macd(), macd_indicator.macd_signal()
     macd_curr, macd_prev = df.iloc[-1], df.iloc[-2]
@@ -185,11 +194,50 @@ def filter_sell_stocks(df: pd.DataFrame, volume) -> Union[dict, None]:
     if not (rsi_condition or macd_condition):
         return None
 
-    return {
-        df.iloc[-1]['high']: int(volume) // 12,
-        df.iloc[-1]['close']: int(volume) // 3,
-        df.iloc[-1]['low']: int(volume) // 12
-    }
+    # 저항선 기반 매도 레벨 산정: 최근 pivot high와 더 높은 저항(BB Upper 또는 ATR 기반 상향 추정)
+    df['ATR5'] = AverageTrueRange(high=df['high'], low=df['low'], close=df['close'], window=5).average_true_range()
+    df['ATR10'] = AverageTrueRange(high=df['high'], low=df['low'], close=df['close'], window=10).average_true_range()
+    df['ATR20'] = AverageTrueRange(high=df['high'], low=df['low'], close=df['close'], window=20).average_true_range()
+    atr = max(df.iloc[-1]['ATR5'], df.iloc[-1]['ATR10'], df.iloc[-1]['ATR20'])
+    if pd.isna(atr) or atr <= 0:
+        atr = 0.0
+
+    # 최근 피벗 고점 탐지 (local maximum)
+    df['pivot_high_flag'] = (df['high'] > df['high'].shift(1)) & (df['high'] > df['high'].shift(-1))
+    pivots_window = df.tail(30)
+    pivots = pivots_window[pivots_window['pivot_high_flag']]
+    if len(pivots) > 0:
+        pivot_high_val = float(pivots.iloc[-1]['high'])
+    else:
+        # 피벗이 없으면 최근 5거래일(당일 제외) 최고가 사용
+        pivot_high_val = float(df['high'].rolling(window=5).max().iloc[-2])
+
+    bb_upper_today = float(df.iloc[-1]['BB_Upper']) if not pd.isna(df.iloc[-1]['BB_Upper']) else np.nan
+    # 안전한 폴백 처리
+    if pd.isna(pivot_high_val) or pivot_high_val <= 0:
+        pivot_high_val = float(df['high'].rolling(window=10).max().iloc[-2])
+    if pd.isna(bb_upper_today) or bb_upper_today <= 0:
+        # 볼린저 상단이 없으면 최근 20일 90% 분위값을 근사 상단으로 사용
+        bb_upper_today = float(df['high'].rolling(window=20).quantile(0.9).iloc[-2])
+
+    # 세 개의 저항선 가격 산정: pivot high, BB Upper, ATR 상향 추정
+    price_r1 = max(0.0, float(pivot_high_val))
+    price_r2 = max(0.0, float(bb_upper_today))
+    price_r3 = max(0.0, float(pivot_high_val + 0.5 * float(atr)))
+
+    # 물량 배분: 1/12, 1/3, 1/12 (기존 분배 정책 유지)
+    v1 = int(int(volume) // 12)
+    v2 = int(int(volume) // 3)
+    v3 = int(int(volume) // 12)
+
+    levels: dict[float, int] = {}
+    for pr, vol in [(price_r1, v1), (price_r2, v2), (price_r3, v3)]:
+        if vol > 0:
+            levels[pr] = levels.get(pr, 0) + vol
+
+    if not levels:
+        return None
+    return levels
 
 
 def select_sell_korea_stocks(korea_investment: KoreaInvestmentAPI) -> dict:
@@ -337,12 +385,35 @@ def update_sell_queue(ki_api: KoreaInvestmentAPI, country: str = "KOR"):
         trade_type = trade.sll_buy_dvsn_cd
 
         if trade_type == "02":
-            base = float(getattr(trade, "pchs_avg_pric", price))
-            volumes_and_prices = calc_adjusted_volumes(volume, base, country)
+            # 매수 체결 시: 최근 가격 이력 기반의 저항선 3레벨로 판매 가격을 분산 설정
+            try:
+                df_hist = fetch_price_dataframe(trade.pdno)
+                r1, r2, r3 = compute_resistance_prices(df_hist)
+                # 국가별 가격 정제
+                if country == "KOR":
+                    p1 = price_refine(r1)
+                    p2 = price_refine(r2)
+                    p3 = price_refine(r3)
+                else:  # USA 등 해외
+                    p1 = round(float(r1), 2)
+                    p2 = round(float(r2), 2)
+                    p3 = round(float(r3), 2)
 
-            for vol, prc in volumes_and_prices:
-                if vol > 0:
-                    sell_queue_entries[(trade.pdno, prc)] = sell_queue_entries.get((trade.pdno, prc), 0) + vol
+                # 볼륨을 3등분(합계 보존)
+                v1 = int(volume // 3)
+                v2 = int((volume - v1) // 2)
+                v3 = int(volume - v1 - v2)
+
+                for vol_i, pr_i in ((v1, p1), (v2, p2), (v3, p3)):
+                    if vol_i > 0:
+                        sell_queue_entries[(trade.pdno, pr_i)] = sell_queue_entries.get((trade.pdno, pr_i), 0) + vol_i
+            except Exception:
+                # 폴백: 기존 고정 비율 기반 가격 생성
+                base = float(getattr(trade, "pchs_avg_pric", price))
+                volumes_and_prices = calc_adjusted_volumes(volume, base, country)
+                for vol, prc in volumes_and_prices:
+                    if vol > 0:
+                        sell_queue_entries[(trade.pdno, prc)] = sell_queue_entries.get((trade.pdno, prc), 0) + vol
 
         elif trade_type == "01":
             sell_queue_entries[(trade.pdno, price)] = sell_queue_entries.get((trade.pdno, price), 0) - volume
