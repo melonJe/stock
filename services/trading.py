@@ -78,6 +78,17 @@ def select_buy_stocks(country: str = "KOR") -> dict:
             if country == 'USA' and df.iloc[-1]['close'] * df['volume'].rolling(window=50).mean().iloc[-1] < 20000000:
                 continue
 
+            df_res = df[['date', 'open', 'high', 'low', 'close', 'volume']].copy()
+            df_res['date_dt'] = pd.to_datetime(df_res['date'], errors='coerce')
+            df_res = df_res.dropna(subset=['date_dt']).sort_values('date_dt')
+            if len(df_res) >= 2:
+                weekly = df_res.resample('W-FRI', on='date_dt').agg({'open': 'first', 'high': 'max', 'low': 'min', 'close': 'last', 'volume': 'sum'}).dropna()
+                monthly = df_res.resample('M', on='date_dt').agg({'open': 'first', 'high': 'max', 'low': 'min', 'close': 'last', 'volume': 'sum'}).dropna()
+                weekly_down = len(weekly) >= 2 and float(weekly['close'].iloc[-1]) < float(weekly['close'].iloc[-2])
+                monthly_down = len(monthly) >= 2 and float(monthly['close'].iloc[-1]) < float(monthly['close'].iloc[-2])
+                if weekly_down or monthly_down:
+                    continue
+
             bollinger = BollingerBands(close=df['close'], window=20, window_dev=2)
             df['BB_Mavg'] = bollinger.bollinger_mavg()
             df['BB_Upper'] = bollinger.bollinger_hband()
