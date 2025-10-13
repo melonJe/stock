@@ -44,23 +44,6 @@ def select_buy_stocks(country: str = "KOR") -> dict:
     equity_base = default_equity_usd if country == "USA" else default_equity_krw
     risk_amount_value = equity_base * risk_pct
 
-    stats = {
-        "scanned": 0,
-        "not_today": 0,
-        "too_short": 0,
-        "liquidity_fail": 0,
-        "htf_fail": 0,
-        "bb_fail": 0,
-        "obv_fail": 0,
-        "rsi_macd_fail": 0,
-        "daily_conf_fail": 0,
-        "atr_fail": 0,
-        "base_shares_zero": 0,
-        "adtv_na": 0,
-        "volume_zero": 0,
-        "success": 0,
-    }
-
     def higher_timeframe_ok(df_all: pd.DataFrame) -> bool:
         df_res = df_all[['date', 'open', 'high', 'low', 'close', 'volume']].copy()
         df_res['date_dt'] = pd.to_datetime(df_res['date'], errors='coerce')
@@ -119,7 +102,6 @@ def select_buy_stocks(country: str = "KOR") -> dict:
 
     for symbol in stocks:
         try:
-            stats["scanned"] += 1
             df = fetch_price_dataframe(symbol)
 
             if country == 'USA':
@@ -129,23 +111,18 @@ def select_buy_stocks(country: str = "KOR") -> dict:
                 df['low'] = df['low'].astype(float)
 
             if not str(df.iloc[-1]['date']) == anchor_date:  # 마지막 데이터가 오늘이 아니면 pass
-                stats["not_today"] += 1
                 continue
 
             if len(df) < 100:
-                stats["too_short"] += 1
                 continue
 
             if country == 'KOR' and df.iloc[-1]['close'] * df['volume'].rolling(window=50).mean().iloc[-1] < 10000000 * usd_krw:
-                stats["liquidity_fail"] += 1
                 continue
 
             if country == 'USA' and df.iloc[-1]['close'] * df['volume'].rolling(window=50).mean().iloc[-1] < 20000000:
-                stats["liquidity_fail"] += 1
                 continue
 
             if not higher_timeframe_ok(df):
-                stats["htf_fail"] += 1
                 continue
 
             bollinger = BollingerBands(close=df['close'], window=20, window_dev=2)
@@ -153,11 +130,9 @@ def select_buy_stocks(country: str = "KOR") -> dict:
             df['BB_Upper'] = bollinger.bollinger_hband()
             df['BB_Lower'] = bollinger.bollinger_lband()
             if not bb_proximity_ok(df, tol=0.05):
-                stats["bb_fail"] += 1
                 continue
 
             if not obv_sma_rising(df, steps=3):
-                stats["obv_fail"] += 1
                 continue
 
             df['RSI'] = RSIIndicator(close=df['close'], window=7).rsi()
@@ -168,11 +143,9 @@ def select_buy_stocks(country: str = "KOR") -> dict:
             macd_curr, macd_prev = df.iloc[-1], df.iloc[-2]
             macd_condition = macd_prev['MACD'] <= macd_prev['MACD_Signal'] and macd_curr['MACD'] >= macd_curr['MACD_Signal']
             if not (rsi_condition or macd_condition):
-                stats["rsi_macd_fail"] += 1
                 continue
-            
+
             if not (float(df.iloc[-1]['close']) > float(df.iloc[-2]['low'])):
-                stats["daily_conf_fail"] += 1
                 continue
 
             df['ATR5'] = AverageTrueRange(high=df['high'], low=df['low'], close=df['close'], window=5).average_true_range()
@@ -180,24 +153,20 @@ def select_buy_stocks(country: str = "KOR") -> dict:
             df['ATR20'] = AverageTrueRange(high=df['high'], low=df['low'], close=df['close'], window=20).average_true_range()
             atr = max(df.iloc[-1]['ATR5'], df.iloc[-1]['ATR10'], df.iloc[-1]['ATR20'])
             if pd.isna(atr) or atr <= 0:
-                stats["atr_fail"] += 1
                 continue
 
             # Risk-based position sizing
             base_shares = int(risk_amount_value / (atr * risk_k))
             if base_shares <= 0:
-                stats["base_shares_zero"] += 1
                 continue
 
             # Liquidity cap by ADTV
             adtv = float(df.iloc[-1]['close']) * float(df['volume'].rolling(window=50).mean().iloc[-1])
             if pd.isna(adtv) or adtv <= 0:
-                stats["adtv_na"] += 1
                 continue
             shares_adtv_cap = int((adtv * adtv_limit_ratio) / float(df.iloc[-1]['close']))
             volume = max(0, min(base_shares, shares_adtv_cap))
             if volume <= 0:
-                stats["volume_zero"] += 1
                 continue
 
             # Support-based buy levels: recent pivot low and deeper support (BB lower or ATR-projected)
@@ -234,15 +203,8 @@ def select_buy_stocks(country: str = "KOR") -> dict:
                     price_s1: vol_s1,
                     price_s2: vol_s2,
                 }
-            stats["success"] += 1
         except Exception as e:
             logging.error(f"select_buy_stocks Error occurred: {e}")
-    logging.info(
-        f"select_buy_stocks stats: scanned={stats['scanned']}, not_today={stats['not_today']}, too_short={stats['too_short']}, "
-        f"liquidity_fail={stats['liquidity_fail']}, htf_fail={stats['htf_fail']}, bb_fail={stats['bb_fail']}, obv_fail={stats['obv_fail']}, "
-        f"rsi_macd_fail={stats['rsi_macd_fail']}, daily_conf_fail={stats['daily_conf_fail']}, atr_fail={stats['atr_fail']}, "
-        f"base_shares_zero={stats['base_shares_zero']}, adtv_na={stats['adtv_na']}, volume_zero={stats['volume_zero']}, success={stats['success']}"
-    )
     return buy_levels
 
 
