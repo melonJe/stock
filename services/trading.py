@@ -44,6 +44,67 @@ def select_buy_stocks(country: str = "KOR") -> dict:
     equity_base = default_equity_usd if country == "USA" else default_equity_krw
     risk_amount_value = equity_base * risk_pct
 
+    stats = {
+        "scanned": 0,
+        "not_today": 0,
+        "too_short": 0,
+        "liquidity_fail": 0,
+        "htf_fail": 0,
+        "bb_fail": 0,
+        "obv_fail": 0,
+        "rsi_macd_fail": 0,
+        "daily_conf_fail": 0,
+        "atr_fail": 0,
+        "base_shares_zero": 0,
+        "adtv_na": 0,
+        "volume_zero": 0,
+        "success": 0,
+    }
+
+    def higher_timeframe_ok(df_all: pd.DataFrame) -> bool:
+        df_res = df_all[['date', 'open', 'high', 'low', 'close', 'volume']].copy()
+        df_res['date_dt'] = pd.to_datetime(df_res['date'], errors='coerce')
+        df_res = df_res.dropna(subset=['date_dt']).sort_values('date_dt')
+        weekly_ok = False
+        monthly_ok = False
+        if len(df_res) >= 2:
+            weekly = df_res.resample('W-FRI', on='date_dt').agg({'open': 'first', 'high': 'max', 'low': 'min', 'close': 'last', 'volume': 'sum'}).dropna()
+            monthly = df_res.resample('M', on='date_dt').agg({'open': 'first', 'high': 'max', 'low': 'min', 'close': 'last', 'volume': 'sum'}).dropna()
+            if len(weekly) >= 3:
+                wk_close_prev = float(weekly['close'].iloc[-2])
+                wk_sma20_series = weekly['close'].rolling(20).mean()
+                wk_sma20_prev = wk_sma20_series.iloc[-2] if len(wk_sma20_series) >= 2 else np.nan
+                if not pd.isna(wk_sma20_prev):
+                    weekly_ok = bool(wk_close_prev > float(wk_sma20_prev))
+                else:
+                    wk_down1 = bool(weekly['close'].iloc[-2] < weekly['close'].iloc[-3])
+                    wk_down2 = bool(weekly['close'].iloc[-3] < weekly['close'].iloc[-4]) if len(weekly) >= 4 else False
+                    weekly_ok = not (wk_down1 and wk_down2)
+            if len(monthly) >= 2:
+                mo_sma10_series = monthly['close'].rolling(10).mean()
+                mo_sma10_prev = mo_sma10_series.iloc[-2] if len(mo_sma10_series) >= 2 else np.nan
+                if not pd.isna(mo_sma10_prev):
+                    mo_close_prev = float(monthly['close'].iloc[-2])
+                    monthly_ok = bool(mo_close_prev >= float(mo_sma10_prev))
+        return bool(weekly_ok or monthly_ok)
+
+    def bb_proximity_ok(df_all: pd.DataFrame, tol: float = 0.05) -> bool:
+        val_l = df_all['BB_Lower'].iloc[-1]
+        val_c = df_all['close'].iloc[-1]
+        if pd.isna(val_l) or pd.isna(val_c) or float(val_l) <= 0:
+            return False
+        dist = abs(float(val_c) - float(val_l)) / float(val_l)
+        return bool(dist <= tol)
+
+    def obv_sma_rising(df_all: pd.DataFrame, steps: int = 3) -> bool:
+        obv_series = OnBalanceVolumeIndicator(close=df_all['close'], volume=df_all['volume']).on_balance_volume()
+        obv_sma = obv_series.rolling(window=10).mean()
+        if len(obv_sma) < steps + 1:
+            return False
+        if pd.isna(obv_sma.iloc[-1]) or pd.isna(obv_sma.iloc[-steps]):
+            return False
+        return bool(obv_sma.iloc[-1] > obv_sma.iloc[-steps])
+
     blacklist_symbols = Blacklist.select(Blacklist.symbol)
     sub_symbols = Subscription.select(Subscription.symbol)
     stocks_query = (
@@ -58,6 +119,7 @@ def select_buy_stocks(country: str = "KOR") -> dict:
 
     for symbol in stocks:
         try:
+            stats["scanned"] += 1
             df = fetch_price_dataframe(symbol)
 
             if country == 'USA':
@@ -67,41 +129,35 @@ def select_buy_stocks(country: str = "KOR") -> dict:
                 df['low'] = df['low'].astype(float)
 
             if not str(df.iloc[-1]['date']) == anchor_date:  # 마지막 데이터가 오늘이 아니면 pass
+                stats["not_today"] += 1
                 continue
 
             if len(df) < 100:
+                stats["too_short"] += 1
                 continue
 
             if country == 'KOR' and df.iloc[-1]['close'] * df['volume'].rolling(window=50).mean().iloc[-1] < 10000000 * usd_krw:
+                stats["liquidity_fail"] += 1
                 continue
 
             if country == 'USA' and df.iloc[-1]['close'] * df['volume'].rolling(window=50).mean().iloc[-1] < 20000000:
+                stats["liquidity_fail"] += 1
                 continue
 
-            df_res = df[['date', 'open', 'high', 'low', 'close', 'volume']].copy()
-            df_res['date_dt'] = pd.to_datetime(df_res['date'], errors='coerce')
-            df_res = df_res.dropna(subset=['date_dt']).sort_values('date_dt')
-            if len(df_res) >= 2:
-                weekly = df_res.resample('W-FRI', on='date_dt').agg({'open': 'first', 'high': 'max', 'low': 'min', 'close': 'last', 'volume': 'sum'}).dropna()
-                monthly = df_res.resample('M', on='date_dt').agg({'open': 'first', 'high': 'max', 'low': 'min', 'close': 'last', 'volume': 'sum'}).dropna()
-                weekly_down = len(weekly) >= 2 and float(weekly['close'].iloc[-1]) < float(weekly['close'].iloc[-2])
-                monthly_down = len(monthly) >= 2 and float(monthly['close'].iloc[-1]) < float(monthly['close'].iloc[-2])
-                if weekly_down or monthly_down:
-                    continue
+            if not higher_timeframe_ok(df):
+                stats["htf_fail"] += 1
+                continue
 
             bollinger = BollingerBands(close=df['close'], window=20, window_dev=2)
             df['BB_Mavg'] = bollinger.bollinger_mavg()
             df['BB_Upper'] = bollinger.bollinger_hband()
             df['BB_Lower'] = bollinger.bollinger_lband()
-            # 최근 3봉 모두 하단 밴드 위에 있으면 리버전 관점에서 제외(잡음 완화)
-            recent = df.tail(2)
-            if np.all(recent['close'] > recent['BB_Lower']) and np.all(recent['low'] > recent['BB_Lower']):
+            if not bb_proximity_ok(df, tol=0.05):
+                stats["bb_fail"] += 1
                 continue
 
-            obv_series = OnBalanceVolumeIndicator(close=df['close'], volume=df['volume']).on_balance_volume()
-            obv_sma = obv_series.rolling(window=10).mean()
-            # OBV SMA가 최근 4일 대비 상승 중인지 확인(완화된 추세 확인)
-            if pd.isna(obv_sma.iloc[-1]) or pd.isna(obv_sma.iloc[-4]) or not (obv_sma.iloc[-1] > obv_sma.iloc[-4]):
+            if not obv_sma_rising(df, steps=3):
+                stats["obv_fail"] += 1
                 continue
 
             df['RSI'] = RSIIndicator(close=df['close'], window=7).rsi()
@@ -112,6 +168,11 @@ def select_buy_stocks(country: str = "KOR") -> dict:
             macd_curr, macd_prev = df.iloc[-1], df.iloc[-2]
             macd_condition = macd_prev['MACD'] <= macd_prev['MACD_Signal'] and macd_curr['MACD'] >= macd_curr['MACD_Signal']
             if not (rsi_condition or macd_condition):
+                stats["rsi_macd_fail"] += 1
+                continue
+            
+            if not (float(df.iloc[-1]['close']) > float(df.iloc[-2]['low'])):
+                stats["daily_conf_fail"] += 1
                 continue
 
             df['ATR5'] = AverageTrueRange(high=df['high'], low=df['low'], close=df['close'], window=5).average_true_range()
@@ -119,20 +180,24 @@ def select_buy_stocks(country: str = "KOR") -> dict:
             df['ATR20'] = AverageTrueRange(high=df['high'], low=df['low'], close=df['close'], window=20).average_true_range()
             atr = max(df.iloc[-1]['ATR5'], df.iloc[-1]['ATR10'], df.iloc[-1]['ATR20'])
             if pd.isna(atr) or atr <= 0:
+                stats["atr_fail"] += 1
                 continue
 
             # Risk-based position sizing
             base_shares = int(risk_amount_value / (atr * risk_k))
             if base_shares <= 0:
+                stats["base_shares_zero"] += 1
                 continue
 
             # Liquidity cap by ADTV
             adtv = float(df.iloc[-1]['close']) * float(df['volume'].rolling(window=50).mean().iloc[-1])
             if pd.isna(adtv) or adtv <= 0:
+                stats["adtv_na"] += 1
                 continue
             shares_adtv_cap = int((adtv * adtv_limit_ratio) / float(df.iloc[-1]['close']))
             volume = max(0, min(base_shares, shares_adtv_cap))
             if volume <= 0:
+                stats["volume_zero"] += 1
                 continue
 
             # Support-based buy levels: recent pivot low and deeper support (BB lower or ATR-projected)
@@ -169,8 +234,15 @@ def select_buy_stocks(country: str = "KOR") -> dict:
                     price_s1: vol_s1,
                     price_s2: vol_s2,
                 }
+            stats["success"] += 1
         except Exception as e:
             logging.error(f"select_buy_stocks Error occurred: {e}")
+    logging.info(
+        f"select_buy_stocks stats: scanned={stats['scanned']}, not_today={stats['not_today']}, too_short={stats['too_short']}, "
+        f"liquidity_fail={stats['liquidity_fail']}, htf_fail={stats['htf_fail']}, bb_fail={stats['bb_fail']}, obv_fail={stats['obv_fail']}, "
+        f"rsi_macd_fail={stats['rsi_macd_fail']}, daily_conf_fail={stats['daily_conf_fail']}, atr_fail={stats['atr_fail']}, "
+        f"base_shares_zero={stats['base_shares_zero']}, adtv_na={stats['adtv_na']}, volume_zero={stats['volume_zero']}, success={stats['success']}"
+    )
     return buy_levels
 
 
