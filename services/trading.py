@@ -52,7 +52,7 @@ def select_buy_stocks(country: str = "KOR") -> dict:
         monthly_ok = False
         if len(df_res) >= 2:
             weekly = df_res.resample('W-FRI', on='date_dt').agg({'open': 'first', 'high': 'max', 'low': 'min', 'close': 'last', 'volume': 'sum'}).dropna()
-            monthly = df_res.resample('M', on='date_dt').agg({'open': 'first', 'high': 'max', 'low': 'min', 'close': 'last', 'volume': 'sum'}).dropna()
+            monthly = df_res.resample('ME', on='date_dt').agg({'open': 'first', 'high': 'max', 'low': 'min', 'close': 'last', 'volume': 'sum'}).dropna()
             if len(weekly) >= 3:
                 wk_close_prev = float(weekly['close'].iloc[-2])
                 wk_sma20_series = weekly['close'].rolling(20).mean()
