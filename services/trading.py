@@ -71,13 +71,17 @@ def select_buy_stocks(country: str = "KOR") -> dict:
                     monthly_ok = bool(mo_close_prev >= float(mo_sma10_prev))
         return bool(weekly_ok or monthly_ok)
 
-    def bb_proximity_ok(df_all: pd.DataFrame, tol: float = 0.05) -> bool:
-        val_l = df_all['BB_Lower'].iloc[-1]
-        val_c = df_all['close'].iloc[-1]
-        if pd.isna(val_l) or pd.isna(val_c) or float(val_l) <= 0:
+    def bb_proximity_ok(df_all: pd.DataFrame, tol: float = 0.1, use_low: bool = True, lookback: int = 3) -> bool:
+        df_tail = df_all.tail(int(max(1, lookback)))
+        lower = df_tail['BB_Lower']
+        upper = df_tail['BB_Upper']
+        denom = upper  - lower
+        price_series = np.minimum(df_tail['close'], df_tail['low']) if use_low else df_tail['close']
+        valid = (~pd.isna(lower)) & (~pd.isna(upper)) & (~pd.isna(price_series)) & (denom > 0)
+        if not valid.any():
             return False
-        dist = abs(float(val_c) - float(val_l)) / float(val_l)
-        return bool(dist <= tol)
+        pct_b = (price_series - lower) / denom
+        return bool((pct_b[valid] <= tol).any())
 
     def obv_sma_rising(df_all: pd.DataFrame, steps: int = 3) -> bool:
         obv_series = OnBalanceVolumeIndicator(close=df_all['close'], volume=df_all['volume']).on_balance_volume()
@@ -129,7 +133,7 @@ def select_buy_stocks(country: str = "KOR") -> dict:
             df['BB_Mavg'] = bollinger.bollinger_mavg()
             df['BB_Upper'] = bollinger.bollinger_hband()
             df['BB_Lower'] = bollinger.bollinger_lband()
-            if not bb_proximity_ok(df, tol=0.05):
+            if not bb_proximity_ok(df, tol=0.1, use_low=True, lookback=3):
                 continue
 
             if not obv_sma_rising(df, steps=3):
