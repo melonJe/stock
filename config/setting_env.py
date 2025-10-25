@@ -56,8 +56,9 @@ APP_SECRET = get_env("APP_SECRET")
 SIMULATE = get_env("SIMULATE", "true").lower() not in ['false', 'f']
 TR_ID = "V" if SIMULATE else "T"
 DOMAIN = "https://openapivts.koreainvestment.com:29443" if SIMULATE else "https://openapi.koreainvestment.com:9443"
-ACCOUNT_NUMBER = get_env("ACCOUNT_NUMBER")
-ACCOUNT_CODE = get_env("ACCOUNT_CODE")
-
+ACCOUNT_NUMBER_KOR = get_env("ACCOUNT_NUMBER_KOR")
+ACCOUNT_CODE_KOR = get_env("ACCOUNT_CODE_KOR")
+ACCOUNT_NUMBER_USA = get_env("ACCOUNT_NUMBER_USA")
+ACCOUNT_CODE_USA = get_env("ACCOUNT_CODE_USA")
 # 주요 환경 변수 로그
 logger.info("환경 변수가 성공적으로 로드되었습니다.")

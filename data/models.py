@@ -84,6 +84,7 @@ class SellQueue(Model):
 
 class Subscription(Model):
     symbol = CharField()
+    category = CharField()
     id = BigAutoField(primary_key=True)
 
     class Meta:
