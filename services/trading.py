@@ -398,6 +398,10 @@ def filter_stable_for_sell(stocks_held: Union[List[StockResponseDTO], StockRespo
     sell_levels = {}
     for stock in (stocks_held or {}):
         symbol = stock.pdno
+        if Subscription.select().where(
+                (Subscription.category == "growth") & (Subscription.symbol == symbol)
+        ).exists():
+            continue
         qty = int(stock.hldg_qty)
         try:
             if qty <= 0:
