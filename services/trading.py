@@ -411,7 +411,13 @@ def filter_stable_for_sell(stocks_held: Union[List[StockResponseDTO], StockRespo
             if df is None or len(df) < 30:
                 continue
 
-            target_price = max(float(stock.prpr) * 1.01, float(stock.pchs_avg_pric) * 1.025)
+            bollinger = BollingerBands(close=df['close'], window=20, window_dev=2)
+            df['BB_Upper'] = bollinger.bollinger_hband()
+            df['BB_Lower'] = bollinger.bollinger_lband()
+            bollinger_upper = df['BB_Upper'].iloc[-1] - (df['BB_Upper'].iloc[-1] - df['BB_Lower'].iloc[-1]) * 0.1
+            target_price = max(float(stock.prpr) * 1.01, float(stock.pchs_avg_pric) * 1.025, bollinger_upper)
+            if pd.isna(target_price) or target_price <= 0:
+                continue
 
             lookback = 120
             window_df = df.tail(lookback).copy()
