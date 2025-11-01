@@ -315,7 +315,7 @@ def filter_stable_for_buy(country: str = "KOR") -> dict[str, dict[float, int]]:
             df['BB_Mavg'] = bollinger.bollinger_mavg()
             df['BB_Upper'] = bollinger.bollinger_hband()
             df['BB_Lower'] = bollinger.bollinger_lband()
-            if not bb_proximity_ok(df, tol=0.05, use_low=True, lookback=3):
+            if not bb_proximity_ok(df, tol=0.10, use_low=True, lookback=3):
                 continue
 
             if not obv_sma_rising(df, steps=3):
