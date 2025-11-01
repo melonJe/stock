@@ -23,10 +23,23 @@ from utils.operations import price_refine
 
 
 def select_buy_stocks(country: str = "KOR") -> dict[str, dict[float, int]]:
-    buy_levels: dict[str, dict[float, int]] = {}
-    buy_levels.update(filter_stable_for_buy(country=country))
-    buy_levels.update(filter_trend_for_buy(country=country))
+    buy_levels = {}
+    for d in [filter_stable_for_buy(country=country), filter_trend_for_buy(country=country)]:
+        for sym, price_dict in d.items():
+            for price, qty in price_dict.items():
+                buy_levels.setdefault(sym, {})
+                buy_levels[sym][price] = buy_levels[sym].get(price, 0) + qty
     return buy_levels
+
+
+def select_sell_stocks(stocks_held: Union[List[StockResponseDTO], StockResponseDTO, None], country: str = "KOR") -> dict[str, dict[float, int]]:
+    sell_levels = {}
+    for d in [filter_stable_for_sell(stocks_held), filter_trend_for_sell(stocks_held)]:
+        for sym, price_dict in d.items():
+            for price, qty in price_dict.items():
+                sell_levels.setdefault(sym, {})
+                sell_levels[sym][price] = sell_levels[sym].get(price, 0) + qty
+    return sell_levels
 
 
 def filter_trend_for_buy(country: str = "KOR") -> dict[str, dict[float, int]]:
@@ -188,7 +201,7 @@ def filter_trend_for_buy(country: str = "KOR") -> dict[str, dict[float, int]]:
     return buy_levels
 
 
-def filter_trend_for_sell(stocks_held: Union[List[StockResponseDTO], StockResponseDTO, None], country: str = "KOR") -> dict[str, dict[float, int]]:
+def filter_trend_for_sell(stocks_held: list[StockResponseDTO] | StockResponseDTO | None, country: str = "KOR") -> dict[str, dict[float, int]]:
     sell_levels = {}
     return sell_levels
 
@@ -381,8 +394,76 @@ def filter_stable_for_buy(country: str = "KOR") -> dict[str, dict[float, int]]:
     return buy_levels
 
 
-def filter_stable_for_sell(stocks_held: list[StockResponseDTO] | StockResponseDTO | None, country: str = "KOR") -> dict[str, dict[float, int]]:
+def filter_stable_for_sell(stocks_held: Union[List[StockResponseDTO], StockResponseDTO, None], country: str = "KOR") -> dict[str, dict[float, int]]:
     sell_levels = {}
+    for stock in (stocks_held or {}):
+        symbol = stock.pdno
+        qty = int(stock.hldg_qty)
+        try:
+            if qty <= 0:
+                continue
+
+            df = fetch_price_dataframe(symbol)
+            if df is None or len(df) < 30:
+                continue
+
+            target_price = max(float(stock.prpr) * 1.01, float(stock.pchs_avg_pric) * 1.025)
+
+            lookback = 120
+            window_df = df.tail(lookback).copy()
+            if len(window_df) < 5:
+                continue
+
+            # pivot high: 현재 high가 이전·다음의 high보다 큰 경우
+            window_df['pivot_high'] = (window_df['high'] > window_df['high'].shift(1)) & (window_df['high'] > window_df['high'].shift(-1))
+
+            pivots = window_df[window_df['pivot_high']]
+
+            # 후보 저항선: pivot 고점 중 target_price 이상인 값
+            candidate_resistances = []
+            if len(pivots) > 0:
+                # pivot의 high값을 사용
+                for val in pivots['high'].values:
+                    try:
+                        h = float(val)
+                        if h >= target_price:
+                            candidate_resistances.append(h)
+                    except Exception:
+                        continue
+
+            # 보조: pivot이 없거나 후보가 없으면 최근 고점(rolling max) 중 target 이상인 것 사용
+            if not candidate_resistances:
+                rolling_max_20 = window_df['high'].rolling(window=20, min_periods=5).max()
+                # 최근 3 지점에서 rolling max가 target 이상인 경우 후보로 추가
+                recent_rolling = rolling_max_20.dropna().iloc[-10:] if len(rolling_max_20.dropna()) > 0 else pd.Series(dtype=float)
+                for val in recent_rolling.values:
+                    try:
+                        v = float(val)
+                        if v >= target_price:
+                            candidate_resistances.append(v)
+                    except Exception:
+                        continue
+
+            if not candidate_resistances:
+                # 저항선 없음 -> 스킵
+                continue
+
+            # 가장 근접한(작은) 저항선 선택
+            resistance_price = float(np.min(candidate_resistances))
+
+            sell_qty = max(1, int(qty * 0.1))
+
+            # 가격 소수점 정리: 종목에 따라 틱 사이즈가 다를 수 있으므로 소수 2자리로 둠.
+            resistance_price = round(resistance_price, 2)
+
+            if get_country_by_symbol(symbol) == "KOR":
+                sell_levels[symbol] = {price_refine(int(resistance_price)): sell_qty}
+            elif get_country_by_symbol(symbol) == "USA":
+                sell_levels[symbol] = {resistance_price: sell_qty}
+
+        except Exception as e:
+            logging.error(f"sell_on_resistance 처리 중 에러: {symbol} -> {e}")
+            continue
     return sell_levels
 
 
@@ -400,32 +481,6 @@ def trading_buy(korea_investment: KoreaInvestmentAPI, buy_levels):
         try:
             country = get_country_by_symbol(symbol)
             stock = korea_investment.get_owned_stock_info(symbol=symbol)
-            # Compute ATR-based stop loss (based on expected weighted entry price)
-            stop_atr_mult = getattr(setting_env, "STOP_ATR_MULT", 1.2)
-            # expected weighted average entry from planned levels
-            try:
-                total_vol = sum(int(v) for v in levels.values() if v)
-                weighted_sum = sum(float(p) * int(v) for p, v in levels.items() if v)
-                expected_entry = (weighted_sum / total_vol) if total_vol > 0 else float(min(levels.keys()))
-            except Exception:
-                expected_entry = float(min(levels.keys()))
-            try:
-                df = fetch_price_dataframe(symbol)
-                if country == "USA":
-                    df['open'] = df['open'].astype(float)
-                    df['high'] = df['high'].astype(float)
-                    df['close'] = df['close'].astype(float)
-                    df['low'] = df['low'].astype(float)
-                df['ATR5'] = AverageTrueRange(high=df['high'], low=df['low'], close=df['close'], window=5).average_true_range()
-                df['ATR10'] = AverageTrueRange(high=df['high'], low=df['low'], close=df['close'], window=10).average_true_range()
-                df['ATR20'] = AverageTrueRange(high=df['high'], low=df['low'], close=df['close'], window=20).average_true_range()
-                atr = max(df.iloc[-1]['ATR5'], df.iloc[-1]['ATR10'], df.iloc[-1]['ATR20'])
-                if pd.isna(atr) or atr <= 0:
-                    stop_loss_price = expected_entry * 0.95  # fallback to 5% below expected entry
-                else:
-                    stop_loss_price = max(0.0, expected_entry - atr * float(stop_atr_mult))
-            except Exception:
-                stop_loss_price = expected_entry * 0.95  # fallback
             for price, volume in levels.items():
                 if stock and price > float(stock.pchs_avg_pric) * 0.975:
                     continue
@@ -511,4 +566,5 @@ def usa_trading():
 
 
 if __name__ == "__main__":
-    pass
+    ki_api = KoreaInvestmentAPI(app_key=setting_env.APP_KEY, app_secret=setting_env.APP_SECRET, account_number=setting_env.ACCOUNT_NUMBER_USA, account_code=setting_env.ACCOUNT_CODE_USA)
+    print(ki_api.get_owned_stock_info())

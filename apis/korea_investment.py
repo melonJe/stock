@@ -288,8 +288,14 @@ class KoreaInvestmentAPI:
             if result:
                 return result
             return self.get_oversea_owned_stock_info(country='USA', symbol=symbol)
-        else:
-            return self.get_korea_owned_stock_info() + convert_overseas_to_domestic(self.get_oversea_owned_stock_info(country='USA'))
+
+        korea_list = self.get_korea_owned_stock_info()
+        oversea_raw = self.get_oversea_owned_stock_info(country='USA')
+
+        korea_list = korea_list or []
+        oversea_list = convert_overseas_to_domestic(oversea_raw or [])
+
+        return korea_list + oversea_list
 
     def get_korea_owned_stock_info(self, symbol: str = None) -> Union[List[StockResponseDTO], StockResponseDTO, None]:
         """
