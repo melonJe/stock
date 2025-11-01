@@ -456,7 +456,7 @@ def trading_sell(korea_investment: KoreaInvestmentAPI, sell_levels):
     """Place sell orders for stocks present in the queue."""
     end_date = korea_investment.get_nth_open_day(1)
 
-    for symbol, levels in sell_levels.items():
+    for symbol, levels in (sell_levels or {}).items():
         country = get_country_by_symbol(symbol)
         stock = korea_investment.get_owned_stock_info(symbol=symbol)
         if not stock:

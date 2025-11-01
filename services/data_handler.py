@@ -436,17 +436,25 @@ def update_stock_listings():
 
     try:
         df_kr = FinanceDataReader.StockListing('KRX')
-        process_stock_listing(df_kr, 'Code', 'Name', "KOR")
+        try:
+            process_stock_listing(df_kr, 'Code', 'Name', "KOR")
+        except Exception as e:
+            logging.error(f"Error insert KOR data: {e}")
+    except Exception as e:
+        logging.error(f"Error loading KOR data: {e}")
 
+    try:
         df_us = pd.concat([
             FinanceDataReader.StockListing('S&P500'),
             FinanceDataReader.StockListing('NASDAQ'),
             FinanceDataReader.StockListing('NYSE')  # 주석 해제 시 추가 가능
         ])
-        process_stock_listing(df_us, "Symbol", "Name", "USA")
-
+        try:
+            process_stock_listing(df_us, "Symbol", "Name", "USA")
+        except Exception as e:
+            logging.error(f"Error insert USA data: {e}")
     except Exception as e:
-        logging.error(f"Error loading US data: {e}")
+        logging.error(f"Error loading USA data: {e}")
 
 
 def add_stock_price(symbol: str = None, country: str = None, start_date: datetime.datetime = None, end_date: datetime.datetime = None):
@@ -524,7 +532,7 @@ def add_price_for_symbol(symbol: str, start_date: datetime.datetime = None, end_
 
 
 if __name__ == "__main__":
-    update_subscription_stock()
+    update_stock_listings()
     # print(stock_dividend_filter(country="america", min_yield=2.0, min_continuous_dividend_payout=5, min_payout_ratio=20, max_payout_ratio=60))
     # print(len(stock_growth_filter(country="korea", min_rev_cagr=15.0, min_eps_cagr=10.0, min_roe=10.0, max_debt_to_equity=150.0, min_current_ratio=1.2, max_peg=1.15)))
     # print(len(stock_growth_filter(country="america", min_rev_cagr=20.0, min_eps_cagr=15, min_roe=15.0, max_debt_to_equity=100.0, min_current_ratio=1.5, max_peg=1.4)))
