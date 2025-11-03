@@ -51,13 +51,15 @@ DISCORD_MESSAGE_URL = get_env("DISCORD_MESSAGE_URL")
 DISCORD_ERROR_URL = get_env("DISCORD_ERROR_URL")
 
 # API 키와 시뮬레이션 모드
-APP_KEY = get_env("APP_KEY")
-APP_SECRET = get_env("APP_SECRET")
 SIMULATE = get_env("SIMULATE", "true").lower() not in ['false', 'f']
 TR_ID = "V" if SIMULATE else "T"
 DOMAIN = "https://openapivts.koreainvestment.com:29443" if SIMULATE else "https://openapi.koreainvestment.com:9443"
+APP_KEY_KOR = get_env("APP_KEY_KOR")
+APP_SECRET_KOR = get_env("APP_SECRET_KOR")
 ACCOUNT_NUMBER_KOR = get_env("ACCOUNT_NUMBER_KOR")
 ACCOUNT_CODE_KOR = get_env("ACCOUNT_CODE_KOR")
+APP_KEY_USA = get_env("APP_KEY_USA")
+APP_SECRET_USA = get_env("APP_SECRET_USA")
 ACCOUNT_NUMBER_USA = get_env("ACCOUNT_NUMBER_USA")
 ACCOUNT_CODE_USA = get_env("ACCOUNT_CODE_USA")
 # 주요 환경 변수 로그
