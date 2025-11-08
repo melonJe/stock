@@ -1,11 +1,19 @@
 """Utility helpers for the trading service."""
 
+import datetime
 import math
-from typing import Iterable, Tuple
+from typing import Iterable, Optional, Set, Tuple
 
-import pandas as pd
+import FinanceDataReader
 import numpy as np
+import pandas as pd
+from ta.momentum import RSIIndicator
+from ta.trend import MACD
 from ta.volatility import BollingerBands, AverageTrueRange
+from ta.volume import OnBalanceVolumeIndicator
+
+from config import setting_env
+from data.models import Blacklist, Stock, Subscription
 from services.data_handler import get_country_by_symbol, get_history_table
 from utils.operations import price_refine
 
@@ -104,3 +112,254 @@ def compute_resistance_prices(df: pd.DataFrame) -> Tuple[float, float, float]:
     price_r2 = max(0.0, float(bb_upper_today))
     price_r3 = max(0.0, float(atr_up))
     return price_r1, price_r2, price_r3
+
+
+def prepare_buy_context(country: str, category: str) -> tuple[str, float, float, float, Set[str], float]:
+    usd_krw = float(FinanceDataReader.DataReader("USD/KRW").iloc[-1]["Adj Close"])
+
+    risk_pct = float(getattr(setting_env, "RISK_PCT", 0.0051))
+    risk_k = float(getattr(setting_env, "RISK_ATR_MULT", 12.0))
+    adtv_limit_ratio = float(getattr(setting_env, "ADTV_LIMIT_RATIO", 0.015))
+    default_equity_krw = float(getattr(setting_env, "EQUITY_KRW", 100_000_000.0))
+    default_equity_usd = float(getattr(setting_env, "EQUITY_USD", 100_000.0))
+
+    anchor_date = datetime.datetime.now()
+    if country == "USA":
+        anchor_date -= datetime.timedelta(days=1)
+    anchor_date_str = anchor_date.strftime("%Y-%m-%d")
+
+    equity_base = default_equity_usd if country == "USA" else default_equity_krw
+    risk_amount_value = equity_base * risk_pct
+
+    blacklist_symbols = Blacklist.select(Blacklist.symbol)
+    sub_symbols = Subscription.select(Subscription.symbol).where(Subscription.category == category)
+    stocks_query = (
+        Stock.select(Stock.symbol)
+        .where(
+            (Stock.country == country)
+            & (Stock.symbol.in_(sub_symbols))
+            & ~(Stock.symbol.in_(blacklist_symbols))
+        )
+    )
+    stocks = {row.symbol for row in stocks_query}
+
+    return anchor_date_str, risk_amount_value, risk_k, adtv_limit_ratio, stocks, usd_krw
+
+
+def normalize_dataframe_for_country(df: pd.DataFrame, country: str) -> pd.DataFrame:
+    if country == "USA":
+        for column in ("open", "high", "close", "low"):
+            df[column] = df[column].astype(float)
+    return df
+
+
+def is_same_anchor_date(df: pd.DataFrame, anchor_date: str) -> bool:
+    try:
+        return str(df.iloc[-1]["date"]) == anchor_date
+    except (KeyError, IndexError):
+        return False
+
+
+def has_min_rows(df: pd.DataFrame, min_length: int) -> bool:
+    return len(df) >= min_length
+
+
+def calculate_adtv(df: pd.DataFrame) -> Optional[float]:
+    try:
+        rolling_volume = df["volume"].rolling(window=50).mean().iloc[-1]
+        if pd.isna(rolling_volume):
+            return None
+        return float(df.iloc[-1]["close"]) * float(rolling_volume)
+    except (KeyError, IndexError):
+        return None
+
+
+def meets_liquidity_threshold(adtv: Optional[float], country: str, usd_krw: float) -> bool:
+    if adtv is None or adtv <= 0:
+        return False
+    threshold = 10_000_000 * usd_krw if country == "KOR" else 20_000_000
+    return adtv >= threshold
+
+
+def calculate_atr(df: pd.DataFrame) -> Optional[float]:
+    atr_values: list[float] = []
+    try:
+        for window in (5, 10, 20):
+            atr_series = AverageTrueRange(high=df["high"], low=df["low"], close=df["close"], window=window).average_true_range()
+            atr_value = float(atr_series.iloc[-1])
+            if pd.isna(atr_value) or atr_value <= 0:
+                return None
+            atr_values.append(atr_value)
+    except (KeyError, IndexError):
+        return None
+    return max(atr_values) if atr_values else None
+
+
+def apply_bollinger_bands(df: pd.DataFrame, window: int = 20, window_dev: float = 2) -> pd.DataFrame:
+    if "close" not in df.columns:
+        return df
+    indicator = BollingerBands(close=df["close"], window=window, window_dev=window_dev)
+    df["BB_Mavg"] = indicator.bollinger_mavg()
+    df["BB_Upper"] = indicator.bollinger_hband()
+    df["BB_Lower"] = indicator.bollinger_lband()
+    return df
+
+
+def support_price_levels(df: pd.DataFrame, atr: float) -> Optional[tuple[float, float]]:
+    if atr <= 0:
+        return None
+    try:
+        df['pivot_low_flag'] = (df['low'] < df['low'].shift(1)) & (df['low'] < df['low'].shift(-1))
+        pivots_window = df.tail(30)
+        pivots = pivots_window[pivots_window['pivot_low_flag']]
+        if len(pivots) > 0:
+            pivot_low_val = float(pivots.iloc[-1]['low'])
+        else:
+            pivot_low_val = float(df['low'].rolling(window=5).min().iloc[-2])
+
+        bb_lower_today = float(df.iloc[-1]['BB_Lower']) if 'BB_Lower' in df.columns else np.nan
+        if pd.isna(pivot_low_val) or pivot_low_val <= 0:
+            pivot_low_val = float(df['low'].rolling(window=10).min().iloc[-2])
+        if pd.isna(bb_lower_today) or bb_lower_today <= 0:
+            bb_lower_today = float(df['low'].rolling(window=20).quantile(0.1).iloc[-2])
+
+        price_s1 = max(0.0, float(pivot_low_val))
+        deeper_candidate = float(pivot_low_val) - 0.5 * float(atr)
+        price_s2 = max(0.0, float(min(bb_lower_today, deeper_candidate)))
+        return price_s1, price_s2
+    except (KeyError, IndexError, ValueError):
+        return None
+
+
+def allocate_volume_to_levels(price_s1: float, price_s2: float, total_volume: int) -> dict[float, int]:
+    if total_volume <= 0:
+        return {}
+    if abs(price_s1 - price_s2) < 1e-8:
+        return {price_s1: int(total_volume)}
+    vol_s1 = int(total_volume // 3)
+    vol_s2 = int(total_volume - vol_s1)
+    return {price_s1: vol_s1, price_s2: vol_s2}
+
+
+def add_prev_close_allocation(levels: dict[float, int], df: pd.DataFrame, base_volume: int) -> dict[float, int]:
+    if base_volume <= 0 or len(df) < 2:
+        return levels
+
+    prev_close = df.iloc[-2]["close"]
+    if pd.isna(prev_close):
+        return levels
+
+    prev_close_value = float(prev_close)
+    if prev_close_value <= 0:
+        return levels
+
+    extra_volume = math.ceil(base_volume * 0.1)
+    if extra_volume <= 0:
+        return levels
+
+    levels[prev_close_value] = levels.get(prev_close_value, 0) + extra_volume
+    return levels
+
+
+def calculate_position_volume(
+        atr: Optional[float],
+        adtv: Optional[float],
+        close_price: float,
+        risk_amount_value: float,
+        risk_k: float,
+        adtv_limit_ratio: float,
+) -> int:
+    if atr is None or atr <= 0:
+        return 0
+    if adtv is None or adtv <= 0 or close_price <= 0:
+        return 0
+    base_shares = int(risk_amount_value / (atr * risk_k))
+    if base_shares <= 0:
+        return 0
+    shares_adtv_cap = int((adtv * adtv_limit_ratio) / close_price)
+    return max(0, min(base_shares, shares_adtv_cap))
+
+
+def higher_timeframe_ok(df_all: pd.DataFrame) -> bool:
+    df_res = df_all[["date", "open", "high", "low", "close", "volume"]].copy()
+    df_res["date_dt"] = pd.to_datetime(df_res["date"], errors="coerce")
+    df_res = df_res.dropna(subset=["date_dt"]).sort_values("date_dt")
+    weekly_ok = False
+    monthly_ok = False
+    if len(df_res) >= 2:
+        weekly = df_res.resample("W-FRI", on="date_dt").agg({"open": "first", "high": "max", "low": "min", "close": "last", "volume": "sum"}).dropna()
+        monthly = df_res.resample("ME", on="date_dt").agg({"open": "first", "high": "max", "low": "min", "close": "last", "volume": "sum"}).dropna()
+        if len(weekly) >= 3:
+            wk_close_prev = float(weekly["close"].iloc[-2])
+            wk_sma20_series = weekly["close"].rolling(20).mean()
+            wk_sma20_prev = wk_sma20_series.iloc[-2] if len(wk_sma20_series) >= 2 else np.nan
+            if not pd.isna(wk_sma20_prev):
+                weekly_ok = bool(wk_close_prev > float(wk_sma20_prev))
+            else:
+                wk_down1 = bool(weekly["close"].iloc[-2] < weekly["close"].iloc[-3])
+                wk_down2 = bool(weekly["close"].iloc[-3] < weekly["close"].iloc[-4]) if len(weekly) >= 4 else False
+                weekly_ok = not (wk_down1 and wk_down2)
+        if len(monthly) >= 2:
+            mo_sma10_series = monthly["close"].rolling(10).mean()
+            mo_sma10_prev = mo_sma10_series.iloc[-2] if len(mo_sma10_series) >= 2 else np.nan
+            if not pd.isna(mo_sma10_prev):
+                mo_close_prev = float(monthly["close"].iloc[-2])
+                monthly_ok = bool(mo_close_prev >= float(mo_sma10_prev))
+    return bool(weekly_ok or monthly_ok)
+
+
+def bb_proximity_ok(df_all: pd.DataFrame, tol: float = 0.05, use_low: bool = True, lookback: int = 3) -> bool:
+    df_tail = df_all.tail(int(max(1, lookback)))
+    lower = df_tail["BB_Lower"]
+    upper = df_tail["BB_Upper"]
+    denom = upper - lower
+    price_series = np.minimum(df_tail["close"], df_tail["low"]) if use_low else df_tail["close"]
+    valid = (~pd.isna(lower)) & (~pd.isna(upper)) & (~pd.isna(price_series)) & (denom > 0)
+    if not valid.any():
+        return False
+    pct_b = (price_series - lower) / denom
+    return bool((pct_b[valid] <= tol).any())
+
+
+def obv_sma_rising(df_all: pd.DataFrame, steps: int = 3) -> bool:
+    obv_series = OnBalanceVolumeIndicator(close=df_all["close"], volume=df_all["volume"]).on_balance_volume()
+    obv_sma = obv_series.rolling(window=10).mean()
+    if len(obv_sma) < steps + 1:
+        return False
+    if pd.isna(obv_sma.iloc[-1]) or pd.isna(obv_sma.iloc[-steps]):
+        return False
+    return bool(obv_sma.iloc[-1] > obv_sma.iloc[-steps])
+
+
+def macd_rebound_ok(df: pd.DataFrame) -> bool:
+    macd_indicator = MACD(close=df['close'], window_fast=12, window_slow=26, window_sign=9)
+    df['MACD'] = macd_indicator.macd()
+    df['MACD_Signal'] = macd_indicator.macd_signal()
+    if pd.isna(df['MACD'].iloc[-1]) or pd.isna(df['MACD_Signal'].iloc[-1]):
+        return False
+    macd_curr = float(df['MACD'].iloc[-1])
+    macd_prev = float(df['MACD'].iloc[-2])
+    sig_curr = float(df['MACD_Signal'].iloc[-1])
+    sig_prev = float(df['MACD_Signal'].iloc[-2])
+    recent_below_signal = bool((df['MACD'] <= df['MACD_Signal']).tail(6).head(5).any())
+    return (macd_curr >= sig_curr) and ((macd_curr - sig_curr) > (macd_prev - sig_prev)) and recent_below_signal
+
+
+def rsi_in_range(df: pd.DataFrame, window: int, lower: float, upper: float) -> bool:
+    rsi_series = RSIIndicator(close=df['close'], window=window).rsi()
+    if pd.isna(rsi_series.iloc[-1]):
+        return False
+    return lower <= float(rsi_series.iloc[-1]) <= upper
+
+
+def rsi_rebound_below(df: pd.DataFrame, window: int, upper_bound: float) -> bool:
+    rsi_series = RSIIndicator(close=df['close'], window=window).rsi()
+    if len(rsi_series) < 2:
+        return False
+    curr = rsi_series.iloc[-1]
+    prev = rsi_series.iloc[-2]
+    if pd.isna(curr) or pd.isna(prev):
+        return False
+    curr_val = float(curr)
+    prev_val = float(prev)
+    return prev_val < curr_val < upper_bound
