@@ -20,6 +20,7 @@ from services.trading_helpers import (
     calculate_atr,
     calculate_adtv,
     calculate_position_volume,
+    compute_resistance_prices,
     fetch_price_dataframe,
     higher_timeframe_ok,
     has_min_rows,
@@ -40,7 +41,11 @@ from utils.operations import price_refine
 
 def select_buy_stocks(country: str = "KOR") -> dict[str, dict[float, int]]:
     buy_levels = {}
-    for d in [filter_stable_for_buy(country=country), filter_trend_for_buy(country=country)]:
+    for d in [
+        filter_stable_for_buy(country=country),
+        filter_trend_for_buy(country=country),
+        filter_box_for_buy(country=country),
+    ]:
         for sym, price_dict in d.items():
             for price, qty in price_dict.items():
                 buy_levels.setdefault(sym, {})
@@ -50,7 +55,11 @@ def select_buy_stocks(country: str = "KOR") -> dict[str, dict[float, int]]:
 
 def select_sell_stocks(stocks_held: Union[List[StockResponseDTO], StockResponseDTO, None]) -> dict[str, dict[float, int]]:
     sell_levels = {}
-    for d in [filter_stable_for_sell(stocks_held), filter_trend_for_sell(stocks_held)]:
+    for d in [
+        filter_stable_for_sell(stocks_held),
+        filter_trend_for_sell(stocks_held),
+        filter_box_for_sell(stocks_held),
+    ]:
         for sym, price_dict in d.items():
             for price, qty in price_dict.items():
                 sell_levels.setdefault(sym, {})
@@ -220,11 +229,24 @@ def filter_stable_for_buy(country: str = "KOR") -> dict[str, dict[float, int]]:
 
 def filter_stable_for_sell(stocks_held: Union[List[StockResponseDTO], StockResponseDTO, None], country: str = "KOR") -> dict[str, dict[float, int]]:
     sell_levels = {}
+    growth_query = (
+        Subscription
+        .select(Subscription.symbol)
+        .where(Subscription.category == "growth")
+    )
+
+    growth_symbols = {
+        row.symbol
+        for row in (
+            Subscription
+        .select(Subscription.symbol)
+        .where(Subscription.category == "dividend")
+        .where(Subscription.symbol.not_in(growth_query))
+    )
+}
     for stock in (stocks_held or {}):
         symbol = stock.pdno
-        if Subscription.select().where(
-                (Subscription.category == "growth") & (Subscription.symbol == symbol)
-        ).exists():
+        if symbol in growth_symbols:
             continue
         qty = int(stock.hldg_qty)
         try:
@@ -300,6 +322,194 @@ def filter_stable_for_sell(stocks_held: Union[List[StockResponseDTO], StockRespo
             continue
     return sell_levels
 
+def filter_box_for_buy(country: str = "KOR") -> dict[str, dict[float, int]]:
+    anchor_date, risk_amount_value, risk_k, adtv_limit_ratio, stocks, usd_krw = prepare_buy_context(country, "box")
+    buy_levels: dict[str, dict[float, int]] = {}
+    for symbol in stocks:
+        try:
+            df = fetch_price_dataframe(symbol)
+            df = normalize_dataframe_for_country(df, country)
+
+            if not is_same_anchor_date(df, anchor_date):
+                continue
+            if not has_min_rows(df, 120):
+                continue
+
+            adtv = calculate_adtv(df)
+            if not meets_liquidity_threshold(adtv, country, usd_krw):
+                continue
+
+            df = apply_bollinger_bands(df)
+
+            bb_upper = df["BB_Upper"].iloc[-1]
+            bb_lower = df["BB_Lower"].iloc[-1]
+            bb_mavg = df["BB_Mavg"].iloc[-1]
+            if pd.isna(bb_upper) or pd.isna(bb_lower) or pd.isna(bb_mavg) or bb_mavg <= 0:
+                continue
+            width_ratio = float((bb_upper - bb_lower) / bb_mavg)
+            if not (0.07 <= width_ratio <= 0.18):
+                continue
+
+            sma20 = df["close"].rolling(window=20).mean()
+            if len(sma20) < 11 or pd.isna(sma20.iloc[-1]) or pd.isna(sma20.iloc[-11]):
+                continue
+            slope_ratio = abs(float(sma20.iloc[-1]) / float(sma20.iloc[-11]) - 1.0)
+            if slope_ratio > 0.05:
+                continue
+
+            if not higher_timeframe_ok(df):
+                continue
+            if not obv_sma_rising(df, steps=3):
+                continue
+
+            if not bb_proximity_ok(df, tol=0.15, use_low=True, lookback=3):
+                continue
+
+            atr = calculate_atr(df)
+            if atr is None:
+                continue
+
+            close_price = float(df.iloc[-1]["close"])
+            volume = calculate_position_volume(
+                atr=atr,
+                adtv=adtv,
+                close_price=close_price,
+                risk_amount_value=risk_amount_value,
+                risk_k=risk_k,
+                adtv_limit_ratio=adtv_limit_ratio,
+            )
+            if volume <= 0:
+                continue
+
+            support_levels = support_price_levels(df, atr)
+            if support_levels is None:
+                continue
+
+            levels = allocate_volume_to_levels(*support_levels, total_volume=volume)
+            if not levels:
+                continue
+
+            buy_levels[symbol] = add_prev_close_allocation(levels, df, volume)
+        except Exception as e:
+            logging.error(f"filter_box_for_buy Error occurred: {e}")
+    return buy_levels
+
+
+def filter_box_for_sell(stocks_held: list[StockResponseDTO] | StockResponseDTO | None, country: str = "KOR") -> dict[str, dict[float, int]]:
+    sell_levels: dict[str, dict[float, int]] = {}
+    if not stocks_held:
+        return sell_levels
+
+    holdings = stocks_held if isinstance(stocks_held, list) else [stocks_held]
+    growth_query = (
+        Subscription
+        .select(Subscription.symbol)
+        .where(Subscription.category == "growth")
+    )
+
+    box_symbols = {
+        row.symbol
+        for row in (
+            Subscription
+        .select(Subscription.symbol)
+        .where(Subscription.category == "box")
+        .where(Subscription.symbol.not_in(growth_query))
+    )
+}
+
+    for stock in holdings:
+        try:
+            symbol = stock.pdno
+            if symbol not in box_symbols:
+                continue
+
+            try:
+                qty = max(0, int(float(stock.hldg_qty)))
+            except (TypeError, ValueError):
+                continue
+            if qty <= 0:
+                continue
+
+            symbol_country = get_country_by_symbol(symbol)
+
+            df = fetch_price_dataframe(symbol)
+            if df is None or len(df) < 120:
+                continue
+
+            df = normalize_dataframe_for_country(df, symbol_country)
+            df = apply_bollinger_bands(df)
+
+            if len(df) < 2:
+                continue
+
+            try:
+                bb_upper = float(df["BB_Upper"].iloc[-1])
+                bb_lower = float(df["BB_Lower"].iloc[-1])
+                bb_mavg = float(df["BB_Mavg"].iloc[-1])
+                close_price = float(df.iloc[-1]["close"])
+                prev_close = float(df.iloc[-2]["close"])
+            except (TypeError, ValueError):
+                continue
+
+            if any(np.isnan(x) or x <= 0 for x in (bb_upper, bb_lower, bb_mavg, close_price, prev_close)):
+                continue
+
+            width_ratio = float((bb_upper - bb_lower) / bb_mavg) if bb_mavg else np.inf
+            sma20 = df["close"].rolling(window=20).mean()
+            slope_ratio = np.inf
+            if len(sma20) >= 11 and not pd.isna(sma20.iloc[-1]) and not pd.isna(sma20.iloc[-11]):
+                try:
+                    slope_ratio = abs(float(sma20.iloc[-1]) / float(sma20.iloc[-11]) - 1.0)
+                except (TypeError, ValueError):
+                    slope_ratio = np.inf
+
+            box_break = (
+                width_ratio < 0.05
+                or width_ratio > 0.22
+                or slope_ratio > 0.06
+                or close_price > bb_upper * 1.01
+                or close_price < bb_lower * 0.99
+            )
+
+            if box_break:
+                sell_qty = max(1, int(qty * 0.2))
+                target_price = prev_close if prev_close > 0 else close_price
+                if symbol_country == "KOR":
+                    price_key = price_refine(int(round(target_price)))
+                else:
+                    price_key = round(target_price, 2)
+                sell_levels.setdefault(symbol, {})
+                sell_levels[symbol][price_key] = sell_levels[symbol].get(price_key, 0) + sell_qty
+                continue
+
+            try:
+                price_r1, price_r2, price_r3 = compute_resistance_prices(df.copy())
+            except Exception:
+                price_r1 = price_r2 = price_r3 = 0.0
+
+            resistance_candidates = [r for r in (price_r1, price_r2, price_r3) if r and r > close_price]
+            if not resistance_candidates:
+                resistance_price = close_price * 1.02
+            else:
+                resistance_price = float(min(resistance_candidates))
+
+            if resistance_price <= 0:
+                continue
+
+            sell_qty = max(1, int(qty * 0.1))
+            if symbol_country == "KOR":
+                price_key = price_refine(int(round(resistance_price)))
+            else:
+                price_key = round(resistance_price, 2)
+
+            sell_levels.setdefault(symbol, {})
+            sell_levels[symbol][price_key] = sell_levels[symbol].get(price_key, 0) + sell_qty
+
+        except Exception as exc:
+            logging.error(f"filter_box_for_sell error: %s -> %s", getattr(stock, "pdno", "unknown"), exc)
+            continue
+
+    return sell_levels
 
 def trading_buy(korea_investment: KoreaInvestmentAPI, buy_levels):
     """Submit buy orders for calculated levels with ATR-based stop-loss preset."""
