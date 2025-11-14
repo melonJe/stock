@@ -1,5 +1,4 @@
 import datetime
-import json
 import logging
 import os
 import re
@@ -14,6 +13,10 @@ from dateutil.relativedelta import relativedelta
 
 from custom_exception.exception import NotFoundUrl
 from data.models import Stock, PriceHistory, PriceHistoryUS, Subscription, Blacklist
+from services.tradingview_scan import (
+    build_tradingview_payload,
+    request_tradingview_scan,
+)
 from utils.data_util import upsert_many
 
 
@@ -85,91 +88,24 @@ def stock_dividend_filter(country="korea",
                           payout_ratio=True, min_payout_ratio=30.0, max_payout_ratio=50.0,
                           conversion_ratio=True, min_conversion_ratio=1,
                           max_count=20000):
-    url = f"https://scanner.tradingview.com/{country}/scan?label-product=screener-stock"
-    headers = {
-        "Content-Type": "text/plain;charset=UTF-8",
-        "Accept": "application/json",
-        "Origin": "https://kr.tradingview.com",
-        "Referer": "https://kr.tradingview.com/",
-        "User-Agent": "Mozilla/5.0"
-    }
-
-    payload = {
-        "symbols": {},
-        "columns": ["name", "description", "logoid", "update_mode", "type", "typespecs",
-                    "dividends_yield",
-                    "dividend_payout_ratio_ttm",
-                    "continuous_dividend_payout",
-                    "cash_f_operating_activities_ttm",
-                    "net_income_fy",
-                    "exchange"
-                    ],
-        "filter": [
-            {"left": "is_primary", "operation": "equal", "right": True}
-        ],
-        "filter2": {
-            "operator": "and",
-            "operands": [
-                {
-                    "operation": {
-                        "operator": "or",
-                        "operands": [
-                            {
-                                "operation": {
-                                    "operator": "and",
-                                    "operands": [
-                                        {"expression": {"left": "type", "operation": "equal", "right": "stock"}},
-                                        {"expression": {"left": "typespecs", "operation": "has", "right": ["common"]}}
-                                    ]
-                                }
-                            },
-                            {
-                                "operation": {
-                                    "operator": "and",
-                                    "operands": [
-                                        {"expression": {"left": "type", "operation": "equal", "right": "stock"}},
-                                        {"expression": {"left": "typespecs", "operation": "has",
-                                                        "right": ["preferred"]}}
-                                    ]
-                                }
-                            },
-                            {
-                                "operation": {
-                                    "operator": "and",
-                                    "operands": [
-                                        {"expression": {"left": "type", "operation": "equal", "right": "dr"}}
-                                    ]
-                                }
-                            },
-                            {
-                                "operation": {
-                                    "operator": "and",
-                                    "operands": [
-                                        {"expression": {"left": "type", "operation": "equal", "right": "fund"}},
-                                        {"expression": {"left": "typespecs", "operation": "has_none_of",
-                                                        "right": ["etf"]}}
-                                    ]
-                                }
-                            }
-                        ]
-                    }
-                }
-            ]
-        },
-        "ignore_unknown_fields": False,
-        "markets": ["america"],
-        "options": {"lang": "ko"},
-        "range": [0, max_count],
-        "sort": {
-            "sortBy": "dividends_yield",
-            "sortOrder": "desc"
-        }
-    }
+    columns = [
+        "name", "description", "logoid", "update_mode", "type", "typespecs",
+        "dividends_yield",
+        "dividend_payout_ratio_ttm",
+        "continuous_dividend_payout",
+        "cash_f_operating_activities_ttm",
+        "net_income_fy",
+        "exchange",
+    ]
+    payload = build_tradingview_payload(
+        columns=columns,
+        max_count=max_count,
+        sort={"sortBy": "dividends_yield", "sortOrder": "desc"},
+        markets=["america"],
+    )
 
     try:
-        response = requests.post(url, headers=headers, data=json.dumps(payload))
-        response.raise_for_status()
-        result = response.json()
+        result = request_tradingview_scan(country, payload)
         # 데이터를 pandas DataFrame으로 변환
         data_list = []
         for item in result.get("data", []):
@@ -224,15 +160,6 @@ def stock_growth_filter(country="korea",
                         min_current_ratio: float = 1.0,
                         max_peg: float = 1.5,
                         max_count: int = 20000):
-    url = f"https://scanner.tradingview.com/{country}/scan?label-product=screener-stock"
-    headers = {
-        "Content-Type": "text/plain;charset=UTF-8",
-        "Accept": "application/json",
-        "Origin": "https://kr.tradingview.com",
-        "Referer": "https://kr.tradingview.com/",
-        "User-Agent": "Mozilla/5.0"
-    }
-
     columns = [
         "name",
         "total_revenue_cagr_5y", "total_revenue_yoy_growth_fy",
@@ -245,70 +172,16 @@ def stock_growth_filter(country="korea",
         "net_income_fq", "net_income_fh", "net_income_fy", "net_income_ttm"  # 순이익
     ]
 
-    payload = {
-        "symbols": {},
-        "columns": columns,
-        "filter": [
-            {"left": "is_primary", "operation": "equal", "right": True}
-        ],
-        "filter2": {
-            "operator": "and",
-            "operands": [
-                {
-                    "operation": {
-                        "operator": "or",
-                        "operands": [
-                            {
-                                "operation": {
-                                    "operator": "and",
-                                    "operands": [
-                                        {"expression": {"left": "type", "operation": "equal", "right": "stock"}},
-                                        {"expression": {"left": "typespecs", "operation": "has", "right": ["common"]}}
-                                    ]
-                                }
-                            },
-                            {
-                                "operation": {
-                                    "operator": "and",
-                                    "operands": [
-                                        {"expression": {"left": "type", "operation": "equal", "right": "stock"}},
-                                        {"expression": {"left": "typespecs", "operation": "has", "right": ["preferred"]}}
-                                    ]
-                                }
-                            },
-                            {
-                                "operation": {
-                                    "operator": "and",
-                                    "operands": [
-                                        {"expression": {"left": "type", "operation": "equal", "right": "dr"}}
-                                    ]
-                                }
-                            },
-                            {
-                                "operation": {
-                                    "operator": "and",
-                                    "operands": [
-                                        {"expression": {"left": "type", "operation": "equal", "right": "fund"}},
-                                        {"expression": {"left": "typespecs", "operation": "has_none_of", "right": ["etf"]}}
-                                    ]
-                                }
-                            }
-                        ]
-                    }
-                }
-            ]
-        },
-        "ignore_unknown_fields": True,
-        "markets": [country],
-        "options": {"lang": "ko"},
-        "range": [0, max_count],
-        "sort": {"sortBy": "market_cap_basic", "sortOrder": "desc"}
-    }
+    payload = build_tradingview_payload(
+        columns=columns,
+        max_count=max_count,
+        sort={"sortBy": "market_cap_basic", "sortOrder": "desc"},
+        markets=[country],
+        ignore_unknown_fields=True,
+    )
 
     try:
-        response = requests.post(url, headers=headers, data=json.dumps(payload))
-        response.raise_for_status()
-        result = response.json()
+        result = request_tradingview_scan(country, payload)
 
         rows = []
         for item in result.get("data", []):
@@ -370,6 +243,116 @@ def stock_growth_filter(country="korea",
         return set()
 
 
+def stock_box_pattern_filter(
+        country: str = "korea",
+        min_ebitda_ttm: float = 0.0,
+        min_cash_f_operating_activities_ttm: float = 0.0,
+        max_debt_to_equity: float = 1.5,
+        min_revenue_growth: float = 15.0,
+        min_roe: float = 12.0,
+        min_oper_margin: float = 10.0,
+        min_current_ratio: float = 1.3,
+        max_per: float = 18.0,
+        min_market_cap_quantile: float = 0.85,
+        max_count: int = 20000,
+):
+    columns = [
+        "name",
+        "total_revenue_cagr_5y", "total_revenue_yoy_growth_fy",
+        "ebitda_ttm",
+        "debt_to_equity_fq",
+        "cash_f_operating_activities_ttm",
+        "return_on_equity_fq",
+        "operating_margin_fy",
+        "current_ratio_fy",
+        "price_earnings_ttm",
+        "market_cap_basic",
+    ]
+
+    payload = build_tradingview_payload(
+        columns=columns,
+        max_count=max_count,
+        sort={"sortBy": "market_cap_basic", "sortOrder": "desc"},
+        markets=[country],
+        ignore_unknown_fields=True,
+    )
+
+    try:
+        result = request_tradingview_scan(country, payload)
+
+        rows = []
+        for item in result.get("data", []):
+            values = item.get("d", [])
+            rows.append(dict(zip(columns, values)))
+
+        df = pd.DataFrame(rows)
+        if df.empty:
+            return set()
+
+        numeric_cols = [
+            "total_revenue_cagr_5y",
+            "total_revenue_yoy_growth_fy",
+            "ebitda_ttm",
+            "debt_to_equity_fq",
+            "cash_f_operating_activities_ttm",
+            "return_on_equity_fq",
+            "operating_margin_fy",
+            "current_ratio_fy",
+            "price_earnings_ttm",
+            "market_cap_basic",
+        ]
+        available_numeric_cols = [c for c in numeric_cols if c in df.columns]
+        if available_numeric_cols:
+            df[available_numeric_cols] = df[available_numeric_cols].apply(pd.to_numeric, errors="coerce")
+
+        df["ebitda"] = df.get("ebitda_ttm")
+        df["dte"] = df.get("debt_to_equity_fq")
+        df["cash"] = df.get("cash_f_operating_activities_ttm")
+        df["roe"] = df.get("return_on_equity_fq")
+        df["op_margin"] = df.get("operating_margin_fy")
+        df["cr"] = df.get("current_ratio_fy")
+        df["per"] = df.get("price_earnings_ttm")
+        df["mcap"] = df.get("market_cap_basic") if "market_cap_basic" in df.columns else None
+
+        revenue_cols = ["total_revenue_cagr_5y", "total_revenue_yoy_growth_fy"]
+        available_revenue_cols = [c for c in revenue_cols if c in df.columns]
+        if available_revenue_cols:
+            df["rev_growth"] = (
+                df[available_revenue_cols]
+                .bfill(axis=1)
+                .iloc[:, 0]
+            )
+        else:
+            df["rev_growth"] = None
+
+        if "mcap" in df.columns and df["mcap"].notna().any():
+            mcap_threshold = df["mcap"].quantile(min_market_cap_quantile)
+            mcap_ok = df["mcap"].apply(lambda x: pd.notna(x) and float(x) >= float(mcap_threshold))
+        else:
+            mcap_ok = pd.Series([True] * len(df))
+
+        df["sel"] = (
+                df["ebitda"].apply(lambda x: pd.notna(x) and float(x) >= float(min_ebitda_ttm))
+                & df["cash"].apply(lambda x: pd.notna(x) and float(x) >= float(min_cash_f_operating_activities_ttm))
+                & df["dte"].apply(lambda x: pd.notna(x) and float(x) <= float(max_debt_to_equity))
+                & df["rev_growth"].apply(lambda x: pd.notna(x) and float(x) >= float(min_revenue_growth))
+                & df["roe"].apply(lambda x: pd.notna(x) and float(x) >= float(min_roe))
+                & df["op_margin"].apply(lambda x: pd.notna(x) and float(x) >= float(min_oper_margin))
+                & df["cr"].apply(lambda x: pd.notna(x) and float(x) >= float(min_current_ratio))
+                & df["per"].apply(lambda x: pd.notna(x) and float(x) <= float(max_per))
+                & mcap_ok
+        )
+
+        return set(df.loc[df["sel"], "name"].dropna().tolist())
+
+    except requests.RequestException as e:
+        logging.error("요청 실패: %s", e)
+        return set()
+    except Exception as e:
+        logging.error("오류 발생: %s", e)
+        return set()
+
+
 def update_subscription_stock():
     logging.info(f'{datetime.datetime.now()} update_subscription_stock 시작')
     data_to_insert = []
@@ -383,6 +366,29 @@ def update_subscription_stock():
     data_to_insert.extend([{'symbol': symbol, 'category': 'growth'} for symbol in stock_growth_filter(country="korea", min_rev_cagr=15.0, min_eps_cagr=10.0, min_roe=10.0, max_debt_to_equity=150.0, min_current_ratio=1.2, max_peg=1.15)])
     # 미국 성장주 프로세스
     data_to_insert.extend([{'symbol': symbol, 'category': 'growth'} for symbol in stock_growth_filter(country="america", min_rev_cagr=20.0, min_eps_cagr=15, min_roe=15.0, max_debt_to_equity=100.0, min_current_ratio=1.5, max_peg=1.4)])
+
+    data_to_insert.extend([{'symbol': symbol, 'category': 'box'} for symbol in
+                           stock_box_pattern_filter(country="korea",
+                                                    min_ebitda_ttm=0.0,
+                                                    min_cash_f_operating_activities_ttm=0.0,
+                                                    max_debt_to_equity=120.0,
+                                                    min_revenue_growth=12.0,
+                                                    min_roe=12.0,
+                                                    min_oper_margin=10.0,
+                                                    min_current_ratio=1.3,
+                                                    max_per=18.0,
+                                                    min_market_cap_quantile=0.92)])
+    data_to_insert.extend([{'symbol': symbol, 'category': 'box'} for symbol in
+                           stock_box_pattern_filter(country="america",
+                                                    min_ebitda_ttm=0.0,
+                                                    min_cash_f_operating_activities_ttm=0.0,
+                                                    max_debt_to_equity=100.0,
+                                                    min_revenue_growth=15.0,
+                                                    min_roe=15.0,
+                                                    min_oper_margin=12.0,
+                                                    min_current_ratio=1.4,
+                                                    max_per=22.0,
+                                                    min_market_cap_quantile=0.92)])
 
     if data_to_insert:
         logging.info(f"{len(data_to_insert)}개 주식")
@@ -532,7 +538,5 @@ def add_price_for_symbol(symbol: str, start_date: datetime.datetime = None, end_
 
 
 if __name__ == "__main__":
-    update_stock_listings()
-    # print(stock_dividend_filter(country="america", min_yield=2.0, min_continuous_dividend_payout=5, min_payout_ratio=20, max_payout_ratio=60))
-    # print(len(stock_growth_filter(country="korea", min_rev_cagr=15.0, min_eps_cagr=10.0, min_roe=10.0, max_debt_to_equity=150.0, min_current_ratio=1.2, max_peg=1.15)))
-    # print(len(stock_growth_filter(country="america", min_rev_cagr=20.0, min_eps_cagr=15, min_roe=15.0, max_debt_to_equity=100.0, min_current_ratio=1.5, max_peg=1.4)))
+    print(stock_box_pattern_filter(country="korea"))
+    print(stock_box_pattern_filter(country="america"))
