@@ -22,6 +22,7 @@ from services.trading_helpers import (
     calculate_position_volume,
     compute_resistance_prices,
     fetch_price_dataframe,
+    generate_dca_entry_levels,
     higher_timeframe_ok,
     has_min_rows,
     is_same_anchor_date,
@@ -32,7 +33,6 @@ from services.trading_helpers import (
     prepare_buy_context,
     rsi_in_range,
     rsi_rebound_below,
-    support_price_levels,
     add_prev_close_allocation,
 )
 from utils import discord
@@ -143,11 +143,11 @@ def filter_trend_for_buy(country: str = "KOR") -> dict[str, dict[float, int]]:
             if volume_shares <= 0:
                 continue
 
-            support_levels = support_price_levels(df, atr)
-            if support_levels is None:
+            price_levels = generate_dca_entry_levels(df, atr)
+            if not price_levels:
                 continue
 
-            levels = allocate_volume_to_levels(*support_levels, total_volume=volume_shares)
+            levels = allocate_volume_to_levels(price_levels, total_volume=volume_shares)
             if not levels:
                 continue
 
@@ -213,11 +213,11 @@ def filter_stable_for_buy(country: str = "KOR") -> dict[str, dict[float, int]]:
             if volume <= 0:
                 continue
 
-            support_levels = support_price_levels(df, atr)
-            if support_levels is None:
+            price_levels = generate_dca_entry_levels(df, atr)
+            if not price_levels:
                 continue
 
-            levels = allocate_volume_to_levels(*support_levels, total_volume=volume)
+            levels = allocate_volume_to_levels(price_levels, total_volume=volume)
             if not levels:
                 continue
 
@@ -381,11 +381,11 @@ def filter_box_for_buy(country: str = "KOR") -> dict[str, dict[float, int]]:
             if volume <= 0:
                 continue
 
-            support_levels = support_price_levels(df, atr)
-            if support_levels is None:
+            price_levels = generate_dca_entry_levels(df, atr)
+            if not price_levels:
                 continue
 
-            levels = allocate_volume_to_levels(*support_levels, total_volume=volume)
+            levels = allocate_volume_to_levels(price_levels, total_volume=volume)
             if not levels:
                 continue
 

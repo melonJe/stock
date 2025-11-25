@@ -62,5 +62,8 @@ APP_KEY_USA = get_env("APP_KEY_USA")
 APP_SECRET_USA = get_env("APP_SECRET_USA")
 ACCOUNT_NUMBER_USA = get_env("ACCOUNT_NUMBER_USA")
 ACCOUNT_CODE_USA = get_env("ACCOUNT_CODE_USA")
+
+# 매매 전략 관련
+EQUITY_USD = get_env("EQUITY_USD")
 # 주요 환경 변수 로그
 logger.info("환경 변수가 성공적으로 로드되었습니다.")
