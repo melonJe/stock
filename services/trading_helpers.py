@@ -2,7 +2,7 @@
 
 import datetime
 import math
-from typing import Iterable, Optional, Set, Tuple
+from typing import Iterable, Optional, Set, Tuple, Union
 
 import FinanceDataReader
 import numpy as np
@@ -120,7 +120,6 @@ def prepare_buy_context(country: str, category: str) -> tuple[str, float, float,
     risk_pct = float(getattr(setting_env, "RISK_PCT", 0.0051))
     risk_k = float(getattr(setting_env, "RISK_ATR_MULT", 12.0))
     adtv_limit_ratio = float(getattr(setting_env, "ADTV_LIMIT_RATIO", 0.015))
-    default_equity_krw = float(getattr(setting_env, "EQUITY_KRW", 100_000_000.0))
     default_equity_usd = float(getattr(setting_env, "EQUITY_USD", 100_000.0))
 
     anchor_date = datetime.datetime.now()
@@ -128,7 +127,7 @@ def prepare_buy_context(country: str, category: str) -> tuple[str, float, float,
         anchor_date -= datetime.timedelta(days=1)
     anchor_date_str = anchor_date.strftime("%Y-%m-%d")
 
-    equity_base = default_equity_usd if country == "USA" else default_equity_krw
+    equity_base = default_equity_usd *( 1 if country == "USA" else usd_krw )
     risk_amount_value = equity_base * risk_pct
 
     blacklist_symbols = Blacklist.select(Blacklist.symbol)
@@ -205,40 +204,176 @@ def apply_bollinger_bands(df: pd.DataFrame, window: int = 20, window_dev: float 
     return df
 
 
-def support_price_levels(df: pd.DataFrame, atr: float) -> Optional[tuple[float, float]]:
+def generate_dca_entry_levels(df: pd.DataFrame, atr: float, max_levels: Optional[int] = None) -> Optional[list[float]]:
+    """Return descending ladder prices for staged DCA buys using ATR/volatility aware spacing."""
+
     if atr <= 0:
         return None
+
     try:
-        df['pivot_low_flag'] = (df['low'] < df['low'].shift(1)) & (df['low'] < df['low'].shift(-1))
-        pivots_window = df.tail(30)
-        pivots = pivots_window[pivots_window['pivot_low_flag']]
-        if len(pivots) > 0:
-            pivot_low_val = float(pivots.iloc[-1]['low'])
-        else:
-            pivot_low_val = float(df['low'].rolling(window=5).min().iloc[-2])
-
-        bb_lower_today = float(df.iloc[-1]['BB_Lower']) if 'BB_Lower' in df.columns else np.nan
-        if pd.isna(pivot_low_val) or pivot_low_val <= 0:
-            pivot_low_val = float(df['low'].rolling(window=10).min().iloc[-2])
-        if pd.isna(bb_lower_today) or bb_lower_today <= 0:
-            bb_lower_today = float(df['low'].rolling(window=20).quantile(0.1).iloc[-2])
-
-        price_s1 = max(0.0, float(pivot_low_val))
-        deeper_candidate = float(pivot_low_val) - 0.5 * float(atr)
-        price_s2 = max(0.0, float(min(bb_lower_today, deeper_candidate)))
-        return price_s1, price_s2
-    except (KeyError, IndexError, ValueError):
+        close_price = float(df.iloc[-1]["close"])
+    except (KeyError, IndexError, ValueError, TypeError):
         return None
 
+    if pd.isna(close_price) or close_price <= 0:
+        return None
 
-def allocate_volume_to_levels(price_s1: float, price_s2: float, total_volume: int) -> dict[float, int]:
+    bb_lower_today = np.nan
+    if "BB_Lower" in df.columns:
+        bb_lower_today = float(df.iloc[-1]["BB_Lower"])
+
+    if pd.isna(bb_lower_today) or bb_lower_today <= 0:
+        try:
+            bb_lower_today = float(df["low"].rolling(window=20, min_periods=5).quantile(0.1).iloc[-2])
+        except (KeyError, IndexError, ValueError):
+            bb_lower_today = np.nan
+
+    swing_floor = np.nan
+    try:
+        swing_floor = float(df["low"].rolling(window=30, min_periods=5).min().iloc[-2])
+    except (KeyError, IndexError, ValueError):
+        pass
+
+    if pd.isna(swing_floor) or swing_floor <= 0:
+        try:
+            swing_floor = float(df["low"].rolling(window=10, min_periods=3).min().iloc[-2])
+        except (KeyError, IndexError, ValueError):
+            swing_floor = np.nan
+
+    floor_price = 0.0
+    if not pd.isna(swing_floor) and swing_floor > 0:
+        floor_price = max(floor_price, swing_floor * 0.95)
+    if not pd.isna(bb_lower_today) and bb_lower_today > 0:
+        floor_price = max(floor_price, bb_lower_today * 0.98)
+
+    min_gap = max(close_price * 0.005, atr * 0.25)
+    available_span = max(close_price - floor_price, min_gap)
+    theoretical_cap = max(1, int(available_span / min_gap))
+
+    volatility_ratio = atr / close_price
+    desired_levels = 2
+    if volatility_ratio >= 0.03:
+        desired_levels = 5
+    elif volatility_ratio >= 0.02:
+        desired_levels = 4
+    elif volatility_ratio >= 0.012:
+        desired_levels = 3
+
+    target_levels = min(theoretical_cap, desired_levels)
+    if max_levels is not None and max_levels > 0:
+        target_levels = min(target_levels, max_levels)
+    target_levels = max(1, target_levels)
+
+    multipliers = np.linspace(0.4, 2.2, num=max(target_levels * 3, 4))
+    candidate_pool: list[float] = [close_price - float(mult) * atr for mult in multipliers]
+    for extra in (bb_lower_today, swing_floor, floor_price):
+        if extra and not pd.isna(extra) and extra > 0:
+            candidate_pool.append(float(extra))
+
+    candidate_pool = sorted({val for val in candidate_pool if val > 0}, reverse=True)
+
+    levels: list[float] = []
+    prev_level = close_price
+    for raw_candidate in candidate_pool:
+        candidate = max(raw_candidate, floor_price)
+        candidate = min(candidate, prev_level - min_gap)
+
+        if candidate <= 0:
+            continue
+        if levels and candidate >= levels[-1] - 1e-8:
+            continue
+
+        levels.append(float(candidate))
+        prev_level = candidate
+
+        if len(levels) >= target_levels:
+            break
+
+    if floor_price > 0 and len(levels) < target_levels:
+        candidate = max(floor_price, min(prev_level - min_gap, floor_price))
+        if candidate > 0 and (not levels or candidate < levels[-1] - min_gap * 0.25):
+            levels.append(float(candidate))
+
+    return levels[:target_levels] or None
+
+
+def build_weight_profile(level_count: int, profile: str = "uniform") -> list[float]:
+    """Return weight coefficients tailored to the requested DCA profile."""
+
+    if level_count <= 0:
+        return []
+
+    profile_key = profile.lower()
+    if profile_key == "front_loaded":
+        return [float(level_count - idx) for idx in range(level_count)]
+    if profile_key == "bottom_loaded":
+        return [float(idx + 1) for idx in range(level_count)]
+    if profile_key == "middle_loaded":
+        midpoint = (level_count - 1) / 2
+        return [float(level_count - abs(idx - midpoint)) for idx in range(level_count)]
+    return [1.0] * level_count
+
+
+def allocate_volume_to_levels(
+        price_levels: Iterable[float],
+        total_volume: int,
+        weights: Optional[Union[Iterable[float], str]] = None,
+) -> dict[float, int]:
     if total_volume <= 0:
         return {}
-    if abs(price_s1 - price_s2) < 1e-8:
-        return {price_s1: int(total_volume)}
-    vol_s1 = int(total_volume // 3)
-    vol_s2 = int(total_volume - vol_s1)
-    return {price_s1: vol_s1, price_s2: vol_s2}
+
+    normalized_levels: list[float] = []
+    for price in price_levels:
+        try:
+            price_val = float(price)
+        except (TypeError, ValueError):
+            continue
+        if pd.isna(price_val) or price_val <= 0:
+            continue
+        if normalized_levels and abs(normalized_levels[-1] - price_val) < 1e-8:
+            continue
+        normalized_levels.append(price_val)
+
+    if not normalized_levels:
+        return {}
+
+    level_count = len(normalized_levels)
+    if isinstance(weights, str):
+        weights_list = build_weight_profile(level_count, weights)
+    elif weights is None:
+        weights_list = [1.0] * level_count
+    else:
+        weights_list = []
+        for weight in weights:
+            try:
+                weight_val = float(weight)
+            except (TypeError, ValueError):
+                weight_val = 0.0
+            weights_list.append(max(0.0, weight_val))
+        if len(weights_list) < level_count:
+            weights_list.extend([1.0] * (level_count - len(weights_list)))
+        elif len(weights_list) > level_count:
+            weights_list = weights_list[:level_count]
+        if sum(weights_list) <= 0:
+            weights_list = [1.0] * level_count
+
+    weight_sum = sum(weights_list)
+    allocations: dict[float, int] = {}
+    assigned = 0
+
+    for idx, (price, weight) in enumerate(zip(normalized_levels, weights_list)):
+        if idx == level_count - 1:
+            qty = total_volume - assigned
+        else:
+            qty = int(max(0, math.floor(total_volume * (weight / weight_sum))))
+            assigned += qty
+
+        if qty <= 0:
+            continue
+
+        allocations[price] = allocations.get(price, 0) + qty
+
+    return allocations
 
 
 def add_prev_close_allocation(levels: dict[float, int], df: pd.DataFrame, base_volume: int) -> dict[float, int]:
