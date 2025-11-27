@@ -248,7 +248,10 @@ def filter_stable_for_sell(stocks_held: Union[List[StockResponseDTO], StockRespo
         symbol = stock.pdno
         if symbol in growth_symbols:
             continue
-        qty = int(stock.hldg_qty)
+        try:
+            qty = max(0, int(float(stock.hldg_qty)))
+        except (TypeError, ValueError):
+            continue
         try:
             if qty <= 0:
                 continue
@@ -257,68 +260,91 @@ def filter_stable_for_sell(stocks_held: Union[List[StockResponseDTO], StockRespo
             if df is None or len(df) < 30:
                 continue
 
-            bollinger = BollingerBands(close=df['close'], window=20, window_dev=2)
-            df['BB_Upper'] = bollinger.bollinger_hband()
-            df['BB_Lower'] = bollinger.bollinger_lband()
-            bollinger_upper = df['BB_Upper'].iloc[-1] - (df['BB_Upper'].iloc[-1] - df['BB_Lower'].iloc[-1]) * 0.1
-            target_price = max(float(stock.prpr) * 1.01, float(stock.pchs_avg_pric) * 1.025, bollinger_upper)
-            if pd.isna(target_price) or target_price <= 0:
+            # 기본: 일봉 기준 트레일링 스탑 (전일까지의 rolling max)
+            closes = df["close"].astype(float)
+            highs = df["high"].astype(float)
+            if len(closes) < 5:
                 continue
 
-            lookback = 120
-            window_df = df.tail(lookback).copy()
-            if len(window_df) < 5:
+            # 전일까지의 최고 종가/고가
+            rolling_window = 60
+            prev_closes = closes.iloc[:-1]
+            prev_highs = highs.iloc[:-1]
+            rolling_max_close = prev_closes.rolling(window=rolling_window, min_periods=5).max().iloc[-1]
+            rolling_max_high = prev_highs.rolling(window=rolling_window, min_periods=5).max().iloc[-1]
+
+            if pd.isna(rolling_max_close) or pd.isna(rolling_max_high):
                 continue
 
-            # pivot high: 현재 high가 이전·다음의 high보다 큰 경우
-            window_df['pivot_high'] = (window_df['high'] > window_df['high'].shift(1)) & (window_df['high'] > window_df['high'].shift(-1))
+            # 트레일링 스탑 비율 (예: 고점 대비 8% 하락 시 매도)
+            trailing_drop_pct = 0.08
+            base_max = max(float(rolling_max_close), float(rolling_max_high))
+            trailing_stop = base_max * (1.0 - trailing_drop_pct)
 
-            pivots = window_df[window_df['pivot_high']]
+            # ATR 기반 target/stop 보조: ATR 계산 가능하고 매입가가 있다면 사용
+            atr = calculate_atr(df)
+            atr_target_price = None
+            atr_stop_price = None
+            try:
+                entry_price = float(stock.pchs_avg_pric)
+            except (TypeError, ValueError):
+                entry_price = None
 
-            # 후보 저항선: pivot 고점 중 target_price 이상인 값
-            candidate_resistances = []
-            if len(pivots) > 0:
-                # pivot의 high값을 사용
-                for val in pivots['high'].values:
-                    try:
-                        h = float(val)
-                        if h >= target_price:
-                            candidate_resistances.append(h)
-                    except Exception:
-                        continue
+            if atr is not None and entry_price and entry_price > 0:
+                # 예시: 2R 익절, 1R 손절
+                r_multiple_target = 2.0
+                r_multiple_stop = 1.0
+                risk_per_share = float(atr)
+                atr_stop_price = max(entry_price - r_multiple_stop * risk_per_share, 0)
+                atr_target_price = entry_price + r_multiple_target * risk_per_share
 
-            # 보조: pivot이 없거나 후보가 없으면 최근 고점(rolling max) 중 target 이상인 것 사용
-            if not candidate_resistances:
-                rolling_max_20 = window_df['high'].rolling(window=20, min_periods=5).max()
-                # 최근 3 지점에서 rolling max가 target 이상인 경우 후보로 추가
-                recent_rolling = rolling_max_20.dropna().iloc[-10:] if len(rolling_max_20.dropna()) > 0 else pd.Series(dtype=float)
-                for val in recent_rolling.values:
-                    try:
-                        v = float(val)
-                        if v >= target_price:
-                            candidate_resistances.append(v)
-                    except Exception:
-                        continue
+            # 실제 주문 가격 선택: ATR 타겟이 있으면 우선 사용, 없으면 트레일링 스탑만 사용
+            price_candidates: list[float] = []
+            if atr_target_price and atr_target_price > 0:
+                price_candidates.append(float(atr_target_price))
+            price_candidates.append(float(trailing_stop))
 
-            if not candidate_resistances:
-                # 저항선 없음 -> 스킵
+            if not price_candidates:
                 continue
 
-            # 가장 근접한(작은) 저항선 선택
-            resistance_price = float(np.min(candidate_resistances))
+            # 상향 정렬 후 1~2개 가격대에 분할 매도 (R-multiple 관리용)
+            price_candidates = sorted(set(price_candidates))
+            sell_plan: dict[float, int] = {}
 
-            sell_qty = max(1, int(qty * 0.1))
+            if len(price_candidates) == 1:
+                # 하나만 있으면 20%만 매도 예약
+                sell_qty = max(1, int(qty * 0.2))
+                sell_plan[price_candidates[0]] = sell_qty
+            else:
+                # 두 개 이상이면 절반씩 분할
+                first_price, second_price = price_candidates[0], price_candidates[-1]
+                first_qty = max(1, int(qty * 0.1))
+                second_qty = max(1, int(qty * 0.1))
+                total_planned = first_qty + second_qty
+                if total_planned > qty:
+                    # 보수적으로 전체 수량을 넘지 않도록 조정
+                    scale = qty / total_planned
+                    first_qty = max(1, int(first_qty * scale))
+                    second_qty = max(1, int(second_qty * scale))
+                sell_plan[first_price] = first_qty
+                sell_plan[second_price] = sell_plan.get(second_price, 0) + second_qty
 
-            # 가격 소수점 정리: 종목에 따라 틱 사이즈가 다를 수 있으므로 소수 2자리로 둠.
-            resistance_price = round(resistance_price, 2)
+            if not sell_plan:
+                continue
 
-            if get_country_by_symbol(symbol) == "KOR":
-                sell_levels[symbol] = {price_refine(int(resistance_price)): sell_qty}
-            elif get_country_by_symbol(symbol) == "USA":
-                sell_levels[symbol] = {resistance_price: sell_qty}
+            country_code = get_country_by_symbol(symbol)
+            for raw_price, vol in sell_plan.items():
+                if vol <= 0:
+                    continue
+                if country_code == "KOR":
+                    price_key = price_refine(int(round(raw_price)))
+                else:
+                    price_key = round(raw_price, 2)
+                sell_levels.setdefault(symbol, {})
+                sell_levels[symbol][price_key] = sell_levels[symbol].get(price_key, 0) + vol
 
         except Exception as e:
-            logging.error(f"sell_on_resistance 처리 중 에러: {symbol} -> {e}")
+            logging.error(f"filter_stable_for_sell 처리 중 에러: {symbol} -> {e}")
             continue
     return sell_levels
 
@@ -463,47 +489,84 @@ def filter_box_for_sell(stocks_held: list[StockResponseDTO] | StockResponseDTO |
                 except (TypeError, ValueError):
                     slope_ratio = np.inf
 
+            # 박스 범위 계산: Bollinger 상단/하단을 박스 상·하단으로 사용
+            low_box = bb_lower
+            high_box = bb_upper
+            box_range = high_box - low_box
+            if box_range <= 0:
+                continue
+
+            # 박스 이탈 여부 (기존 조건 유지)
             box_break = (
                 width_ratio < 0.05
                 or width_ratio > 0.22
                 or slope_ratio > 0.06
-                or close_price > bb_upper * 1.01
-                or close_price < bb_lower * 0.99
+                or close_price > high_box * 1.01
+                or close_price < low_box * 0.99
             )
 
+            # 기본 출구 2-1: 박스 높이 비율 익절/손절
+            # 예시: 박스 70% 지점에서 익절, 로우 박스 하회 시 손절
+            take_profit_ratio = 0.7
+            tp_price = low_box + box_range * take_profit_ratio
+            stop_price = low_box * 0.99
+
+            sell_plan: dict[float, int] = {}
+
             if box_break:
-                sell_qty = max(1, int(qty * 0.2))
-                target_price = prev_close if prev_close > 0 else close_price
-                if symbol_country == "KOR":
-                    price_key = price_refine(int(round(target_price)))
-                else:
-                    price_key = round(target_price, 2)
-                sell_levels.setdefault(symbol, {})
-                sell_levels[symbol][price_key] = sell_levels[symbol].get(price_key, 0) + sell_qty
-                continue
+                # 박스가 깨지면 보수적으로 일부 수량 정리 (예: 20%)
+                break_qty = max(1, int(qty * 0.2))
+                # 이탈 방향과 무관하게 직전 종가 기준으로 예약
+                base_price = prev_close if prev_close > 0 else close_price
+                sell_plan[base_price] = break_qty
+            else:
+                # 박스 내부: 박스 비율 기반 익절/손절
+                tp_qty = max(1, int(qty * 0.1))
+                stop_qty = max(1, int(qty * 0.1))
+                sell_plan[tp_price] = tp_qty
+                sell_plan[stop_price] = sell_plan.get(stop_price, 0) + stop_qty
 
+            # VWAP/POC 기반 분할 매도 (데이터 인프라가 충분한 경우)
+            # 여기서는 단순 일봉 VWAP를 근사치로 사용
+            vwap_price = None
             try:
-                price_r1, price_r2, price_r3 = compute_resistance_prices(df.copy())
+                if "volume" in df.columns and not df["volume"].isna().all():
+                    vol = df["volume"].astype(float)
+                    typical_price = (df["high"].astype(float) + df["low"].astype(float) + df["close"].astype(float)) / 3.0
+                    vwap_series = (typical_price * vol).cumsum() / vol.cumsum()
+                    vwap_price = float(vwap_series.iloc[-1])
             except Exception:
-                price_r1 = price_r2 = price_r3 = 0.0
+                vwap_price = None
 
-            resistance_candidates = [r for r in (price_r1, price_r2, price_r3) if r and r > close_price]
-            if not resistance_candidates:
-                resistance_price = close_price * 1.02
-            else:
-                resistance_price = float(min(resistance_candidates))
+            if vwap_price and vwap_price > 0:
+                # VWAP 근처 1차 매도, 상단 근처 2차 매도
+                vwap_qty = max(1, int(qty * 0.1))
+                upper_qty = max(1, int(qty * 0.1))
+                sell_plan[vwap_price] = sell_plan.get(vwap_price, 0) + vwap_qty
+                sell_plan[high_box * 0.98] = sell_plan.get(high_box * 0.98, 0) + upper_qty
 
-            if resistance_price <= 0:
+            # 총 계획 수량이 보유 수량을 넘지 않도록 스케일 조정
+            total_planned = sum(sell_plan.values())
+            if total_planned > qty and total_planned > 0:
+                scale = qty / total_planned
+                for k in list(sell_plan.keys()):
+                    scaled = int(sell_plan[k] * scale)
+                    sell_plan[k] = max(0, scaled)
+
+            # 0 이상인 주문만 반영
+            sell_plan = {p: q for p, q in sell_plan.items() if q > 0}
+            if not sell_plan:
                 continue
 
-            sell_qty = max(1, int(qty * 0.1))
-            if symbol_country == "KOR":
-                price_key = price_refine(int(round(resistance_price)))
-            else:
-                price_key = round(resistance_price, 2)
-
-            sell_levels.setdefault(symbol, {})
-            sell_levels[symbol][price_key] = sell_levels[symbol].get(price_key, 0) + sell_qty
+            for raw_price, vol in sell_plan.items():
+                if vol <= 0:
+                    continue
+                if symbol_country == "KOR":
+                    price_key = price_refine(int(round(raw_price)))
+                else:
+                    price_key = round(raw_price, 2)
+                sell_levels.setdefault(symbol, {})
+                sell_levels[symbol][price_key] = sell_levels[symbol].get(price_key, 0) + vol
 
         except Exception as exc:
             logging.error(f"filter_box_for_sell error: %s -> %s", getattr(stock, "pdno", "unknown"), exc)
