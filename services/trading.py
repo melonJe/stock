@@ -6,7 +6,6 @@ from typing import List, Union
 
 import numpy as np
 import pandas as pd
-from ta.volatility import BollingerBands
 
 from apis.korea_investment import KoreaInvestmentAPI
 from config import setting_env
@@ -20,7 +19,6 @@ from services.trading_helpers import (
     calculate_atr,
     calculate_adtv,
     calculate_position_volume,
-    compute_resistance_prices,
     fetch_price_dataframe,
     generate_dca_entry_levels,
     higher_timeframe_ok,
@@ -74,6 +72,8 @@ def filter_trend_for_buy(country: str = "KOR") -> dict[str, dict[float, int]]:
     for symbol in stocks:
         try:
             df = fetch_price_dataframe(symbol)
+            if df is None or df.empty:
+                continue
             df = normalize_dataframe_for_country(df, country)
 
             if not is_same_anchor_date(df, anchor_date):
@@ -169,6 +169,8 @@ def filter_stable_for_buy(country: str = "KOR") -> dict[str, dict[float, int]]:
     for symbol in stocks:
         try:
             df = fetch_price_dataframe(symbol)
+            if df is None or df.empty:
+                continue
             df = normalize_dataframe_for_country(df, country)
 
             if not is_same_anchor_date(df, anchor_date):
@@ -239,11 +241,11 @@ def filter_stable_for_sell(stocks_held: Union[List[StockResponseDTO], StockRespo
         row.symbol
         for row in (
             Subscription
-        .select(Subscription.symbol)
-        .where(Subscription.category == "dividend")
-        .where(Subscription.symbol.not_in(growth_query))
-    )
-}
+            .select(Subscription.symbol)
+            .where(Subscription.category == "dividend")
+            .where(Subscription.symbol.not_in(growth_query))
+        )
+    }
     for stock in (stocks_held or {}):
         symbol = stock.pdno
         if symbol in growth_symbols:
@@ -257,7 +259,12 @@ def filter_stable_for_sell(stocks_held: Union[List[StockResponseDTO], StockRespo
                 continue
 
             df = fetch_price_dataframe(symbol)
-            if df is None or len(df) < 30:
+            if df is None or df.empty:
+                continue
+
+            country_code = get_country_by_symbol(symbol)
+            df = normalize_dataframe_for_country(df, country_code)
+            if len(df) < 30:
                 continue
 
             # 기본: 일봉 기준 트레일링 스탑 (전일까지의 rolling max)
@@ -332,7 +339,6 @@ def filter_stable_for_sell(stocks_held: Union[List[StockResponseDTO], StockRespo
             if not sell_plan:
                 continue
 
-            country_code = get_country_by_symbol(symbol)
             for raw_price, vol in sell_plan.items():
                 if vol <= 0:
                     continue
@@ -348,12 +354,15 @@ def filter_stable_for_sell(stocks_held: Union[List[StockResponseDTO], StockRespo
             continue
     return sell_levels
 
+
 def filter_box_for_buy(country: str = "KOR") -> dict[str, dict[float, int]]:
     anchor_date, risk_amount_value, risk_k, adtv_limit_ratio, stocks, usd_krw = prepare_buy_context(country, "box")
     buy_levels: dict[str, dict[float, int]] = {}
     for symbol in stocks:
         try:
             df = fetch_price_dataframe(symbol)
+            if df is None or df.empty:
+                continue
             df = normalize_dataframe_for_country(df, country)
 
             if not is_same_anchor_date(df, anchor_date):
@@ -437,11 +446,11 @@ def filter_box_for_sell(stocks_held: list[StockResponseDTO] | StockResponseDTO |
         row.symbol
         for row in (
             Subscription
-        .select(Subscription.symbol)
-        .where(Subscription.category == "box")
-        .where(Subscription.symbol.not_in(growth_query))
-    )
-}
+            .select(Subscription.symbol)
+            .where(Subscription.category == "box")
+            .where(Subscription.symbol.not_in(growth_query))
+        )
+    }
 
     for stock in holdings:
         try:
@@ -459,7 +468,9 @@ def filter_box_for_sell(stocks_held: list[StockResponseDTO] | StockResponseDTO |
             symbol_country = get_country_by_symbol(symbol)
 
             df = fetch_price_dataframe(symbol)
-            if df is None or len(df) < 120:
+            if df is None or df.empty:
+                continue
+            if len(df) < 120:
                 continue
 
             df = normalize_dataframe_for_country(df, symbol_country)
@@ -498,11 +509,11 @@ def filter_box_for_sell(stocks_held: list[StockResponseDTO] | StockResponseDTO |
 
             # 박스 이탈 여부 (기존 조건 유지)
             box_break = (
-                width_ratio < 0.05
-                or width_ratio > 0.22
-                or slope_ratio > 0.06
-                or close_price > high_box * 1.01
-                or close_price < low_box * 0.99
+                    width_ratio < 0.05
+                    or width_ratio > 0.22
+                    or slope_ratio > 0.06
+                    or close_price > high_box * 1.01
+                    or close_price < low_box * 0.99
             )
 
             # 기본 출구 2-1: 박스 높이 비율 익절/손절
@@ -573,6 +584,7 @@ def filter_box_for_sell(stocks_held: list[StockResponseDTO] | StockResponseDTO |
             continue
 
     return sell_levels
+
 
 def trading_buy(korea_investment: KoreaInvestmentAPI, buy_levels):
     """Submit buy orders for calculated levels with ATR-based stop-loss preset."""
@@ -670,5 +682,7 @@ def usa_trading():
 
 
 if __name__ == "__main__":
-    print(filter_trend_for_buy(country="USA"))
-    print(filter_stable_for_buy(country="USA"))
+    ki_api = KoreaInvestmentAPI(app_key=setting_env.APP_KEY_USA, app_secret=setting_env.APP_SECRET_USA, account_number=setting_env.ACCOUNT_NUMBER_USA, account_code=setting_env.ACCOUNT_CODE_USA)
+    stocks_held = ki_api.get_owned_stock_info()
+    sell_queue = select_sell_stocks(stocks_held)
+    print(sell_queue)
