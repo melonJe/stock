@@ -638,7 +638,7 @@ def trading_sell(korea_investment: KoreaInvestmentAPI, sell_levels):
         for price, volume in levels.items():
             if country == "KOR":
                 if price < float(stock.pchs_avg_pric):
-                    price = price_refine(int(float(stock.pchs_avg_pric)), 3)
+                    price = price_refine(int(float(stock.pchs_avg_pric) * 1.002), 1)
                 korea_investment.sell_reserve(symbol=symbol, price=int(price), volume=volume, end_date=end_date)
             elif country == "USA":
                 if price < float(stock.pchs_avg_pric):
