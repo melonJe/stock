@@ -146,9 +146,17 @@ def prepare_buy_context(country: str, category: str) -> tuple[str, float, float,
 
 
 def normalize_dataframe_for_country(df: pd.DataFrame, country: str) -> pd.DataFrame:
-    if country == "USA":
-        for column in ("open", "high", "close", "low"):
-            df[column] = df[column].astype(float)
+    if df is None or df.empty:
+        return df
+
+    numeric_columns = ("open", "high", "low", "close")
+    for column in numeric_columns:
+        if column in df.columns:
+            df[column] = pd.to_numeric(df[column], errors="coerce")
+
+    if "volume" in df.columns:
+        df["volume"] = pd.to_numeric(df["volume"], errors="coerce")
+
     return df
 
 
