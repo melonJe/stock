@@ -126,7 +126,7 @@ class KoreaInvestmentAPI:
             response.raise_for_status()
             return response.json()
         except requests.RequestException as e:
-            logging.error(f"{error_log_prefix}. 예외: {e}, URL: {full_url}, Payload: {payload}")
+            logging.error(f"{error_log_prefix}. 예외: {e}, URL: {full_url}")
             return None
 
     def _add_tr_id_to_headers(self, tr_id_suffix: str, use_prefix: bool = True) -> Dict:
@@ -214,7 +214,7 @@ class KoreaInvestmentAPI:
             else:
                 logging.error(f"Order failed: {response}")
         else:
-            logging.error(f"Order processing failed for payload: {payload}")
+            logging.error(f"Order processing failed")
         return False
 
     def buy(self, symbol: str, price: int, volume: int, order_type: str = "00") -> bool:
