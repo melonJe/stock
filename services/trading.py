@@ -62,6 +62,72 @@ def select_sell_stocks(stocks_held: Union[List[StockResponseDTO], StockResponseD
             for price, qty in price_dict.items():
                 sell_levels.setdefault(sym, {})
                 sell_levels[sym][price] = sell_levels[sym].get(price, 0) + qty
+
+    if not stocks_held or not sell_levels:
+        return sell_levels
+
+    holdings = stocks_held if isinstance(stocks_held, list) else [stocks_held]
+    limits: dict[str, int] = {}
+    for stock in holdings:
+        try:
+            symbol = stock.pdno
+        except Exception:
+            continue
+
+        try:
+            hldg_qty = int(float(getattr(stock, "hldg_qty", 0) or 0))
+        except (TypeError, ValueError):
+            hldg_qty = 0
+
+        try:
+            ord_psbl_qty = int(float(getattr(stock, "ord_psbl_qty", 0) or 0))
+        except (TypeError, ValueError):
+            ord_psbl_qty = 0
+
+        limit = ord_psbl_qty if ord_psbl_qty > 0 else hldg_qty
+        if limit > 0:
+            limits[symbol] = limit
+
+    for symbol, levels in list(sell_levels.items()):
+        limit = limits.get(symbol)
+        if not limit:
+            continue
+
+        price_volume_items = [(price, int(volume)) for price, volume in levels.items() if int(volume) > 0]
+        if not price_volume_items:
+            sell_levels.pop(symbol, None)
+            continue
+
+        total_volume = sum(volume for _, volume in price_volume_items)
+        if total_volume <= limit:
+            continue
+
+        scale_factor = limit / total_volume if total_volume else 0
+        scaled_levels: dict[float, int] = {}
+        fractional_remainders: list[tuple[float, float]] = []
+        for price, volume in price_volume_items:
+            scaled_raw = volume * scale_factor
+            scaled_base = int(scaled_raw)
+            if scaled_base > 0:
+                scaled_levels[price] = scaled_base
+                fractional_remainders.append((price, scaled_raw - scaled_base))
+            else:
+                scaled_levels[price] = 0
+                fractional_remainders.append((price, scaled_raw))
+
+        current_total = sum(scaled_levels.values())
+        remaining = limit - current_total
+        if remaining > 0:
+            fractional_remainders.sort(key=lambda x: x[1], reverse=True)
+            idx = 0
+            n = len(fractional_remainders)
+            while remaining > 0 and n > 0:
+                price, _ = fractional_remainders[idx % n]
+                scaled_levels[price] = scaled_levels.get(price, 0) + 1
+                remaining -= 1
+                idx += 1
+
+        sell_levels[symbol] = {price: volume for price, volume in scaled_levels.items() if volume > 0}
     return sell_levels
 
 
@@ -635,14 +701,33 @@ def trading_sell(korea_investment: KoreaInvestmentAPI, sell_levels):
         stock = korea_investment.get_owned_stock_info(symbol=symbol)
         if not stock:
             continue
+
+        try:
+            available = int(float(getattr(stock, "ord_psbl_qty", 0) or 0))
+        except (TypeError, ValueError):
+            available = 0
+            
+        if available <= 0:
+            continue
+
         for price, volume in levels.items():
+            try:
+                volume = int(volume)
+            except (TypeError, ValueError):
+                continue
+            if volume <= 0 or available <= 0:
+                continue
+            if volume > available:
+                volume = available
+            available -= volume
+
             if country == "KOR":
                 if price < float(stock.pchs_avg_pric):
                     price = price_refine(int(float(stock.pchs_avg_pric) * 1.002), 1)
                 korea_investment.sell_reserve(symbol=symbol, price=int(price), volume=volume, end_date=end_date)
             elif country == "USA":
                 if price < float(stock.pchs_avg_pric):
-                    price = round(float(stock.pchs_avg_pric) * 1.025, 2)
+                    price = round(float(stock.pchs_avg_pric) * 1.005, 2)
                 korea_investment.submit_overseas_reservation_order(country=country, action="sell", symbol=symbol, price=str(round(float(price), 2)), volume=str(volume))
 
 
@@ -685,4 +770,5 @@ if __name__ == "__main__":
     ki_api = KoreaInvestmentAPI(app_key=setting_env.APP_KEY_USA, app_secret=setting_env.APP_SECRET_USA, account_number=setting_env.ACCOUNT_NUMBER_USA, account_code=setting_env.ACCOUNT_CODE_USA)
     stocks_held = ki_api.get_owned_stock_info()
     sell_queue = select_sell_stocks(stocks_held)
-    print(sell_queue)
+    sell = threading.Thread(target=trading_sell, args=(ki_api, sell_queue,))
+    sell.start()
