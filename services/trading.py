@@ -224,7 +224,130 @@ def filter_trend_for_buy(country: str = "KOR") -> dict[str, dict[float, int]]:
 
 
 def filter_trend_for_sell(stocks_held: list[StockResponseDTO] | StockResponseDTO | None, country: str = "KOR") -> dict[str, dict[float, int]]:
-    sell_levels = {}
+    sell_levels: dict[str, dict[float, int]] = {}
+    if not stocks_held:
+        return sell_levels
+
+    holdings = stocks_held if isinstance(stocks_held, list) else [stocks_held]
+    growth_symbols = {
+        row.symbol
+        for row in Subscription.select(Subscription.symbol).where(Subscription.category == "growth")
+    }
+
+    for stock in holdings:
+        try:
+            symbol = stock.pdno
+        except Exception:
+            continue
+
+        if symbol not in growth_symbols:
+            continue
+
+        try:
+            qty = max(0, int(float(getattr(stock, "hldg_qty", 0))))
+        except (TypeError, ValueError):
+            continue
+        if qty <= 0:
+            continue
+
+        try:
+            entry_price = float(stock.pchs_avg_pric)
+        except (TypeError, ValueError):
+            entry_price = None
+
+        try:
+            df = fetch_price_dataframe(symbol)
+            if df is None or df.empty:
+                continue
+
+            symbol_country = get_country_by_symbol(symbol)
+            df = normalize_dataframe_for_country(df, symbol_country)
+            if len(df) < 150:
+                continue
+
+            closes = df["close"].astype(float)
+            highs = df["high"].astype(float)
+            if len(closes) < 2:
+                continue
+
+            close = float(closes.iloc[-1])
+            prev_close = float(closes.iloc[-2])
+
+            sma60 = closes.rolling(60).mean()
+            sma120 = closes.rolling(120).mean()
+            atr = calculate_atr(df)
+
+            sell_plan: dict[float, int] = {}
+
+            # ATR 기반 손절/익절
+            if atr is not None and atr > 0 and entry_price and entry_price > 0:
+                risk_per_share = float(atr)
+                stop_price = max(entry_price - 1.0 * risk_per_share, 0)
+                target_price = entry_price + 2.0 * risk_per_share
+
+                if close <= stop_price * 1.01:
+                    sell_plan[stop_price] = sell_plan.get(stop_price, 0) + max(1, int(qty * 0.3))
+                sell_plan[target_price] = sell_plan.get(target_price, 0) + max(1, int(qty * 0.1))
+
+            # 추세 이탈(SMA 하락 전환 또는 120SMA 하회)
+            try:
+                trend_break = False
+                if len(sma120) >= 1 and not pd.isna(sma120.iloc[-1]):
+                    trend_break = bool(close < float(sma120.iloc[-1]))
+                if len(sma60) >= 2 and len(sma120) >= 2:
+                    if not any(pd.isna([sma60.iloc[-1], sma60.iloc[-2], sma120.iloc[-1], sma120.iloc[-2]])):
+                        trend_break = trend_break or (
+                            float(sma60.iloc[-1]) < float(sma60.iloc[-2])
+                            and float(sma120.iloc[-1]) < float(sma120.iloc[-2])
+                        )
+                if trend_break:
+                    sell_plan[prev_close] = sell_plan.get(prev_close, 0) + max(1, int(qty * 0.2))
+            except Exception:
+                pass
+
+            # 트레일링 스탑(전일 기준 최고가 대비 하락)
+            try:
+                if len(closes) >= 5 and len(highs) >= 5:
+                    rolling_window = 60
+                    rolling_max_close = closes.iloc[:-1].rolling(rolling_window, min_periods=5).max().iloc[-1]
+                    rolling_max_high = highs.iloc[:-1].rolling(rolling_window, min_periods=5).max().iloc[-1]
+                    if not pd.isna(rolling_max_close) and not pd.isna(rolling_max_high):
+                        base_max = max(float(rolling_max_close), float(rolling_max_high))
+                        trailing_stop = base_max * (1.0 - 0.10)
+                        if close <= trailing_stop * 1.01:
+                            sell_plan[trailing_stop] = sell_plan.get(trailing_stop, 0) + max(1, int(qty * 0.1))
+            except Exception:
+                pass
+
+            # 수량 스케일링(보유수량 초과 방지)
+            total_planned = sum(sell_plan.values())
+            if total_planned > qty and total_planned > 0:
+                scale = qty / total_planned
+                scaled_plan: dict[float, int] = {}
+                for price, vol in sell_plan.items():
+                    scaled_vol = int(vol * scale)
+                    if scaled_vol > 0:
+                        scaled_plan[price] = scaled_vol
+                sell_plan = scaled_plan
+
+            sell_plan = {p: q for p, q in sell_plan.items() if q > 0}
+            if not sell_plan:
+                continue
+
+            for raw_price, vol in sell_plan.items():
+                if vol <= 0:
+                    continue
+                if symbol_country == "KOR":
+                    price_key = price_refine(int(round(raw_price)))
+                else:
+                    price_key = round(raw_price, 2)
+                sell_levels.setdefault(symbol, {})
+                sell_levels[symbol][price_key] = sell_levels[symbol].get(price_key, 0) + vol
+
+        except Exception as e:
+            logging.error(f"filter_trend_for_sell 처리 중 에러: {symbol} -> {e}")
+            continue
+
     return sell_levels
 
 
