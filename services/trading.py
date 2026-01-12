@@ -287,7 +287,8 @@ def filter_trend_for_sell(stocks_held: list[StockResponseDTO] | StockResponseDTO
 
                 if close <= stop_price * 1.01:
                     sell_plan[stop_price] = sell_plan.get(stop_price, 0) + max(1, int(qty * 0.3))
-                sell_plan[target_price] = sell_plan.get(target_price, 0) + max(1, int(qty * 0.1))
+                if close >= (entry_price + risk_per_share):
+                    sell_plan[target_price] = sell_plan.get(target_price, 0) + max(1, int(qty * 0.1))
 
             # 추세 이탈(SMA 하락 전환 또는 120SMA 하회)
             try:
@@ -301,7 +302,8 @@ def filter_trend_for_sell(stocks_held: list[StockResponseDTO] | StockResponseDTO
                             and float(sma120.iloc[-1]) < float(sma120.iloc[-2])
                         )
                 if trend_break:
-                    sell_plan[prev_close] = sell_plan.get(prev_close, 0) + max(1, int(qty * 0.2))
+                    exit_price = min(prev_close, close) * 0.995
+                    sell_plan[exit_price] = sell_plan.get(exit_price, 0) + max(1, int(qty * 0.2))
             except Exception:
                 pass
 
@@ -419,14 +421,18 @@ def filter_stable_for_buy(country: str = "KOR") -> dict[str, dict[float, int]]:
 
 
 def filter_stable_for_sell(stocks_held: Union[List[StockResponseDTO], StockResponseDTO, None], country: str = "KOR") -> dict[str, dict[float, int]]:
-    sell_levels = {}
+    sell_levels: dict[str, dict[float, int]] = {}
+    if not stocks_held:
+        return sell_levels
+
+    holdings = stocks_held if isinstance(stocks_held, list) else [stocks_held]
     growth_query = (
         Subscription
         .select(Subscription.symbol)
         .where(Subscription.category == "growth")
     )
 
-    growth_symbols = {
+    dividend_symbols = {
         row.symbol
         for row in (
             Subscription
@@ -435,18 +441,22 @@ def filter_stable_for_sell(stocks_held: Union[List[StockResponseDTO], StockRespo
             .where(Subscription.symbol.not_in(growth_query))
         )
     }
-    for stock in (stocks_held or {}):
-        symbol = stock.pdno
-        if symbol in growth_symbols:
-            continue
+    for stock in holdings:
         try:
-            qty = max(0, int(float(stock.hldg_qty)))
+            symbol = stock.pdno
+        except Exception:
+            continue
+        if symbol not in dividend_symbols:
+            continue
+
+        try:
+            qty = max(0, int(float(getattr(stock, "hldg_qty", 0))))
         except (TypeError, ValueError):
             continue
-        try:
-            if qty <= 0:
-                continue
+        if qty <= 0:
+            continue
 
+        try:
             df = fetch_price_dataframe(symbol)
             if df is None or df.empty:
                 continue
@@ -462,7 +472,6 @@ def filter_stable_for_sell(stocks_held: Union[List[StockResponseDTO], StockRespo
             if len(closes) < 5:
                 continue
 
-            # 전일까지의 최고 종가/고가
             rolling_window = 60
             prev_closes = closes.iloc[:-1]
             prev_highs = highs.iloc[:-1]
@@ -472,61 +481,45 @@ def filter_stable_for_sell(stocks_held: Union[List[StockResponseDTO], StockRespo
             if pd.isna(rolling_max_close) or pd.isna(rolling_max_high):
                 continue
 
-            # 트레일링 스탑 비율 (예: 고점 대비 8% 하락 시 매도)
             trailing_drop_pct = 0.08
             base_max = max(float(rolling_max_close), float(rolling_max_high))
             trailing_stop = base_max * (1.0 - trailing_drop_pct)
 
-            # ATR 기반 target/stop 보조: ATR 계산 가능하고 매입가가 있다면 사용
             atr = calculate_atr(df)
             atr_target_price = None
-            atr_stop_price = None
             try:
                 entry_price = float(stock.pchs_avg_pric)
             except (TypeError, ValueError):
                 entry_price = None
 
             if atr is not None and entry_price and entry_price > 0:
-                # 예시: 2R 익절, 1R 손절
                 r_multiple_target = 2.0
-                r_multiple_stop = 1.0
                 risk_per_share = float(atr)
-                atr_stop_price = max(entry_price - r_multiple_stop * risk_per_share, 0)
                 atr_target_price = entry_price + r_multiple_target * risk_per_share
 
-            # 실제 주문 가격 선택: ATR 타겟이 있으면 우선 사용, 없으면 트레일링 스탑만 사용
-            price_candidates: list[float] = []
-            if atr_target_price and atr_target_price > 0:
-                price_candidates.append(float(atr_target_price))
-            price_candidates.append(float(trailing_stop))
-
-            if not price_candidates:
-                continue
-
-            # 상향 정렬 후 1~2개 가격대에 분할 매도 (R-multiple 관리용)
-            price_candidates = sorted(set(price_candidates))
             sell_plan: dict[float, int] = {}
 
-            if len(price_candidates) == 1:
-                # 하나만 있으면 20%만 매도 예약
-                sell_qty = max(1, int(qty * 0.2))
-                sell_plan[price_candidates[0]] = sell_qty
-            else:
-                # 두 개 이상이면 절반씩 분할
-                first_price, second_price = price_candidates[0], price_candidates[-1]
-                first_qty = max(1, int(qty * 0.1))
-                second_qty = max(1, int(qty * 0.1))
-                total_planned = first_qty + second_qty
-                if total_planned > qty:
-                    # 보수적으로 전체 수량을 넘지 않도록 조정
-                    scale = qty / total_planned
-                    first_qty = max(1, int(first_qty * scale))
-                    second_qty = max(1, int(second_qty * scale))
-                sell_plan[first_price] = first_qty
-                sell_plan[second_price] = sell_plan.get(second_price, 0) + second_qty
+            # 트레일링 스탑: 조건 만족 시에만 예약
+            if close := float(closes.iloc[-1]) <= trailing_stop * 1.01:
+                sell_plan[trailing_stop] = sell_plan.get(trailing_stop, 0) + max(1, int(qty * 0.2))
+
+            # ATR 타겟: 현재가가 1R 이상 상승했을 때만 예약
+            if atr_target_price and atr_target_price > 0 and float(closes.iloc[-1]) >= (entry_price + risk_per_share):
+                sell_plan[atr_target_price] = sell_plan.get(atr_target_price, 0) + max(1, int(qty * 0.1))
 
             if not sell_plan:
                 continue
+
+            # 총 계획 수량이 보유 수량을 넘지 않도록 조정
+            total_planned = sum(sell_plan.values())
+            if total_planned > qty and total_planned > 0:
+                scale = qty / total_planned
+                scaled_plan: dict[float, int] = {}
+                for price, vol in sell_plan.items():
+                    scaled_vol = int(vol * scale)
+                    if scaled_vol > 0:
+                        scaled_plan[price] = scaled_vol
+                sell_plan = scaled_plan
 
             for raw_price, vol in sell_plan.items():
                 if vol <= 0:
@@ -726,24 +719,24 @@ def filter_box_for_sell(stocks_held: list[StockResponseDTO] | StockResponseDTO |
                 sell_plan[tp_price] = tp_qty
                 sell_plan[stop_price] = sell_plan.get(stop_price, 0) + stop_qty
 
-            # VWAP/POC 기반 분할 매도 (데이터 인프라가 충분한 경우)
-            # 여기서는 단순 일봉 VWAP를 근사치로 사용
+            # VWAP/POC 기반 분할 매도 (최근 구간으로 제한, 박스 내부에서만 적용)
             vwap_price = None
-            try:
-                if "volume" in df.columns and not df["volume"].isna().all():
-                    vol = df["volume"].astype(float)
-                    typical_price = (df["high"].astype(float) + df["low"].astype(float) + df["close"].astype(float)) / 3.0
-                    vwap_series = (typical_price * vol).cumsum() / vol.cumsum()
-                    vwap_price = float(vwap_series.iloc[-1])
-            except Exception:
-                vwap_price = None
+            if not box_break:
+                try:
+                    df_tail = df.tail(60)
+                    if "volume" in df_tail.columns and not df_tail["volume"].isna().all() and len(df_tail) >= 5:
+                        vol = df_tail["volume"].astype(float)
+                        typical_price = (df_tail["high"].astype(float) + df_tail["low"].astype(float) + df_tail["close"].astype(float)) / 3.0
+                        vwap_series = (typical_price * vol).cumsum() / vol.cumsum()
+                        vwap_price = float(vwap_series.iloc[-1])
+                except Exception:
+                    vwap_price = None
 
-            if vwap_price and vwap_price > 0:
-                # VWAP 근처 1차 매도, 상단 근처 2차 매도
-                vwap_qty = max(1, int(qty * 0.1))
-                upper_qty = max(1, int(qty * 0.1))
-                sell_plan[vwap_price] = sell_plan.get(vwap_price, 0) + vwap_qty
-                sell_plan[high_box * 0.98] = sell_plan.get(high_box * 0.98, 0) + upper_qty
+                if vwap_price and vwap_price > 0:
+                    vwap_qty = max(1, int(qty * 0.1))
+                    upper_qty = max(1, int(qty * 0.1))
+                    sell_plan[vwap_price] = sell_plan.get(vwap_price, 0) + vwap_qty
+                    sell_plan[high_box * 0.98] = sell_plan.get(high_box * 0.98, 0) + upper_qty
 
             # 총 계획 수량이 보유 수량을 넘지 않도록 스케일 조정
             total_planned = sum(sell_plan.values())
