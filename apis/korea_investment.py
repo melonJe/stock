@@ -11,6 +11,15 @@ from config.country_config import COUNTRY_CONFIG_ORDER
 from data.dto.account_dto import InquireBalanceRequestDTO, AccountResponseDTO, StockResponseDTO, OverseesStockResponseDTO, convert_overseas_to_domestic
 from data.dto.holiday_dto import HolidayResponseDTO, HolidayRequestDTO
 from data.dto.stock_trade_dto import StockTradeListRequestDTO, StockTradeListResponseDTO, OverseasStockTradeListRequestDTO, OverseasStockTradeListResponseDTO
+from data.dto.interest_stock_dto import (
+    InterestGroupListRequestDTO,
+    InterestGroupListItemDTO,
+    InterestGroupListResponseDTO,
+    InterestGroupDetailRequestDTO,
+    InterestGroupDetailInfoDTO,
+    InterestGroupDetailItemDTO,
+    InterestGroupDetailResponseDTO,
+)
 from utils import discord
 from utils.operations import find_nth_open_day
 
@@ -414,6 +423,98 @@ class KoreaInvestmentAPI:
         holidays = self.get_domestic_market_holidays(date)
         holiday = holidays.get(date)
         return holiday.opnd_yn == "N" if holiday else False
+
+    def get_interest_group_list(
+            self,
+            user_id: str,
+            group_type: str = "1",
+            fid_etc_cls_code: str = "00",
+            custtype: str = "P"
+    ) -> Optional[InterestGroupListResponseDTO]:
+        """
+        관심종목 그룹조회 API 호출 (국내주식-204).
+        """
+        headers = self._add_tr_id_to_headers("HHKCM113004C7", use_prefix=False)
+        headers["custtype"] = custtype
+        params = InterestGroupListRequestDTO(
+            TYPE=group_type,
+            FID_ETC_CLS_CODE=fid_etc_cls_code,
+            USER_ID=user_id
+        ).__dict__
+        response_data = self._get_request(
+            "/uapi/domestic-stock/v1/quotations/intstock-grouplist",
+            params,
+            headers,
+            error_log_prefix="관심종목 그룹조회 API 요청 실패"
+        )
+
+        if response_data:
+            try:
+                output2 = response_data.get("output2", []) or []
+                if isinstance(output2, dict):
+                    output2 = [output2]
+                items = [InterestGroupListItemDTO(**item) for item in output2]
+                return InterestGroupListResponseDTO(output2=items)
+            except Exception as e:
+                logging.error(f"관심종목 그룹조회 파싱 오류: {e} - response data: {response_data}")
+                discord.error_message(f"관심종목 그룹조회 파싱 오류: {e} - response data: {response_data}")
+                return None
+
+        logging.warning("Null response received from API for interest group list.")
+        discord.error_message("Null response received from API for interest group list.")
+        return None
+
+    def get_interest_group_stocks(
+            self,
+            user_id: str,
+            inter_grp_code: str,
+            group_type: str = "1",
+            data_rank: str = "",
+            inter_grp_name: str = "",
+            hts_kor_isnm: str = "",
+            cntg_cls_code: str = "",
+            fid_etc_cls_code: str = "4",
+            custtype: str = "P"
+    ) -> Optional[InterestGroupDetailResponseDTO]:
+        """
+        관심종목 그룹별 종목조회 API 호출 (국내주식-203).
+        """
+        headers = self._add_tr_id_to_headers("HHKCM113004C6", use_prefix=False)
+        headers["custtype"] = custtype
+        params = InterestGroupDetailRequestDTO(
+            TYPE=group_type,
+            USER_ID=user_id,
+            DATA_RANK=data_rank,
+            INTER_GRP_CODE=inter_grp_code,
+            INTER_GRP_NAME=inter_grp_name,
+            HTS_KOR_ISNM=hts_kor_isnm,
+            CNTG_CLS_CODE=cntg_cls_code,
+            FID_ETC_CLS_CODE=fid_etc_cls_code
+        ).__dict__
+        response_data = self._get_request(
+            "/uapi/domestic-stock/v1/quotations/intstock-stocklist-by-group",
+            params,
+            headers,
+            error_log_prefix="관심종목 그룹별 종목조회 API 요청 실패"
+        )
+
+        if response_data:
+            try:
+                output1 = response_data.get("output1")
+                info = InterestGroupDetailInfoDTO(**output1) if output1 else None
+                output2 = response_data.get("output2", []) or []
+                if isinstance(output2, dict):
+                    output2 = [output2]
+                items = [InterestGroupDetailItemDTO(**item) for item in output2]
+                return InterestGroupDetailResponseDTO(output1=info, output2=items)
+            except Exception as e:
+                logging.error(f"관심종목 그룹별 종목조회 파싱 오류: {e} - response data: {response_data}")
+                discord.error_message(f"관심종목 그룹별 종목조회 파싱 오류: {e} - response data: {response_data}")
+                return None
+
+        logging.warning("Null response received from API for interest group detail.")
+        discord.error_message("Null response received from API for interest group detail.")
+        return None
 
     def get_stock_order_list(
             self,

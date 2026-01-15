@@ -847,6 +847,57 @@ def trading_sell(korea_investment: KoreaInvestmentAPI, sell_levels):
                 korea_investment.submit_overseas_reservation_order(country=country, action="sell", symbol=symbol, price=str(round(float(price), 2)), volume=str(volume))
 
 
+def buy_etf_group_stocks():
+    """ETF 관심종목 그룹에 포함된 종목을 1주씩 시장가 매수한다."""
+    ki_api = KoreaInvestmentAPI(
+        app_key=setting_env.APP_KEY_ETF,
+        app_secret=setting_env.APP_SECRET_ETF,
+        account_number=setting_env.ACCOUNT_NUMBER_ETF,
+        account_code=setting_env.ACCOUNT_CODE_ETF,
+    )
+    today = datetime.datetime.now().strftime("%Y%m%d")
+    holidays = ki_api.get_domestic_market_holidays(today)
+    holiday = holidays.get(today)
+    if holiday and holiday.opnd_yn == "N":
+        logging.info("ETF 그룹 매수 스킵: 휴장일")
+        return
+
+    group_list = ki_api.get_interest_group_list(user_id=setting_env.HTS_ID_ETF)
+    if not group_list or not group_list.output2:
+        logging.warning("ETF 그룹 매수 스킵: 관심종목 그룹 없음")
+        return
+
+    etf_groups = [
+        item for item in group_list.output2
+        if "ETF" in (item.inter_grp_name or "").upper()
+    ]
+    if not etf_groups:
+        logging.warning("ETF 그룹 매수 스킵: ETF 그룹 미존재")
+        return
+
+    symbols = set()
+    for group in etf_groups:
+        detail = ki_api.get_interest_group_stocks(
+            user_id=setting_env.HTS_ID_ETF,
+            inter_grp_code=group.inter_grp_code,
+        )
+        if not detail or not detail.output2:
+            continue
+        for item in detail.output2:
+            if item.jong_code:
+                symbols.add(item.jong_code)
+
+    if not symbols:
+        logging.warning("ETF 그룹 매수 스킵: 매수 대상 없음")
+        return
+
+    for symbol in sorted(symbols):
+        try:
+            ki_api.buy(symbol=symbol, price=0, volume=1, order_type="01")
+        except Exception as e:
+            logging.error(f"ETF 그룹 매수 실패: {symbol} - {e}")
+
+
 def korea_trading():
     """Main entry to run daily domestic trading tasks."""
     ki_api = KoreaInvestmentAPI(app_key=setting_env.APP_KEY_KOR, app_secret=setting_env.APP_SECRET_KOR, account_number=setting_env.ACCOUNT_NUMBER_KOR, account_code=setting_env.ACCOUNT_CODE_KOR)
