@@ -57,6 +57,7 @@ def select_sell_stocks(stocks_held: Union[List[StockResponseDTO], StockResponseD
         filter_stable_for_sell(stocks_held),
         filter_trend_for_sell(stocks_held),
         filter_box_for_sell(stocks_held),
+        filter_non_subscription_for_sell(stocks_held),
     ]:
         for sym, price_dict in d.items():
             for price, qty in price_dict.items():
@@ -65,7 +66,6 @@ def select_sell_stocks(stocks_held: Union[List[StockResponseDTO], StockResponseD
 
     if not stocks_held or not sell_levels:
         return sell_levels
-
     holdings = stocks_held if isinstance(stocks_held, list) else [stocks_held]
     limits: dict[str, int] = {}
     for stock in holdings:
@@ -128,6 +128,60 @@ def select_sell_stocks(stocks_held: Union[List[StockResponseDTO], StockResponseD
                 idx += 1
 
         sell_levels[symbol] = {price: volume for price, volume in scaled_levels.items() if volume > 0}
+    return sell_levels
+
+
+def filter_non_subscription_for_sell(
+        stocks_held: list[StockResponseDTO] | StockResponseDTO | None,
+        country: str = "KOR"
+) -> dict[str, dict[float, int]]:
+    """구독하지 않은 보유 종목을 전일 종가로 전량 매도 대상으로 반환한다."""
+    sell_levels: dict[str, dict[float, int]] = {}
+    if not stocks_held:
+        return sell_levels
+
+    holdings = stocks_held if isinstance(stocks_held, list) else [stocks_held]
+    subscribed_symbols = {row.symbol for row in Subscription.select(Subscription.symbol)}
+
+    for stock in holdings:
+        try:
+            symbol = stock.pdno
+        except Exception:
+            continue
+
+        if symbol in subscribed_symbols:
+            continue
+
+        try:
+            qty = max(0, int(float(getattr(stock, "hldg_qty", 0))))
+        except (TypeError, ValueError):
+            continue
+        if qty <= 0:
+            continue
+
+        try:
+            df = fetch_price_dataframe(symbol)
+            if df is None or df.empty or len(df) < 2:
+                continue
+            symbol_country = get_country_by_symbol(symbol)
+            df = normalize_dataframe_for_country(df, symbol_country)
+            if len(df) < 2:
+                continue
+            prev_close = float(df["close"].iloc[-2])
+        except Exception:
+            continue
+
+        if prev_close <= 0:
+            continue
+
+        if symbol_country == "KOR":
+            price_key = price_refine(int(round(prev_close)))
+        else:
+            price_key = round(prev_close, 2)
+
+        sell_levels.setdefault(symbol, {})
+        sell_levels[symbol][price_key] = sell_levels[symbol].get(price_key, 0) + qty
+
     return sell_levels
 
 
