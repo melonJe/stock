@@ -80,8 +80,8 @@ class KoreaInvestmentAPI:
         if response and "access_token" in response and "token_type" in response:
             return f"{response['token_type']} {response['access_token']}"
         else:
-            logging.error("Authentication failed: Invalid response.")
-            raise Exception("Authentication failed.")
+            logging.error("인증 실패: 잘못된 응답")
+            raise Exception("인증 실패")
 
     def _get_request_raw(
             self,
@@ -212,18 +212,18 @@ class KoreaInvestmentAPI:
         :return: True if the order was successful, False otherwise.
         """
         if int(payload.get("ORD_QTY", '0')) == 0:
-            logging.warning("Order quantity is zero. Order not sent.")
+            logging.warning("주문 수량이 0입니다. 주문 미전송.")
             return False
 
         response = self._post_request(path, payload, headers)
         if response:
             if response.get("rt_cd") == "0":
-                logging.info("Order processed successfully.")
+                logging.info("주문 처리 성공")
                 return True
             else:
-                logging.error(f"Order failed: {response}")
+                logging.error(f"주문 실패: {response}")
         else:
-            logging.error(f"Order processing failed")
+            logging.error("주문 처리 실패")
         return False
 
     def buy(self, symbol: str, price: int, volume: int, order_type: str = "00") -> bool:
@@ -276,16 +276,16 @@ class KoreaInvestmentAPI:
             try:
                 return AccountResponseDTO(**response_data.get("output2", [])[0])
             except (KeyError, IndexError) as e:
-                logging.error(f"KeyError or IndexError: {e} - response data: {response_data}")
-                discord.error_message(f"KeyError or IndexError: {e} - response data: {response_data}")
+                logging.error(f"계좌정보 파싱 오류 (KeyError/IndexError): {e}")
+                discord.error_message(f"계좌정보 파싱 오류: {e}")
                 return None
             except Exception as e:
-                logging.error(f"Unexpected error: {e} - response data: {response_data}")
-                discord.error_message(f"Unexpected error: {e} - response data: {response_data}")
+                logging.error(f"계좌정보 예상치 못한 오류: {e}")
+                discord.error_message(f"계좌정보 예상치 못한 오류: {e}")
                 return None
         else:
-            logging.warning("Null response received from API for account info.")
-            discord.error_message("Null response received from API for account info.")
+            logging.warning("계좌정보 API 응답 없음")
+            discord.error_message("계좌정보 API 응답 없음")
             return None
 
     def get_owned_stock_info(self, symbol: str = None) -> Union[List[StockResponseDTO], StockResponseDTO, None]:
@@ -333,12 +333,12 @@ class KoreaInvestmentAPI:
             else:
                 return response_list
         except KeyError as e:
-            logging.error(f"KeyError: {e} - response data: {response_data}")
-            discord.error_message(f"KeyError: {e} - response data: {response_data}")
+            logging.error(f"보유종목 파싱 오류 (KeyError): {e}")
+            discord.error_message(f"보유종목 파싱 오류: {e}")
             return None
         except Exception as e:
-            logging.error(f"Unexpected error: {e} - response data: {response_data}")
-            discord.error_message(f"Unexpected error: {e} - response data: {response_data}")
+            logging.error(f"보유종목 예상치 못한 오류: {e}")
+            discord.error_message(f"보유종목 예상치 못한 오류: {e}")
             return None
 
     def get_oversea_owned_stock_info(self, country: str, symbol: str = None) -> Union[List[OverseesStockResponseDTO], OverseesStockResponseDTO, None]:
@@ -349,7 +349,7 @@ class KoreaInvestmentAPI:
         country_code = country.upper()
         config = COUNTRY_CONFIG_ORDER.get(country_code)
         if not config:
-            logging.error(f"Unsupported country code: {country_code}")
+            logging.error(f"지원하지 않는 국가 코드: {country_code}")
             return None
         params = {
             "CANO": self._account_number,
@@ -371,10 +371,10 @@ class KoreaInvestmentAPI:
                 if stock_data:
                     result.extend([OverseesStockResponseDTO(**item) for item in stock_data])
             except KeyError as e:
-                logging.error(f"KeyError: {e} - response data: {response_data}")
+                logging.error(f"해외보유종목 파싱 오류 (KeyError): {e}")
                 continue
             except Exception as e:
-                logging.error(f"Unexpected error: {e} - response data: {response_data}")
+                logging.error(f"해외보유종목 예상치 못한 오류: {e}")
                 continue
 
         if symbol:
@@ -460,8 +460,8 @@ class KoreaInvestmentAPI:
                 discord.error_message(f"관심종목 그룹조회 파싱 오류: {e} - response data: {response_data}")
                 return None
 
-        logging.warning("Null response received from API for interest group list.")
-        discord.error_message("Null response received from API for interest group list.")
+        logging.warning("관심종목 그룹조회 API 응답 없음")
+        discord.error_message("관심종목 그룹조회 API 응답 없음")
         return None
 
     def get_interest_group_stocks(
@@ -512,8 +512,8 @@ class KoreaInvestmentAPI:
                 discord.error_message(f"관심종목 그룹별 종목조회 파싱 오류: {e} - response data: {response_data}")
                 return None
 
-        logging.warning("Null response received from API for interest group detail.")
-        discord.error_message("Null response received from API for interest group detail.")
+        logging.warning("관심종목 상세조회 API 응답 없음")
+        discord.error_message("관심종목 상세조회 API 응답 없음")
         return None
 
     def get_stock_order_list(
@@ -624,7 +624,7 @@ class KoreaInvestmentAPI:
                 headers
             )
             if not resp:
-                logging.error("stock_trade_list HTTP 요청 실패.")
+                logging.error("국내주문내역 HTTP 요청 실패")
                 break
 
             # 2) 페이로드 추출
@@ -665,7 +665,7 @@ class KoreaInvestmentAPI:
             sll_buy_dvsn_cd = config.get("sll_buy_dvsn_cd_sell")
             ord_dvsn = config.get("ord_dvsn_sell")
         else:
-            logging.error(f"Invalid action: {action}. Must be 'buy' or 'sell'.")
+            logging.error(f"잘못된 action: {action}. 'buy' 또는 'sell'이어야 합니다.")
             return None
 
         prdt_type_cd = config.get("prdt_type_cd")

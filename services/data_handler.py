@@ -126,7 +126,7 @@ def stock_dividend_filter(country="korea",
         df = pd.DataFrame(data_list)
 
         if df.empty:
-            print("데이터가 없습니다.")
+            logging.warning("stock_dividend_filter: 데이터가 없습니다.")
             return set()
 
         # 조건 필터링
@@ -145,10 +145,10 @@ def stock_dividend_filter(country="korea",
         return set(df['ticker'].tolist())
 
     except requests.RequestException as e:
-        print(f"요청 실패: {e}")
+        logging.error(f"stock_dividend_filter 요청 실패: {e}")
         return set()
     except Exception as e:
-        print(f"오류 발생: {e}")
+        logging.error(f"stock_dividend_filter 오류 발생: {e}")
         return set()
 
 
@@ -236,10 +236,10 @@ def stock_growth_filter(country="korea",
         return set(df.loc[df['sel'] == True, 'name'].tolist())
 
     except requests.RequestException as e:
-        print(f"요청 실패: {e}")
+        logging.error(f"stock_growth_filter 요청 실패: {e}")
         return set()
     except Exception as e:
-        print(f"오류 발생: {e}")
+        logging.error(f"stock_growth_filter 오류 발생: {e}")
         return set()
 
 

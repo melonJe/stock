@@ -132,8 +132,7 @@ def select_sell_stocks(stocks_held: Union[List[StockResponseDTO], StockResponseD
 
 
 def filter_non_subscription_for_sell(
-        stocks_held: list[StockResponseDTO] | StockResponseDTO | None,
-        country: str = "KOR"
+        stocks_held: Union[List[StockResponseDTO], StockResponseDTO, None]
 ) -> dict[str, dict[float, int]]:
     """구독하지 않은 보유 종목을 전일 종가로 전량 매도 대상으로 반환한다."""
     sell_levels: dict[str, dict[float, int]] = {}
@@ -168,7 +167,8 @@ def filter_non_subscription_for_sell(
             if len(df) < 2:
                 continue
             prev_close = float(df["close"].iloc[-2])
-        except Exception:
+        except Exception as e:
+            logging.error(f"filter_non_subscription_for_sell 처리 중 에러: {symbol} -> {e}")
             continue
 
         if prev_close <= 0:
@@ -273,11 +273,13 @@ def filter_trend_for_buy(country: str = "KOR") -> dict[str, dict[float, int]]:
 
             buy_levels[symbol] = add_prev_close_allocation(levels, df, volume_shares)
         except Exception as e:
-            logging.error(f"filter_trend_pullback_reversal Error occurred: {e}")
+            logging.error(f"filter_trend_for_buy 처리 중 에러: {symbol} -> {e}")
     return buy_levels
 
 
-def filter_trend_for_sell(stocks_held: list[StockResponseDTO] | StockResponseDTO | None, country: str = "KOR") -> dict[str, dict[float, int]]:
+def filter_trend_for_sell(
+        stocks_held: Union[List[StockResponseDTO], StockResponseDTO, None]
+) -> dict[str, dict[float, int]]:
     sell_levels: dict[str, dict[float, int]] = {}
     if not stocks_held:
         return sell_levels
@@ -470,11 +472,13 @@ def filter_stable_for_buy(country: str = "KOR") -> dict[str, dict[float, int]]:
 
             buy_levels[symbol] = add_prev_close_allocation(levels, df, volume)
         except Exception as e:
-            logging.error(f"select_buy_stocks Error occurred: {e}")
+            logging.error(f"filter_stable_for_buy 처리 중 에러: {symbol} -> {e}")
     return buy_levels
 
 
-def filter_stable_for_sell(stocks_held: Union[List[StockResponseDTO], StockResponseDTO, None], country: str = "KOR") -> dict[str, dict[float, int]]:
+def filter_stable_for_sell(
+        stocks_held: Union[List[StockResponseDTO], StockResponseDTO, None]
+        ) -> dict[str, dict[float, int]]:
     sell_levels: dict[str, dict[float, int]] = {}
     if not stocks_held:
         return sell_levels
@@ -515,8 +519,8 @@ def filter_stable_for_sell(stocks_held: Union[List[StockResponseDTO], StockRespo
             if df is None or df.empty:
                 continue
 
-            country_code = get_country_by_symbol(symbol)
-            df = normalize_dataframe_for_country(df, country_code)
+            symbol_country = get_country_by_symbol(symbol)
+            df = normalize_dataframe_for_country(df, symbol_country)
             if len(df) < 30:
                 continue
 
@@ -578,7 +582,7 @@ def filter_stable_for_sell(stocks_held: Union[List[StockResponseDTO], StockRespo
             for raw_price, vol in sell_plan.items():
                 if vol <= 0:
                     continue
-                if country_code == "KOR":
+                if symbol_country == "KOR":
                     price_key = price_refine(int(round(raw_price)))
                 else:
                     price_key = round(raw_price, 2)
@@ -662,11 +666,13 @@ def filter_box_for_buy(country: str = "KOR") -> dict[str, dict[float, int]]:
 
             buy_levels[symbol] = add_prev_close_allocation(levels, df, volume)
         except Exception as e:
-            logging.error(f"filter_box_for_buy Error occurred: {e}")
+            logging.error(f"filter_box_for_buy 처리 중 에러: {symbol} -> {e}")
     return buy_levels
 
 
-def filter_box_for_sell(stocks_held: list[StockResponseDTO] | StockResponseDTO | None, country: str = "KOR") -> dict[str, dict[float, int]]:
+def filter_box_for_sell(
+        stocks_held: Union[List[StockResponseDTO], StockResponseDTO, None]
+) -> dict[str, dict[float, int]]:
     sell_levels: dict[str, dict[float, int]] = {}
     if not stocks_held:
         return sell_levels
@@ -827,7 +833,7 @@ def trading_buy(korea_investment: KoreaInvestmentAPI, buy_levels):
     try:
         end_date = korea_investment.get_nth_open_day(3)
     except Exception as e:
-        logging.error(f"Error occurred while getting nth open day: {e}")
+        logging.error(f"trading_buy 오픈일 조회 실패: {e}")
         return
 
     money = 0
@@ -851,54 +857,65 @@ def trading_buy(korea_investment: KoreaInvestmentAPI, buy_levels):
                         money += price * volume
 
                 except Exception as e:
-                    logging.error(f"Error occurred while executing trades for symbol {symbol}: {e}")
+                    logging.error(f"trading_buy 주문 실패: {symbol} -> {e}")
         except Exception as e:
-            logging.error(f"Error occurred while processing symbol {symbol}: {e}")
+            logging.error(f"trading_buy 처리 중 에러: {symbol} -> {e}")
 
     if money:
         try:
             discord.send_message(f'총 액 : {money}')
         except Exception as e:
-            logging.error(f"Error occurred while sending message to Discord: {e}")
+            logging.error(f"trading_buy 디스코드 전송 실패: {e}")
 
 
 def trading_sell(korea_investment: KoreaInvestmentAPI, sell_levels):
     """Place sell orders for stocks present in the queue."""
-    end_date = korea_investment.get_nth_open_day(1)
+    try:
+        end_date = korea_investment.get_nth_open_day(1)
+    except Exception as e:
+        logging.error(f"trading_sell 오픈일 조회 실패: {e}")
+        return
 
     for symbol, levels in (sell_levels or {}).items():
-        country = get_country_by_symbol(symbol)
-        stock = korea_investment.get_owned_stock_info(symbol=symbol)
-        if not stock:
-            continue
-
         try:
-            available = int(float(getattr(stock, "ord_psbl_qty", 0) or 0))
-        except (TypeError, ValueError):
-            available = 0
-            
-        if available <= 0:
-            continue
+            country = get_country_by_symbol(symbol)
+            stock = korea_investment.get_owned_stock_info(symbol=symbol)
+            if not stock:
+                continue
 
-        for price, volume in levels.items():
             try:
-                volume = int(volume)
+                available = int(float(getattr(stock, "ord_psbl_qty", 0) or 0))
             except (TypeError, ValueError):
-                continue
-            if volume <= 0 or available <= 0:
-                continue
-            if volume > available:
-                volume = available
-            available -= volume
+                available = 0
 
-            if country == "KOR":
-                if price < float(stock.pchs_avg_pric):
-                    price = price_refine(int(float(stock.pchs_avg_pric) * 1.002), 1)
-                korea_investment.sell_reserve(symbol=symbol, price=int(price), volume=volume, end_date=end_date)
-            elif country == "USA":
-                if price < float(stock.pchs_avg_pric):
-                    price = round(float(stock.pchs_avg_pric) * 1.005, 2)
-                korea_investment.submit_overseas_reservation_order(country=country, action="sell", symbol=symbol, price=str(round(float(price), 2)), volume=str(volume))
+            if available <= 0:
+                logging.debug(f"trading_sell 스킵: {symbol} - 주문가능수량 없음")
+                continue
+
+            for price, volume in levels.items():
+                try:
+                    volume = int(volume)
+                except (TypeError, ValueError):
+                    continue
+                if volume <= 0 or available <= 0:
+                    continue
+                if volume > available:
+                    volume = available
+                available -= volume
+
+                try:
+                    if country == "KOR":
+                        if price < float(stock.pchs_avg_pric):
+                            price = price_refine(int(float(stock.pchs_avg_pric) * 1.002), 1)
+                        korea_investment.sell_reserve(symbol=symbol, price=int(price), volume=volume, end_date=end_date)
+                    elif country == "USA":
+                        if price < float(stock.pchs_avg_pric):
+                            price = round(float(stock.pchs_avg_pric) * 1.005, 2)
+                        korea_investment.submit_overseas_reservation_order(country=country, action="sell", symbol=symbol, price=str(round(float(price), 2)), volume=str(volume))
+                except Exception as e:
+                    logging.error(f"trading_sell 주문 실패: {symbol} -> {e}")
+        except Exception as e:
+            logging.error(f"trading_sell 처리 중 에러: {symbol} -> {e}")
 
 
 def buy_etf_group_stocks():
