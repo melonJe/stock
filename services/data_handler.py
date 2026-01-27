@@ -18,6 +18,18 @@ from services.tradingview_scan import (
     request_tradingview_scan,
 )
 from utils.data_util import upsert_many
+from config.constants import (
+    KOREAN_STOCK_PATTERN,
+    MAX_WORKER_COUNT,
+    BLACKLIST_RETENTION_DAYS,
+    DEFAULT_PRICE_HISTORY_YEARS,
+    TICKER_INDEX,
+    DIVIDEND_YIELD_INDEX,
+    DIVIDEND_PAYOUT_RATIO_INDEX,
+    CONTINUOUS_DIVIDEND_INDEX,
+    CASH_FLOW_INDEX,
+    NET_INCOME_INDEX,
+)
 
 
 def get_company_name(symbol: str):
@@ -37,18 +49,14 @@ def get_company_name(symbol: str):
             code = 'Symbol'
         return df_krx[df_krx[code] == symbol].to_dict('records')[0].get('Name')
     except Exception as e:
-        logging.error(f"Failed to fetch stock data: {e}")
+        logging.error(f"종목명 조회 실패: {e}")
         return None
 
 
 def get_country_by_symbol(symbol: str):
-    # try:
-    #     return Stock.get(symbol=symbol).country
-    # except Exception:
-    #     pass
-    if re.match(r'(\d{5}[0-9KLMN])', symbol):
+    if re.match(KOREAN_STOCK_PATTERN, symbol):
         return "KOR"
-    elif re.match(r'([a-zA-Z\s\.]*)', symbol):
+    elif re.match(AMERICA_STOCK_PATTERN, symbol):
         return "USA"
     else:
         return ""
@@ -78,7 +86,7 @@ def insert_stock(symbol: str, company_name: str = None, country: str = None):
         country = get_country_by_symbol(symbol)
 
     new_stock = Stock.create(symbol=symbol, company_name=company_name, country=country)
-    add_price_for_symbol(symbol, start_date=datetime.datetime.now() - relativedelta(years=5), end_date=datetime.datetime.now())
+    add_price_for_symbol(symbol, start_date=datetime.datetime.now() - relativedelta(years=DEFAULT_PRICE_HISTORY_YEARS), end_date=datetime.datetime.now())
     return new_stock
 
 
@@ -112,11 +120,11 @@ def stock_dividend_filter(country="korea",
             values = item.get("d", [])
             try:
                 data_dict = {
-                    'ticker': values[0] if len(values) > 0 else None,  # 주식 티커
-                    'dividend_yield': float(values[6]) if values[6] is not None else None,  # 배당 수익률
-                    'dividend_payout_ratio_ttm': float(values[7]) if values[7] is not None else None,  # 배당금 / 주당 순이익
-                    'continuous_dividend_payout': int(values[8]) if values[8] is not None else None,  # 연속 배당 지불 (1년)
-                    'cash_conversion_ratio': float(values[9]) / float(values[10]) if values[10] else None
+                    'ticker': values[TICKER_INDEX] if len(values) > TICKER_INDEX else None,
+                    'dividend_yield': float(values[DIVIDEND_YIELD_INDEX]) if values[DIVIDEND_YIELD_INDEX] is not None else None,
+                    'dividend_payout_ratio_ttm': float(values[DIVIDEND_PAYOUT_RATIO_INDEX]) if values[DIVIDEND_PAYOUT_RATIO_INDEX] is not None else None,
+                    'continuous_dividend_payout': int(values[CONTINUOUS_DIVIDEND_INDEX]) if values[CONTINUOUS_DIVIDEND_INDEX] is not None else None,
+                    'cash_conversion_ratio': float(values[CASH_FLOW_INDEX]) / float(values[NET_INCOME_INDEX]) if values[NET_INCOME_INDEX] else None
                 }
                 data_list.append(data_dict)
             except (ValueError, TypeError, IndexError):
@@ -193,13 +201,13 @@ def stock_growth_filter(country="korea",
         if df.empty:
             return set()
 
-        def pick(series, keys):
+        def get_first_available_value(series, keys):
             for k in keys:
                 if k in series and pd.notna(series[k]):
                     return series[k]
             return None
 
-        df["rev_cagr"] = df.apply(lambda r: pick(r, ["total_revenue_cagr_5y", "total_revenue_yoy_growth_fy"]), axis=1)
+        df["rev_cagr"] = df.apply(lambda r: get_first_available_value(r, ["total_revenue_cagr_5y", "total_revenue_yoy_growth_fy"]), axis=1)
         df["eps_cagr"] = df["earnings_per_share_basic_ttm"]
         df["roe"] = df.get("return_on_equity_fq")
         df["dte"] = df.get("debt_to_equity_fy")
@@ -233,7 +241,7 @@ def stock_growth_filter(country="korea",
                 df["profits_ok"]
         )
 
-        return set(df.loc[df['sel'] == True, 'name'].tolist())
+        return set(df.loc[df['sel'], 'name'].tolist())
 
     except requests.RequestException as e:
         logging.error(f"stock_growth_filter 요청 실패: {e}")
@@ -346,10 +354,10 @@ def stock_box_pattern_filter(
         return set(df.loc[df["sel"], "name"].dropna().tolist())
 
     except requests.RequestException as e:
-        logging.error("요청 실패: %s", e)
+        logging.error(f"stock_box_pattern_filter 요청 실패: {e}")
         return set()
     except Exception as e:
-        logging.error("오류 발생: %s", e)
+        logging.error(f"stock_box_pattern_filter 오류 발생: {e}")
         return set()
 
 
@@ -401,16 +409,16 @@ def update_blacklist():
             'https://finance.naver.com/sise/investment_alert.naver?type=caution',
             'https://finance.naver.com/sise/investment_alert.naver?type=warning',
             'https://finance.naver.com/sise/investment_alert.naver?type=risk')
-    symbol = set()
+    blacklisted_symbols = set()
     for url in urls:
         page = requests.get(url, timeout=30).text
         soup = BeautifulSoup(page, "html.parser")
         elements = soup.select('a.tltle')
-        symbol = symbol.union(parse_qs(urlparse(x['href']).query)['code'][0] for x in elements)
-    data_to_insert = [{'symbol': x, 'record_date': datetime.datetime.now().strftime('%Y-%m-%d')} for x in symbol]
+        blacklisted_symbols = blacklisted_symbols.union(parse_qs(urlparse(x['href']).query)['code'][0] for x in elements)
+    data_to_insert = [{'symbol': x, 'record_date': datetime.datetime.now().strftime('%Y-%m-%d')} for x in blacklisted_symbols]
     if data_to_insert:
         upsert_many(Blacklist, data_to_insert, Blacklist.symbol, Blacklist.record_date)
-    Blacklist.delete().where(Blacklist.record_date < datetime.datetime.now() - datetime.timedelta(days=30)).execute()
+    Blacklist.delete().where(Blacklist.record_date < datetime.datetime.now() - datetime.timedelta(days=BLACKLIST_RETENTION_DAYS)).execute()
 
     # TODO 미국 주식 Blacklist insert 프로세스 추가
 
@@ -420,7 +428,7 @@ def process_stock_listing(df, code_col, name_col, region):
     주어진 시장 데이터를 처리하고, insert_stock 함수를 병렬로 실행.
     """
     try:
-        with ThreadPoolExecutor(max_workers=min(os.cpu_count(), 10)) as executor:
+        with ThreadPoolExecutor(max_workers=min(os.cpu_count(), MAX_WORKER_COUNT)) as executor:
             futures = [
                 executor.submit(insert_stock, item[code_col], item[name_col], region)
                 for item in df.to_dict('records')
@@ -527,13 +535,11 @@ def add_price_for_symbol(symbol: str, start_date: datetime.datetime = None, end_
 
         upsert_many(table, data_to_insert, [table.symbol, table.date], ['open', 'high', 'close', 'low', 'volume'])
 
-    except NotFoundUrl as e:
+    except NotFoundUrl:
         Stock.delete().where(Stock.symbol == symbol).execute()
-    except KeyError as e:
-        # logging.error(f"Error processing symbol {symbol}: {e}")
+    except KeyError:
         pass
-    except Exception as e:
-        # logging.error(f"Error processing symbol {symbol}: {e}")
+    except Exception:
         pass
 
 

@@ -16,9 +16,27 @@ from config import setting_env
 from data.models import Blacklist, Stock, Subscription
 from services.data_handler import get_country_by_symbol, get_history_table
 from utils.operations import price_refine
+from config.constants import (
+    DEFAULT_PRICE_HISTORY_DAYS,
+    VOLUME_SPLIT_RATIO,
+    KOREAN_PRICE_MARKUP_LEVEL1,
+    KOREAN_PRICE_MARKUP_LEVEL2,
+    USA_PRICE_MARKUP_LEVEL1,
+    USA_PRICE_MARKUP_LEVEL2,
+    BOLLINGER_WINDOW,
+    BOLLINGER_STD_DEV,
+    ADTV_ROLLING_WINDOW,
+    ATR_WINDOWS,
+    KOREAN_LIQUIDITY_THRESHOLD_BASE,
+    USA_LIQUIDITY_THRESHOLD,
+    WEIGHT_PROFILE_UNIFORM,
+    WEIGHT_PROFILE_FRONT_LOADED,
+    WEIGHT_PROFILE_BOTTOM_LOADED,
+    WEIGHT_PROFILE_MIDDLE_LOADED,
+)
 
 
-def fetch_price_dataframe(symbol: str, days: int = 365) -> pd.DataFrame:
+def fetch_price_dataframe(symbol: str, days: int = DEFAULT_PRICE_HISTORY_DAYS) -> pd.DataFrame:
     """Return recent price history for ``symbol``.
 
     Parameters
@@ -47,16 +65,19 @@ def fetch_price_dataframe(symbol: str, days: int = 365) -> pd.DataFrame:
 
 def calc_adjusted_volumes(volume: int, base_price: float, country: str) -> Iterable[tuple[int, float]]:
     """Return tuples of ``(volume, price)`` adjusted for sell queue operations."""
+    first_volume = volume - int(volume * VOLUME_SPLIT_RATIO)
+    second_volume = int(volume * VOLUME_SPLIT_RATIO)
+    
     if country == "KOR":
         return [
-            (volume - int(volume * 0.5), math.ceil(price_refine(base_price * 1.080))),
-            (int(volume * 0.5), math.ceil(price_refine(base_price * 1.155))),
+            (first_volume, math.ceil(price_refine(base_price * KOREAN_PRICE_MARKUP_LEVEL1))),
+            (second_volume, math.ceil(price_refine(base_price * KOREAN_PRICE_MARKUP_LEVEL2))),
         ]
 
     if country == "USA":
         return [
-            (volume - int(volume * 0.5), round(base_price * 1.080, 2)),
-            (int(volume * 0.5), round(base_price * 1.155, 2)),
+            (first_volume, round(base_price * USA_PRICE_MARKUP_LEVEL1, 2)),
+            (second_volume, round(base_price * USA_PRICE_MARKUP_LEVEL2, 2)),
         ]
     return []
 
@@ -80,10 +101,13 @@ def compute_resistance_prices(df: pd.DataFrame) -> Tuple[float, float, float]:
             df[col] = pd.to_numeric(df[col], errors="coerce")
 
     # ATR (max of 5/10/20)
-    df['ATR5'] = AverageTrueRange(high=df['high'], low=df['low'], close=df['close'], window=5).average_true_range()
-    df['ATR10'] = AverageTrueRange(high=df['high'], low=df['low'], close=df['close'], window=10).average_true_range()
-    df['ATR20'] = AverageTrueRange(high=df['high'], low=df['low'], close=df['close'], window=20).average_true_range()
-    atr_vals = [df.iloc[-1]['ATR5'], df.iloc[-1]['ATR10'], df.iloc[-1]['ATR20']]
+    atr_columns = {}
+    for window in ATR_WINDOWS:
+        col_name = f'ATR{window}'
+        atr_columns[col_name] = AverageTrueRange(high=df['high'], low=df['low'], close=df['close'], window=window).average_true_range()
+        df[col_name] = atr_columns[col_name]
+    
+    atr_vals = [df.iloc[-1][f'ATR{w}'] for w in ATR_WINDOWS]
     atr = max([v for v in atr_vals if not pd.isna(v)] or [np.nan])
 
     # Pivot high (3-bar)
@@ -99,10 +123,10 @@ def compute_resistance_prices(df: pd.DataFrame) -> Tuple[float, float, float]:
             pivot_high_val = float(df['high'].rolling(window=10).max().iloc[-2])
 
     # Bollinger Upper with fallback
-    boll = BollingerBands(close=df['close'], window=20, window_dev=2)
+    boll = BollingerBands(close=df['close'], window=BOLLINGER_WINDOW, window_dev=BOLLINGER_STD_DEV)
     bb_upper_today = float(boll.bollinger_hband().iloc[-1])
     if pd.isna(bb_upper_today) or bb_upper_today <= 0:
-        bb_upper_today = float(df['high'].rolling(window=20).quantile(0.9).iloc[-2])
+        bb_upper_today = float(df['high'].rolling(window=BOLLINGER_WINDOW).quantile(0.9).iloc[-2])
 
     # ATR-up projection
     atr = 0.0 if (pd.isna(atr) or atr <= 0) else float(atr)
@@ -127,7 +151,7 @@ def prepare_buy_context(country: str, category: str) -> tuple[str, float, float,
         anchor_date -= datetime.timedelta(days=1)
     anchor_date_str = anchor_date.strftime("%Y-%m-%d")
 
-    equity_base = default_equity_usd *( 1 if country == "USA" else usd_krw )
+    equity_base = default_equity_usd * (1 if country == "USA" else usd_krw)
     risk_amount_value = equity_base * risk_pct
 
     blacklist_symbols = Blacklist.select(Blacklist.symbol)
@@ -173,7 +197,7 @@ def has_min_rows(df: pd.DataFrame, min_length: int) -> bool:
 
 def calculate_adtv(df: pd.DataFrame) -> Optional[float]:
     try:
-        rolling_volume = df["volume"].rolling(window=50).mean().iloc[-1]
+        rolling_volume = df["volume"].rolling(window=ADTV_ROLLING_WINDOW).mean().iloc[-1]
         if pd.isna(rolling_volume):
             return None
         return float(df.iloc[-1]["close"]) * float(rolling_volume)
@@ -184,14 +208,14 @@ def calculate_adtv(df: pd.DataFrame) -> Optional[float]:
 def meets_liquidity_threshold(adtv: Optional[float], country: str, usd_krw: float) -> bool:
     if adtv is None or adtv <= 0:
         return False
-    threshold = 10_000_000 * usd_krw if country == "KOR" else 20_000_000
+    threshold = KOREAN_LIQUIDITY_THRESHOLD_BASE * usd_krw if country == "KOR" else USA_LIQUIDITY_THRESHOLD
     return adtv >= threshold
 
 
 def calculate_atr(df: pd.DataFrame) -> Optional[float]:
     atr_values: list[float] = []
     try:
-        for window in (5, 10, 20):
+        for window in ATR_WINDOWS:
             atr_series = AverageTrueRange(high=df["high"], low=df["low"], close=df["close"], window=window).average_true_range()
             atr_value = float(atr_series.iloc[-1])
             if pd.isna(atr_value) or atr_value <= 0:
@@ -202,7 +226,7 @@ def calculate_atr(df: pd.DataFrame) -> Optional[float]:
     return max(atr_values) if atr_values else None
 
 
-def apply_bollinger_bands(df: pd.DataFrame, window: int = 20, window_dev: float = 2) -> pd.DataFrame:
+def apply_bollinger_bands(df: pd.DataFrame, window: int = BOLLINGER_WINDOW, window_dev: float = BOLLINGER_STD_DEV) -> pd.DataFrame:
     if "close" not in df.columns:
         return df
     indicator = BollingerBands(close=df["close"], window=window, window_dev=window_dev)
@@ -312,11 +336,11 @@ def build_weight_profile(level_count: int, profile: str = "uniform") -> list[flo
         return []
 
     profile_key = profile.lower()
-    if profile_key == "front_loaded":
+    if profile_key == WEIGHT_PROFILE_FRONT_LOADED:
         return [float(level_count - idx) for idx in range(level_count)]
-    if profile_key == "bottom_loaded":
+    if profile_key == WEIGHT_PROFILE_BOTTOM_LOADED:
         return [float(idx + 1) for idx in range(level_count)]
-    if profile_key == "middle_loaded":
+    if profile_key == WEIGHT_PROFILE_MIDDLE_LOADED:
         midpoint = (level_count - 1) / 2
         return [float(level_count - abs(idx - midpoint)) for idx in range(level_count)]
     return [1.0] * level_count
