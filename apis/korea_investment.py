@@ -260,6 +260,29 @@ class KoreaInvestmentAPI:
         reserve_payload = self._create_reserve_payload(symbol, price, volume, end_date, order_type, "01")
         return self._send_order("/uapi/domestic-stock/v1/trading/order-resv", headers, reserve_payload)
 
+    def get_current_price(self, symbol: str) -> Optional[int]:
+        """
+        국내주식 현재가 시세 조회.
+
+        :param symbol: 종목코드 (6자리)
+        :return: 현재가 (정수) 또는 None
+        """
+        headers = self._add_tr_id_to_headers("FHKST01010100", use_prefix=False)
+        params = {
+            "FID_COND_MRKT_DIV_CODE": "J",
+            "FID_INPUT_ISCD": symbol
+        }
+        response_data = self._get_request("/uapi/domestic-stock/v1/quotations/inquire-price", params, headers)
+
+        if response_data:
+            try:
+                output = response_data.get("output", {})
+                return int(output.get("stck_prpr", 0))
+            except (KeyError, ValueError) as e:
+                logging.error(f"현재가 조회 파싱 오류: {symbol} - {e}")
+                return None
+        return None
+
     def get_account_info(self) -> Union[AccountResponseDTO, None]:
         """
         Retrieve account information.

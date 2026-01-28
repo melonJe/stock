@@ -962,11 +962,35 @@ def buy_etf_group_stocks():
         logging.warning("ETF 그룹 매수 스킵: 매수 대상 없음")
         return
 
+    total_purchase_amount = 0
+    purchased_symbols = []
+
     for symbol in sorted(symbols):
         try:
             ki_api.buy(symbol=symbol, price=0, volume=1, order_type="03")
+            purchased_symbols.append(symbol)
         except Exception as e:
             logging.critical(f"ETF 그룹 매수 실패: {symbol} - {e}")
+
+    # 구매 금액 계산 및 잔고 확인
+    if purchased_symbols:
+        for symbol in purchased_symbols:
+            current_price = ki_api.get_current_price(symbol=symbol)
+            if current_price:
+                total_purchase_amount += current_price
+
+        account_info = ki_api.get_account_info()
+        if account_info and total_purchase_amount > 0:
+            balance = int(account_info.dnca_tot_amt)
+            threshold = total_purchase_amount * 2
+            if balance <= threshold:
+                discord.send_message(
+                    f"[ETF 계좌 잔고 부족 알림]\n"
+                    f"금일 구매 금액: {total_purchase_amount:,}원\n"
+                    f"현재 잔고: {balance:,}원\n"
+                    f"권장 잔고: {threshold:,}원 이상\n"
+                    f"→ 금액 충전이 필요합니다."
+                )
 
 
 def korea_trading():
