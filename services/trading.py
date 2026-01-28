@@ -833,7 +833,7 @@ def trading_buy(korea_investment: KoreaInvestmentAPI, buy_levels):
     try:
         end_date = korea_investment.get_nth_open_day(3)
     except Exception as e:
-        logging.error(f"trading_buy 오픈일 조회 실패: {e}")
+        logging.critical(f"trading_buy 오픈일 조회 실패: {e}")
         return
 
     money = 0
@@ -857,7 +857,7 @@ def trading_buy(korea_investment: KoreaInvestmentAPI, buy_levels):
                         money += price * volume
 
                 except Exception as e:
-                    logging.error(f"trading_buy 주문 실패: {symbol} -> {e}")
+                    logging.critical(f"trading_buy 주문 실패: {symbol} -> {e}")
         except Exception as e:
             logging.error(f"trading_buy 처리 중 에러: {symbol} -> {e}")
 
@@ -873,7 +873,7 @@ def trading_sell(korea_investment: KoreaInvestmentAPI, sell_levels):
     try:
         end_date = korea_investment.get_nth_open_day(1)
     except Exception as e:
-        logging.error(f"trading_sell 오픈일 조회 실패: {e}")
+        logging.critical(f"trading_sell 오픈일 조회 실패: {e}")
         return
 
     for symbol, levels in (sell_levels or {}).items():
@@ -913,7 +913,7 @@ def trading_sell(korea_investment: KoreaInvestmentAPI, sell_levels):
                             price = round(float(stock.pchs_avg_pric) * 1.005, 2)
                         korea_investment.submit_overseas_reservation_order(country=country, action="sell", symbol=symbol, price=str(round(float(price), 2)), volume=str(volume))
                 except Exception as e:
-                    logging.error(f"trading_sell 주문 실패: {symbol} -> {e}")
+                    logging.critical(f"trading_sell 주문 실패: {symbol} -> {e}")
         except Exception as e:
             logging.error(f"trading_sell 처리 중 에러: {symbol} -> {e}")
 
@@ -966,7 +966,7 @@ def buy_etf_group_stocks():
         try:
             ki_api.buy(symbol=symbol, price=0, volume=1, order_type="03")
         except Exception as e:
-            logging.error(f"ETF 그룹 매수 실패: {symbol} - {e}")
+            logging.critical(f"ETF 그룹 매수 실패: {symbol} - {e}")
 
 
 def korea_trading():

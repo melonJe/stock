@@ -276,16 +276,13 @@ class KoreaInvestmentAPI:
             try:
                 return AccountResponseDTO(**response_data.get("output2", [])[0])
             except (KeyError, IndexError) as e:
-                logging.error(f"계좌정보 파싱 오류 (KeyError/IndexError): {e}")
-                discord.error_message(f"계좌정보 파싱 오류: {e}")
+                logging.critical(f"계좌정보 파싱 오류 (KeyError/IndexError): {e}")
                 return None
             except Exception as e:
-                logging.error(f"계좌정보 예상치 못한 오류: {e}")
-                discord.error_message(f"계좌정보 예상치 못한 오류: {e}")
+                logging.critical(f"계좌정보 예상치 못한 오류: {e}")
                 return None
         else:
-            logging.warning("계좌정보 API 응답 없음")
-            discord.error_message("계좌정보 API 응답 없음")
+            logging.critical("계좌정보 API 응답 없음")
             return None
 
     def get_owned_stock_info(self, symbol: str = None) -> Union[List[StockResponseDTO], StockResponseDTO, None]:
@@ -333,12 +330,10 @@ class KoreaInvestmentAPI:
             else:
                 return response_list
         except KeyError as e:
-            logging.error(f"보유종목 파싱 오류 (KeyError): {e}")
-            discord.error_message(f"보유종목 파싱 오류: {e}")
+            logging.critical(f"보유종목 파싱 오류 (KeyError): {e}")
             return None
         except Exception as e:
-            logging.error(f"보유종목 예상치 못한 오류: {e}")
-            discord.error_message(f"보유종목 예상치 못한 오류: {e}")
+            logging.critical(f"보유종목 예상치 못한 오류: {e}")
             return None
 
     def get_oversea_owned_stock_info(self, country: str, symbol: str = None) -> Union[List[OverseesStockResponseDTO], OverseesStockResponseDTO, None]:
@@ -456,12 +451,10 @@ class KoreaInvestmentAPI:
                 items = [InterestGroupListItemDTO(**item) for item in output2]
                 return InterestGroupListResponseDTO(output2=items)
             except Exception as e:
-                logging.error(f"관심종목 그룹조회 파싱 오류: {e} - response data: {response_data}")
-                discord.error_message(f"관심종목 그룹조회 파싱 오류: {e} - response data: {response_data}")
+                logging.critical(f"관심종목 그룹조회 파싱 오류: {e} - response data: {response_data}")
                 return None
 
-        logging.warning("관심종목 그룹조회 API 응답 없음")
-        discord.error_message("관심종목 그룹조회 API 응답 없음")
+        logging.critical("관심종목 그룹조회 API 응답 없음")
         return None
 
     def get_interest_group_stocks(
@@ -508,12 +501,10 @@ class KoreaInvestmentAPI:
                 items = [InterestGroupDetailItemDTO(**item) for item in output2]
                 return InterestGroupDetailResponseDTO(output1=info, output2=items)
             except Exception as e:
-                logging.error(f"관심종목 그룹별 종목조회 파싱 오류: {e} - response data: {response_data}")
-                discord.error_message(f"관심종목 그룹별 종목조회 파싱 오류: {e} - response data: {response_data}")
+                logging.critical(f"관심종목 그룹별 종목조회 파싱 오류: {e} - response data: {response_data}")
                 return None
 
-        logging.warning("관심종목 상세조회 API 응답 없음")
-        discord.error_message("관심종목 상세조회 API 응답 없음")
+        logging.critical("관심종목 상세조회 API 응답 없음")
         return None
 
     def get_stock_order_list(
@@ -558,7 +549,7 @@ class KoreaInvestmentAPI:
                 headers
             )
             if not resp:
-                discord.error_message("stock_order_list HTTP 요청 실패.")
+                logging.critical("stock_order_list HTTP 요청 실패.")
                 return None
 
             # 4) 데이터 파싱
@@ -566,8 +557,7 @@ class KoreaInvestmentAPI:
                 items = resp.json().get("output1", [])
                 all_trades.extend(StockTradeListResponseDTO(**item) for item in items)
             except Exception as e:
-                logging.error(f"JSON 파싱 오류: {e} | 응답 본문: {resp.text}")
-                discord.error_message(f"JSON 파싱 오류: {e}")
+                logging.critical(f"JSON 파싱 오류: {e} | 응답 본문: {resp.text}")
                 return None
 
             # 5) 다음 페이지 계속 여부 확인
