@@ -919,7 +919,7 @@ def trading_sell(korea_investment: KoreaInvestmentAPI, sell_levels):
 
 
 def buy_etf_group_stocks():
-    """ETF 관심종목 그룹에 포함된 종목을 1주씩 시장가 매수한다."""
+    """ETF 관심종목 그룹에 포함된 종목을 1주씩 매수한다."""
     ki_api = KoreaInvestmentAPI(
         app_key=setting_env.APP_KEY_ETF,
         app_secret=setting_env.APP_SECRET_ETF,
@@ -964,7 +964,7 @@ def buy_etf_group_stocks():
 
     for symbol in sorted(symbols):
         try:
-            ki_api.buy(symbol=symbol, price=0, volume=1, order_type="01")
+            ki_api.buy(symbol=symbol, price=0, volume=1, order_type="03")
         except Exception as e:
             logging.error(f"ETF 그룹 매수 실패: {symbol} - {e}")
 

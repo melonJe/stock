@@ -20,6 +20,7 @@ from services.tradingview_scan import (
 from utils.data_util import upsert_many
 from config.constants import (
     KOREAN_STOCK_PATTERN,
+    AMERICA_STOCK_PATTERN,
     MAX_WORKER_COUNT,
     BLACKLIST_RETENTION_DAYS,
     DEFAULT_PRICE_HISTORY_YEARS,
