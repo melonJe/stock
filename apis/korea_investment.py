@@ -723,8 +723,7 @@ class KoreaInvestmentAPI:
             else:
                 if '해당종목정보가 없습니다' in response_data['msg1']:
                     continue
-                error_msg = f"{symbol} 해외 예약 주문 실패: {response_data}"
-                logging.error(error_msg)
+                logging.error(f"{symbol} 해외 예약 주문 실패: {response_data}")
                 continue
 
 
