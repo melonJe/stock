@@ -41,8 +41,12 @@ WORKDIR /app
 # Copy application code
 COPY . .
 
-# Create logs directory
-RUN mkdir -p /app/logs && chmod 777 /app/logs
+# Create logs, static, templates directories
+RUN mkdir -p /app/logs && chmod 755 /app/logs && \
+    mkdir -p /app/static/css /app/static/js && \
+    mkdir -p /app/templates && \
+    chmod 755 /app/static && \
+    chmod 755 /app/templates
 
 # Expose the port the app runs on
 EXPOSE 8000

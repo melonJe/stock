@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>주식 트레이딩 대시보드</title>
+    
+    <!-- TailwindCSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="/static/css/dashboard.css">
+</head>
+<body class="bg-gray-50">
+    <!-- Header -->
+    <header class="bg-white border-b border-gray-200 sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between items-center h-16">
+                <div class="flex items-center gap-3">
+                    <i data-lucide="trending-up" class="w-8 h-8 text-blue-600"></i>
+                    <h1 class="text-xl font-bold text-gray-900">주식 트레이딩 대시보드</h1>
+                </div>
+                
+                <div class="flex items-center gap-4">
+                    <div class="flex items-center gap-2">
+                        <span class="status-indicator status-online"></span>
+                        <span class="text-sm text-gray-600">시스템 정상</span>
+                    </div>
+                    
+                    <div class="flex gap-2">
+                        <button class="btn btn-secondary" onclick="location.reload()">
+                            <i data-lucide="refresh-cw" class="w-4 h-4"></i>
+                            새로고침
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <!-- 국가 선택 탭 -->
+        <div class="tab-nav mb-6">
+            <button class="tab-button active" data-country="KOR" onclick="switchCountry('KOR')">
+                🇰🇷 한국
+            </button>
+            <button class="tab-button" data-country="USA" onclick="switchCountry('USA')">
+                🇺🇸 미국
+            </button>
+        </div>
+
+        <!-- 계좌 정보 카드 -->
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+            <div class="card">
+                <div class="card-header">총 자산</div>
+                <div class="card-value" id="total-asset">-</div>
+                <div class="card-change positive" id="total-asset-change">-</div>
+            </div>
+            
+            <div class="card">
+                <div class="card-header">현금</div>
+                <div class="card-value" id="cash">-</div>
+                <div class="text-sm text-gray-500">가용 자금</div>
+            </div>
+            
+            <div class="card">
+                <div class="card-header">주식 평가액</div>
+                <div class="card-value" id="stock-value">-</div>
+                <div class="text-sm text-gray-500">보유 종목</div>
+            </div>
+            
+            <div class="card">
+                <div class="card-header">평가 손익</div>
+                <div class="card-value" id="profit-loss">-</div>
+                <div class="card-change" id="profit-loss-rate">-</div>
+            </div>
+        </div>
+
+        <!-- 보유 종목 테이블 -->
+        <div class="card mb-8">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-lg font-bold text-gray-900 flex items-center gap-2">
+                    <i data-lucide="briefcase" class="w-5 h-5"></i>
+                    보유 종목
+                </h2>
+                <span class="badge badge-success" id="holdings-count">0개</span>
+            </div>
+            
+            <div class="overflow-x-auto">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>종목코드</th>
+                            <th>종목명</th>
+                            <th class="text-right">보유수량</th>
+                            <th class="text-right">평균단가</th>
+                            <th class="text-right">현재가</th>
+                            <th class="text-right">평가손익</th>
+                            <th class="text-right">수익률</th>
+                        </tr>
+                    </thead>
+                    <tbody id="holdings-table">
+                        <tr>
+                            <td colspan="7" class="text-center text-gray-500 py-8">
+                                <div class="loading mx-auto mb-2"></div>
+                                데이터를 불러오는 중...
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- 시스템 상태 & 로그 -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <!-- 시스템 상태 -->
+            <div class="card">
+                <h2 class="text-lg font-bold text-gray-900 flex items-center gap-2 mb-4">
+                    <i data-lucide="activity" class="w-5 h-5"></i>
+                    시스템 상태
+                </h2>
+                
+                <div class="space-y-3">
+                    <div class="flex justify-between items-center">
+                        <span class="text-sm text-gray-600">스케줄러</span>
+                        <span class="badge badge-success" id="scheduler-status">실행 중</span>
+                    </div>
+                    <div class="flex justify-between items-center">
+                        <span class="text-sm text-gray-600">마지막 업데이트</span>
+                        <span class="text-sm font-medium" id="last-update">-</span>
+                    </div>
+                    <div class="flex justify-between items-center">
+                        <span class="text-sm text-gray-600">전체 종목 수</span>
+                        <span class="text-sm font-medium" id="total-stocks">-</span>
+                    </div>
+                    <div class="flex justify-between items-center">
+                        <span class="text-sm text-gray-600">한국 보유 종목</span>
+                        <span class="text-sm font-medium" id="korea-holdings">-</span>
+                    </div>
+                    <div class="flex justify-between items-center">
+                        <span class="text-sm text-gray-600">미국 보유 종목</span>
+                        <span class="text-sm font-medium" id="usa-holdings">-</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 실시간 로그 -->
+            <div class="card">
+                <h2 class="text-lg font-bold text-gray-900 flex items-center gap-2 mb-4">
+                    <i data-lucide="file-text" class="w-5 h-5"></i>
+                    실시간 로그
+                </h2>
+                
+                <div class="mb-3 flex gap-2">
+                    <button class="btn btn-secondary btn-sm" onclick="loadLogs('app')">App</button>
+                    <button class="btn btn-secondary btn-sm" onclick="loadLogs('error')">Error</button>
+                    <button class="btn btn-secondary btn-sm" onclick="loadLogs('trading')">Trading</button>
+                </div>
+                
+                <div class="log-viewer" id="log-viewer">
+                    <div class="text-center text-gray-400">로그 타입을 선택하세요</div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script src="/static/js/dashboard.js"></script>
+    <script>
+        // Lucide icons 초기화
+        lucide.createIcons();
+        
+        // 페이지 로드 시 데이터 불러오기
+        document.addEventListener('DOMContentLoaded', () => {
+            loadDashboard('KOR');
+            loadSystemStatus();
+            
+            // 30초마다 자동 새로고침
+            setInterval(() => {
+                const currentCountry = document.querySelector('.tab-button.active').dataset.country;
+                loadDashboard(currentCountry);
+                loadSystemStatus();
+            }, 30000);
+        });
+    </script>
+</body>
+</html>
