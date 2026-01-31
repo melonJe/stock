@@ -1,15 +1,14 @@
 """국내주식 주문 API"""
-import logging
 from typing import Dict
 
 from clients.kis.base import KISBaseClient
 from config.logging_config import get_logger
-
-logger = get_logger(__name__)
 from core.validators import validate_symbol, validate_price, validate_volume, validate_order_type, ValidationError
 from core.exceptions import OrderError, InvalidOrderError
 from core.decorators import retry_on_error
 from core.error_handler import handle_error
+
+logger = get_logger(__name__)
 
 
 class DomesticOrderClient(KISBaseClient):

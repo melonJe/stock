@@ -1,5 +1,4 @@
 import datetime
-import logging
 import os
 import re
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -11,6 +10,7 @@ import requests
 from bs4 import BeautifulSoup
 from dateutil.relativedelta import relativedelta
 
+from config.logging_config import get_logger
 from custom_exception.exception import NotFoundUrl
 from data.models import Stock, PriceHistory, PriceHistoryUS, Subscription, Blacklist
 from services.tradingview_scan import (
@@ -32,6 +32,8 @@ from config.constants import (
     NET_INCOME_INDEX,
 )
 
+logger = get_logger(__name__)
+
 
 def get_company_name(symbol: str):
     try:
@@ -50,7 +52,7 @@ def get_company_name(symbol: str):
             code = 'Symbol'
         return df_krx[df_krx[code] == symbol].to_dict('records')[0].get('Name')
     except Exception as e:
-        logging.error(f"종목명 조회 실패: {e}")
+        logger.error(f"종목명 조회 실패: {e}")
         return None
 
 
@@ -135,7 +137,7 @@ def stock_dividend_filter(country="korea",
         df = pd.DataFrame(data_list)
 
         if df.empty:
-            logging.warning("stock_dividend_filter: 데이터가 없습니다.")
+            logger.warning("stock_dividend_filter: 데이터가 없습니다.")
             return set()
 
         # 조건 필터링
@@ -154,10 +156,10 @@ def stock_dividend_filter(country="korea",
         return set(df['ticker'].tolist())
 
     except requests.RequestException as e:
-        logging.error(f"stock_dividend_filter 요청 실패: {e}")
+        logger.error(f"stock_dividend_filter 요청 실패: {e}")
         return set()
     except Exception as e:
-        logging.error(f"stock_dividend_filter 오류 발생: {e}")
+        logger.error(f"stock_dividend_filter 오류 발생: {e}")
         return set()
 
 
@@ -245,10 +247,10 @@ def stock_growth_filter(country="korea",
         return set(df.loc[df['sel'], 'name'].tolist())
 
     except requests.RequestException as e:
-        logging.error(f"stock_growth_filter 요청 실패: {e}")
+        logger.error(f"stock_growth_filter 요청 실패: {e}")
         return set()
     except Exception as e:
-        logging.error(f"stock_growth_filter 오류 발생: {e}")
+        logger.error(f"stock_growth_filter 오류 발생: {e}")
         return set()
 
 
@@ -355,15 +357,15 @@ def stock_box_pattern_filter(
         return set(df.loc[df["sel"], "name"].dropna().tolist())
 
     except requests.RequestException as e:
-        logging.error(f"stock_box_pattern_filter 요청 실패: {e}")
+        logger.error(f"stock_box_pattern_filter 요청 실패: {e}")
         return set()
     except Exception as e:
-        logging.error(f"stock_box_pattern_filter 오류 발생: {e}")
+        logger.error(f"stock_box_pattern_filter 오류 발생: {e}")
         return set()
 
 
 def update_subscription_stock():
-    logging.info(f'{datetime.datetime.now()} update_subscription_stock 시작')
+    logger.info(f'{datetime.datetime.now()} update_subscription_stock 시작')
     data_to_insert = []
 
     # 한국 배당주 프로세스
@@ -400,7 +402,7 @@ def update_subscription_stock():
                                                     min_market_cap_quantile=0.92)])
 
     if data_to_insert:
-        logging.info(f"{len(data_to_insert)}개 주식")
+        logger.info(f"{len(data_to_insert)}개 주식")
         Subscription.delete().execute()
         upsert_many(Subscription, data_to_insert, [Subscription.symbol])
 
@@ -439,9 +441,9 @@ def process_stock_listing(df, code_col, name_col, region):
                 try:
                     future.result()
                 except Exception as e:
-                    logging.error(f"Error while processing data: {e}")
+                    logger.error(f"Error while processing data: {e}")
     except Exception as e:
-        logging.error(f"Error loading data for market: {e}")
+        logger.error(f"Error loading data for market: {e}")
 
 
 def update_stock_listings():
@@ -454,9 +456,9 @@ def update_stock_listings():
         try:
             process_stock_listing(df_kr, 'Code', 'Name', "KOR")
         except Exception as e:
-            logging.error(f"Error insert KOR data: {e}")
+            logger.error(f"Error insert KOR data: {e}")
     except Exception as e:
-        logging.error(f"Error loading KOR data: {e}")
+        logger.error(f"Error loading KOR data: {e}")
 
     try:
         df_us = pd.concat([
@@ -467,9 +469,9 @@ def update_stock_listings():
         try:
             process_stock_listing(df_us, "Symbol", "Name", "USA")
         except Exception as e:
-            logging.error(f"Error insert USA data: {e}")
+            logger.error(f"Error insert USA data: {e}")
     except Exception as e:
-        logging.error(f"Error loading USA data: {e}")
+        logger.error(f"Error loading USA data: {e}")
 
 
 def add_stock_price(symbol: str = None, country: str = None, start_date: datetime.datetime = None, end_date: datetime.datetime = None):
@@ -496,7 +498,7 @@ def add_stock_price(symbol: str = None, country: str = None, start_date: datetim
                 try:
                     future.result()
                 except Exception as e:
-                    logging.error(f"에러 발생: {e}")
+                    logger.error(f"에러 발생: {e}")
 
 
 def add_price_for_symbol(symbol: str, start_date: datetime.datetime = None, end_date: datetime.datetime = None):

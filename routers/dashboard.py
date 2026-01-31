@@ -9,7 +9,7 @@ from pydantic import BaseModel
 
 from config import setting_env
 from clients.kis import KISClient
-from models import Stock, PriceHistory, PriceHistoryUS
+from data.models import Stock, PriceHistory, PriceHistoryUS
 from repositories.stock_repository import StockRepository
 from core.security import verify_basic_auth, sanitize_path, mask_sensitive_data
 

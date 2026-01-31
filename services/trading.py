@@ -1,20 +1,19 @@
 import datetime
-import logging
 import threading
 from time import sleep
 from typing import List, Union, Dict
 
 import numpy as np
 import pandas as pd
-import logging
 
 from apis.korea_investment import KoreaInvestmentAPI
 from config import setting_env
+from config.logging_config import get_logger
 from data.dto.account_dto import StockResponseDTO
 from data.models import Subscription
 from core.exceptions import StrategyError
 from core.decorators import log_execution
-from core.error_handler import handle_error_by_symbol, add_stock_price
+from core.error_handler import handle_error_by_symbol
 from services.data_handler import get_country_by_symbol, add_stock_price
 from services.trading_helpers import (
     allocate_volume_to_levels,
@@ -40,8 +39,10 @@ from services.trading_helpers import (
 from utils import discord
 from utils.operations import price_refine
 
+logger = get_logger(__name__)
 
-@log_execution(level=logging.INFO)
+
+@log_execution()
 def select_buy_stocks(country: str = "KOR") -> dict[str, dict[float, int]]:
     buy_levels = {}
     for d in [
@@ -56,7 +57,7 @@ def select_buy_stocks(country: str = "KOR") -> dict[str, dict[float, int]]:
     return buy_levels
 
 
-@log_execution(level=logging.INFO)
+@log_execution()
 def select_sell_stocks(stocks_held: Union[List[StockResponseDTO], StockResponseDTO, None]) -> dict[str, dict[float, int]]:
     sell_levels = {}
     for d in [
@@ -174,7 +175,7 @@ def filter_non_subscription_for_sell(
                 continue
             prev_close = float(df["close"].iloc[-2])
         except Exception as e:
-            logging.error(f"filter_non_subscription_for_sell 처리 중 에러: {symbol} -> {e}")
+            logger.error(f"filter_non_subscription_for_sell 처리 중 에러: {symbol} -> {e}")
             continue
 
         if prev_close <= 0:
@@ -279,7 +280,7 @@ def filter_trend_for_buy(country: str = "KOR") -> dict[str, dict[float, int]]:
 
             buy_levels[symbol] = add_prev_close_allocation(levels, df, volume_shares)
         except Exception as e:
-            logging.error(f"filter_trend_for_buy 처리 중 에러: {symbol} -> {e}")
+            logger.error(f"filter_trend_for_buy 처리 중 에러: {symbol} -> {e}")
     return buy_levels
 
 
@@ -409,7 +410,7 @@ def filter_trend_for_sell(
                 sell_levels[symbol][price_key] = sell_levels[symbol].get(price_key, 0) + vol
 
         except Exception as e:
-            logging.error(f"filter_trend_for_sell 처리 중 에러: {symbol} -> {e}")
+            logger.error(f"filter_trend_for_sell 처리 중 에러: {symbol} -> {e}")
             continue
 
     return sell_levels
@@ -478,7 +479,7 @@ def filter_stable_for_buy(country: str = "KOR") -> dict[str, dict[float, int]]:
 
             buy_levels[symbol] = add_prev_close_allocation(levels, df, volume)
         except Exception as e:
-            logging.error(f"filter_stable_for_buy 처리 중 에러: {symbol} -> {e}")
+            logger.error(f"filter_stable_for_buy 처리 중 에러: {symbol} -> {e}")
     return buy_levels
 
 
@@ -596,7 +597,7 @@ def filter_stable_for_sell(
                 sell_levels[symbol][price_key] = sell_levels[symbol].get(price_key, 0) + vol
 
         except Exception as e:
-            logging.error(f"filter_stable_for_sell 처리 중 에러: {symbol} -> {e}")
+            logger.error(f"filter_stable_for_sell 처리 중 에러: {symbol} -> {e}")
             continue
     return sell_levels
 
@@ -672,7 +673,7 @@ def filter_box_for_buy(country: str = "KOR") -> dict[str, dict[float, int]]:
 
             buy_levels[symbol] = add_prev_close_allocation(levels, df, volume)
         except Exception as e:
-            logging.error(f"filter_box_for_buy 처리 중 에러: {symbol} -> {e}")
+            logger.error(f"filter_box_for_buy 처리 중 에러: {symbol} -> {e}")
     return buy_levels
 
 
@@ -828,7 +829,7 @@ def filter_box_for_sell(
                 sell_levels[symbol][price_key] = sell_levels[symbol].get(price_key, 0) + vol
 
         except Exception as exc:
-            logging.error(f"filter_box_for_sell error: %s -> %s", getattr(stock, "pdno", "unknown"), exc)
+            logger.error(f"filter_box_for_sell error: %s -> %s", getattr(stock, "pdno", "unknown"), exc)
             continue
 
     return sell_levels
@@ -839,7 +840,7 @@ def trading_buy(korea_investment: KoreaInvestmentAPI, buy_levels):
     try:
         end_date = korea_investment.get_nth_open_day(3)
     except Exception as e:
-        logging.critical(f"trading_buy 오픈일 조회 실패: {e}")
+        logger.critical(f"trading_buy 오픈일 조회 실패: {e}")
         return
 
     money = 0
@@ -863,15 +864,15 @@ def trading_buy(korea_investment: KoreaInvestmentAPI, buy_levels):
                         money += price * volume
 
                 except Exception as e:
-                    logging.critical(f"trading_buy 주문 실패: {symbol} -> {e}")
+                    logger.critical(f"trading_buy 주문 실패: {symbol} -> {e}")
         except Exception as e:
-            logging.error(f"trading_buy 처리 중 에러: {symbol} -> {e}")
+            logger.error(f"trading_buy 처리 중 에러: {symbol} -> {e}")
 
     if money:
         try:
             discord.send_message(f'총 액 : {money}')
         except Exception as e:
-            logging.error(f"trading_buy 디스코드 전송 실패: {e}")
+            logger.error(f"trading_buy 디스코드 전송 실패: {e}")
 
 
 def trading_sell(korea_investment: KoreaInvestmentAPI, sell_levels):
@@ -879,7 +880,7 @@ def trading_sell(korea_investment: KoreaInvestmentAPI, sell_levels):
     try:
         end_date = korea_investment.get_nth_open_day(1)
     except Exception as e:
-        logging.critical(f"trading_sell 오픈일 조회 실패: {e}")
+        logger.critical(f"trading_sell 오픈일 조회 실패: {e}")
         return
 
     for symbol, levels in (sell_levels or {}).items():
@@ -895,7 +896,7 @@ def trading_sell(korea_investment: KoreaInvestmentAPI, sell_levels):
                 available = 0
 
             if available <= 0:
-                logging.debug(f"trading_sell 스킵: {symbol} - 주문가능수량 없음")
+                logger.debug(f"trading_sell 스킵: {symbol} - 주문가능수량 없음")
                 continue
 
             for price, volume in levels.items():
@@ -919,9 +920,9 @@ def trading_sell(korea_investment: KoreaInvestmentAPI, sell_levels):
                             price = round(float(stock.pchs_avg_pric) * 1.005, 2)
                         korea_investment.submit_overseas_reservation_order(country=country, action="sell", symbol=symbol, price=str(round(float(price), 2)), volume=str(volume))
                 except Exception as e:
-                    logging.critical(f"trading_sell 주문 실패: {symbol} -> {e}")
+                    logger.critical(f"trading_sell 주문 실패: {symbol} -> {e}")
         except Exception as e:
-            logging.error(f"trading_sell 처리 중 에러: {symbol} -> {e}")
+            logger.error(f"trading_sell 처리 중 에러: {symbol} -> {e}")
 
 
 def buy_etf_group_stocks():
@@ -936,12 +937,12 @@ def buy_etf_group_stocks():
     holidays = ki_api.get_domestic_market_holidays(today)
     holiday = holidays.get(today)
     if holiday and holiday.opnd_yn == "N":
-        logging.info("ETF 그룹 매수 스킵: 휴장일")
+        logger.info("ETF 그룹 매수 스킵: 휴장일")
         return
 
     group_list = ki_api.get_interest_group_list(user_id=setting_env.HTS_ID_ETF)
     if not group_list or not group_list.output2:
-        logging.warning("ETF 그룹 매수 스킵: 관심종목 그룹 없음")
+        logger.warning("ETF 그룹 매수 스킵: 관심종목 그룹 없음")
         return
 
     etf_groups = [
@@ -949,7 +950,7 @@ def buy_etf_group_stocks():
         if "ETF" in (item.inter_grp_name or "").upper()
     ]
     if not etf_groups:
-        logging.warning("ETF 그룹 매수 스킵: ETF 그룹 미존재")
+        logger.warning("ETF 그룹 매수 스킵: ETF 그룹 미존재")
         return
 
     symbols = set()
@@ -965,7 +966,7 @@ def buy_etf_group_stocks():
                 symbols.add(item.jong_code)
 
     if not symbols:
-        logging.warning("ETF 그룹 매수 스킵: 매수 대상 없음")
+        logger.warning("ETF 그룹 매수 스킵: 매수 대상 없음")
         return
 
     total_purchase_amount = 0
@@ -976,7 +977,7 @@ def buy_etf_group_stocks():
             ki_api.buy(symbol=symbol, price=0, volume=1, order_type="03")
             purchased_symbols.append(symbol)
         except Exception as e:
-            logging.critical(f"ETF 그룹 매수 실패: {symbol} - {e}")
+            logger.critical(f"ETF 그룹 매수 실패: {symbol} - {e}")
 
     # 구매 금액 계산 및 잔고 확인
     if purchased_symbols:
@@ -1003,7 +1004,7 @@ def korea_trading():
     """Main entry to run daily domestic trading tasks."""
     ki_api = KoreaInvestmentAPI(app_key=setting_env.APP_KEY_KOR, app_secret=setting_env.APP_SECRET_KOR, account_number=setting_env.ACCOUNT_NUMBER_KOR, account_code=setting_env.ACCOUNT_CODE_KOR)
     if ki_api.check_holiday(datetime.datetime.now().strftime("%Y%m%d")):
-        logging.info(f'{datetime.datetime.now()} 휴장일')
+        logger.info(f'{datetime.datetime.now()} 휴장일')
         return
 
     while datetime.datetime.now().time() < datetime.time(18, 15, 00):
