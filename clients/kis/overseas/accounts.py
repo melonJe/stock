@@ -60,8 +60,8 @@ class OverseasAccountClient(KISBaseClient):
                 if item.ovrs_pdno == symbol:
                     return item
             return None
-        else:
-            return result
+
+        return result if result else None
 
     def get_order_list(
             self,

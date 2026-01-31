@@ -3,18 +3,30 @@ import logging
 from typing import Optional
 
 from clients.kis.base import KISBaseClient
+from dtos.kis.quote_dtos import CurrentPriceRequestDTO, CurrentPriceResponseDTO
+from core.exceptions import APIError
+from core.validators import validate_symbol, ValidationError
+from core.decorators import retry_on_error
+from core.error_handler import handle_error
 
 
 class DomesticQuoteClient(KISBaseClient):
     """국내주식 시세 조회 클라이언트"""
 
-    def get_current_price(self, symbol: str) -> Optional[int]:
+    @retry_on_error(max_attempts=2, delay=1.0, exceptions=(APIError,))
+    def get_current_price(self, symbol: str) -> Optional[CurrentPriceResponseDTO]:
         """
-        현재가 조회
+        현재가를 조회한다.
 
-        :param symbol: 종목코드 (6자리)
-        :return: 현재가 (정수) 또는 None
+        :param symbol: 종목코드
+        :return: 현재가 정보 DTO 또는 None
         """
+        try:
+            symbol = validate_symbol(symbol)
+        except ValidationError as e:
+            handle_error(e, context="DomesticQuoteClient.get_current_price", should_raise=False)
+            return None
+
         headers = self._get_headers_with_tr_id("FHKST01010100", use_prefix=False)
         params = {
             "FID_COND_MRKT_DIV_CODE": "J",

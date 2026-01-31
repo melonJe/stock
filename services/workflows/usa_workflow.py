@@ -3,8 +3,12 @@ import datetime
 import logging
 import threading
 
-from clients.kis import KISClient
 from config import setting_env
+from config.logging_config import get_logger
+
+logger = get_logger(__name__)
+
+from clients.kis import KISClient
 from services.workflows.base import select_buy_stocks, trading_buy
 
 
@@ -13,7 +17,7 @@ class USAWorkflow:
 
     @staticmethod
     def run():
-        """미국주식 트레이딩 실행"""
+        logger.info("미국 주식 일일 루틴 시작", workflow="usa")
         ki_api = KISClient(
             app_key=setting_env.APP_KEY_USA,
             app_secret=setting_env.APP_SECRET_USA,

@@ -39,6 +39,24 @@ def get_env(key, default=None):
     return value
 
 
+def validate_api_credentials(app_key: str, app_secret: str, key_name: str) -> None:
+    """
+    API 키와 시크릿의 형식을 검증합니다.
+
+    Args:
+        app_key: 앱 키
+        app_secret: 앱 시크릿
+        key_name: 검증 대상 이름 (로깅용)
+
+    Raises:
+        ValueError: 형식이 올바르지 않은 경우
+    """
+    if not app_key or len(app_key) < 10:
+        raise ValueError(f"{key_name} APP_KEY가 유효하지 않습니다. (최소 10자)")
+    if not app_secret or len(app_secret) < 10:
+        raise ValueError(f"{key_name} APP_SECRET이 유효하지 않습니다. (최소 10자)")
+
+
 # 환경 변수 읽기 및 기본값 설정
 DB_HOST = get_env("DB_HOST", "stock_db")
 DB_PORT = int(get_env("DB_PORT", "5432"))
@@ -58,14 +76,20 @@ APP_KEY_KOR = get_env("APP_KEY_KOR")
 APP_SECRET_KOR = get_env("APP_SECRET_KOR")
 ACCOUNT_NUMBER_KOR = get_env("ACCOUNT_NUMBER_KOR")
 ACCOUNT_CODE_KOR = get_env("ACCOUNT_CODE_KOR")
+validate_api_credentials(APP_KEY_KOR, APP_SECRET_KOR, "KOR")
+
 APP_KEY_USA = get_env("APP_KEY_USA")
 APP_SECRET_USA = get_env("APP_SECRET_USA")
 ACCOUNT_NUMBER_USA = get_env("ACCOUNT_NUMBER_USA")
 ACCOUNT_CODE_USA = get_env("ACCOUNT_CODE_USA")
+validate_api_credentials(APP_KEY_USA, APP_SECRET_USA, "USA")
+
 APP_KEY_ETF = get_env("APP_KEY_ETF")
 APP_SECRET_ETF = get_env("APP_SECRET_ETF")
 ACCOUNT_NUMBER_ETF = get_env("ACCOUNT_NUMBER_ETF")
 ACCOUNT_CODE_ETF = get_env("ACCOUNT_CODE_ETF")
+validate_api_credentials(APP_KEY_ETF, APP_SECRET_ETF, "ETF")
+
 HTS_ID_ETF = get_env("HTS_ID_ETF")
 
 # 매매 전략 관련

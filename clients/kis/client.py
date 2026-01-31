@@ -187,5 +187,3 @@ class KISClient:
         )
 
 
-# 기존 코드 호환을 위한 별칭
-KoreaInvestmentAPI = KISClient

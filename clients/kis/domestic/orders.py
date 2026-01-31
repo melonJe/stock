@@ -3,6 +3,13 @@ import logging
 from typing import Dict
 
 from clients.kis.base import KISBaseClient
+from config.logging_config import get_logger
+
+logger = get_logger(__name__)
+from core.validators import validate_symbol, validate_price, validate_volume, validate_order_type, ValidationError
+from core.exceptions import OrderError, InvalidOrderError
+from core.decorators import retry_on_error
+from core.error_handler import handle_error
 
 
 class DomesticOrderClient(KISBaseClient):
@@ -41,31 +48,56 @@ class DomesticOrderClient(KISBaseClient):
             "RSVN_ORD_END_DT": end_date if end_date else ''
         }
 
-    def _send_order(self, path: str, headers: Dict, payload: Dict) -> bool:
+    def _send_order(self, endpoint: str, headers: Dict, payload: Dict) -> bool:
         """주문 요청 전송"""
-        if int(payload.get("ORD_QTY", '0')) == 0:
-            logging.warning("주문 수량이 0입니다. 주문 미전송.")
-            return False
-
-        response = self._post(path, payload, headers)
+        response = self._post(endpoint, payload, headers)
         if response:
             if response.get("rt_cd") == "0":
-                logging.info("주문 처리 성공")
+                logger.info("주문 처리 성공", endpoint=endpoint)
                 return True
             else:
-                logging.error(f"주문 실패: {response}")
+                logger.error("주문 실패", response=response, endpoint=endpoint)
         else:
-            logging.error("주문 처리 실패")
+            logger.error("주문 처리 실패", endpoint=endpoint)
         return False
 
     def buy(self, symbol: str, price: int, volume: int, order_type: str = "00") -> bool:
         """매수 주문"""
-        headers = self._get_headers_with_tr_id("TTC0012U")
-        order_payload = self._create_order_payload(symbol, price, volume, order_type)
-        return self._send_order("/uapi/domestic-stock/v1/trading/order-cash", headers, order_payload)
+        try:
+            symbol = validate_symbol(symbol)
+            price = int(validate_price(price, min_value=0))
+            volume = validate_volume(volume, min_value=1)
+            order_type = validate_order_type(order_type)
+        except ValidationError as e:
+            error = InvalidOrderError(f"매수 주문 입력값 검증 실패: {symbol}", original_error=e)
+            handle_error(error, context="DomesticOrderClient.buy", should_raise=False)
+            return False
+
+        try:
+            headers = self._get_headers_with_tr_id("TTC0012U")
+            order_payload = self._create_order_payload(symbol, price, volume, order_type)
+            return self._send_order("/uapi/domestic-stock/v1/trading/order-cash", headers, order_payload)
+        except Exception as e:
+            error = OrderError(f"매수 주문 실행 실패: {symbol}", original_error=e)
+            handle_error(
+                error,
+                context="DomesticOrderClient.buy",
+                metadata={"symbol": symbol, "price": price, "volume": volume},
+                should_raise=False
+            )
+            return False
 
     def buy_reserve(self, symbol: str, price: int, volume: int, end_date: str, order_type: str = "00") -> bool:
         """예약 매수 주문"""
+        try:
+            symbol = validate_symbol(symbol)
+            price = int(validate_price(price, min_value=0))
+            volume = validate_volume(volume, min_value=1)
+            order_type = validate_order_type(order_type)
+        except ValidationError as e:
+            logging.error(f"예약 매수 입력값 검증 실패: {e}")
+            return False
+
         headers = self._get_headers_with_tr_id("CTSC0008U", use_prefix=False)
         logging.info(f"예약 매수: {symbol}, {price}, {volume}, {end_date}")
         reserve_payload = self._create_reserve_payload(symbol, price, volume, end_date, order_type, "02")
@@ -73,12 +105,30 @@ class DomesticOrderClient(KISBaseClient):
 
     def sell(self, symbol: str, price: int, volume: int, order_type: str = "00") -> bool:
         """매도 주문"""
+        try:
+            symbol = validate_symbol(symbol)
+            price = int(validate_price(price, min_value=0))
+            volume = validate_volume(volume, min_value=1)
+            order_type = validate_order_type(order_type)
+        except ValidationError as e:
+            logging.error(f"매도 주문 입력값 검증 실패: {e}")
+            return False
+
         headers = self._get_headers_with_tr_id("TTC0011U")
         order_payload = self._create_order_payload(symbol, price, volume, order_type)
         return self._send_order("/uapi/domestic-stock/v1/trading/order-cash", headers, order_payload)
 
     def sell_reserve(self, symbol: str, price: int, volume: int, end_date: str, order_type: str = "00") -> bool:
         """예약 매도 주문"""
+        try:
+            symbol = validate_symbol(symbol)
+            price = int(validate_price(price, min_value=0))
+            volume = validate_volume(volume, min_value=1)
+            order_type = validate_order_type(order_type)
+        except ValidationError as e:
+            logging.error(f"예약 매도 입력값 검증 실패: {e}")
+            return False
+
         headers = self._get_headers_with_tr_id("CTSC0008U", use_prefix=False)
         logging.info(f"예약 매도: {symbol}, {price}, {volume}, {end_date}")
         reserve_payload = self._create_reserve_payload(symbol, price, volume, end_date, order_type, "01")

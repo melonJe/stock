@@ -2,15 +2,19 @@ import datetime
 import logging
 import threading
 from time import sleep
-from typing import List, Union
+from typing import List, Union, Dict
 
 import numpy as np
 import pandas as pd
+import logging
 
-from clients.kis import KISClient as KoreaInvestmentAPI
+from apis.korea_investment import KoreaInvestmentAPI
 from config import setting_env
 from data.dto.account_dto import StockResponseDTO
 from data.models import Subscription
+from core.exceptions import StrategyError
+from core.decorators import log_execution
+from core.error_handler import handle_error_by_symbol, add_stock_price
 from services.data_handler import get_country_by_symbol, add_stock_price
 from services.trading_helpers import (
     allocate_volume_to_levels,
@@ -37,6 +41,7 @@ from utils import discord
 from utils.operations import price_refine
 
 
+@log_execution(level=logging.INFO)
 def select_buy_stocks(country: str = "KOR") -> dict[str, dict[float, int]]:
     buy_levels = {}
     for d in [
@@ -51,6 +56,7 @@ def select_buy_stocks(country: str = "KOR") -> dict[str, dict[float, int]]:
     return buy_levels
 
 
+@log_execution(level=logging.INFO)
 def select_sell_stocks(stocks_held: Union[List[StockResponseDTO], StockResponseDTO, None]) -> dict[str, dict[float, int]]:
     sell_levels = {}
     for d in [

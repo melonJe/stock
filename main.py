@@ -1,6 +1,10 @@
 from fastapi import FastAPI
 
+from config.logging_config import setup_logging
 from scheduler import lifespan
+
+# 로깅 초기화
+setup_logging(enable_file_logging=True, enable_json_logging=False)
 
 app = FastAPI(lifespan=lifespan)
 

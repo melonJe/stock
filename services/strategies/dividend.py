@@ -110,6 +110,8 @@ class DividendStrategy(BaseStrategy):
             return sell_levels
 
         holdings = stocks_held if isinstance(stocks_held, list) else [stocks_held]
+
+        # growth 전략 종목은 이 전략에서 매도 대상에서 제외 (GrowthStrategy에서 처리)
         growth_query = (
             Subscription
             .select(Subscription.symbol)
@@ -123,6 +125,7 @@ class DividendStrategy(BaseStrategy):
             except Exception:
                 continue
 
+            # growth 종목은 GrowthStrategy에서 별도 처리
             if symbol in growth_symbols:
                 continue
 

@@ -68,10 +68,16 @@ class StockRepository:
             return None
 
     @staticmethod
-    def insert(symbol: str, company_name: str = None, country: str = None) -> Stock:
-        """종목 정보 저장"""
-        from repositories.price_repository import PriceRepository
+    def insert(symbol: str, company_name: str = None, country: str = None, add_price_history: bool = True) -> Stock:
+        """
+        종목 정보 저장
 
+        :param symbol: 종목코드
+        :param company_name: 회사명 (None이면 자동 조회)
+        :param country: 국가코드 (None이면 자동 판별)
+        :param add_price_history: 가격 히스토리 추가 여부
+        :return: Stock 인스턴스
+        """
         existing_stock = Stock.get_or_none(Stock.symbol == symbol)
         if existing_stock:
             return existing_stock
@@ -83,11 +89,14 @@ class StockRepository:
             country = StockRepository.get_country_by_symbol(symbol)
 
         new_stock = Stock.create(symbol=symbol, company_name=company_name, country=country)
-        PriceRepository.add_for_symbol(
-            symbol,
-            start_date=datetime.datetime.now() - relativedelta(years=DEFAULT_PRICE_HISTORY_YEARS),
-            end_date=datetime.datetime.now()
-        )
+
+        if add_price_history:
+            from repositories.price_repository import PriceRepository
+            PriceRepository.add_for_symbol(
+                symbol,
+                start_date=datetime.datetime.now() - relativedelta(years=DEFAULT_PRICE_HISTORY_YEARS),
+                end_date=datetime.datetime.now()
+            )
         return new_stock
 
     @staticmethod

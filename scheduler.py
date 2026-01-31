@@ -5,9 +5,12 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
 
 from config import setting_env
+from config.logging_config import get_logger
 from services import data_handler
 from services.data_handler import add_stock_price
 from services.trading import usa_trading, korea_trading, buy_etf_group_stocks
+
+logger = get_logger(__name__)
 
 
 def start():
@@ -71,9 +74,11 @@ def start():
         replace_existing=True,
     )
 
+    logger.info("스케줄러 시작", simulate=setting_env.SIMULATE)
     try:
         scheduler.start()
     except KeyboardInterrupt:
+        logger.info("스케줄러 종료 (사용자 중단)")
         scheduler.shutdown()
 
 

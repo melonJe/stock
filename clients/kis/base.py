@@ -10,10 +10,10 @@ class KISBaseClient:
 
     def __init__(
             self,
-            app_key: str = None,
-            app_secret: str = None,
-            account_number: str = None,
-            account_code: str = None,
+            app_key: Optional[str] = None,
+            app_secret: Optional[str] = None,
+            account_number: Optional[str] = None,
+            account_code: Optional[str] = None,
             *,
             auth: Optional[KISAuth] = None,
             http_client: Optional[HttpClient] = None,

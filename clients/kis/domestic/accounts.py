@@ -10,20 +10,27 @@ from data.dto.account_dto import (
     StockResponseDTO,
 )
 from data.dto.stock_trade_dto import StockTradeListRequestDTO, StockTradeListResponseDTO
+from core.decorators import retry_on_error
 
 
 class DomesticAccountClient(KISBaseClient):
     """국내주식 계좌/잔고 조회 클라이언트"""
 
-    def get_account_info(self) -> Optional[AccountResponseDTO]:
-        """계좌 정보 조회"""
+    @retry_on_error(max_attempts=2, delay=1.0, exceptions=(APIError,))
+    def _fetch_balance(self) -> Optional[dict]:
+        """잔고 조회 API 호출 (공통)"""
         headers = self._get_headers_with_tr_id("TTC8434R")
         params = InquireBalanceRequestDTO(
             cano=self.account_number,
             acnt_prdt_cd=self.account_code,
             inqr_dvsn="02"
         ).__dict__
-        response_data = self._get("/uapi/domestic-stock/v1/trading/inquire-balance", params, headers)
+        return self._get("/uapi/domestic-stock/v1/trading/inquire-balance", params, headers)
+
+    @retry_on_error(max_attempts=2, delay=1.0, exceptions=(APIError,))
+    def get_account_info(self) -> Optional[AccountResponseDTO]:
+        """계좌 정보 조회"""
+        response_data = self._fetch_balance()
 
         if response_data:
             try:
@@ -38,15 +45,10 @@ class DomesticAccountClient(KISBaseClient):
             logging.critical("계좌정보 API 응답 없음")
             return None
 
+    @retry_on_error(max_attempts=2, delay=1.0, exceptions=(APIError,))
     def get_owned_stocks(self, symbol: str = None) -> Union[List[StockResponseDTO], StockResponseDTO, None]:
         """국내주식 보유 종목 조회"""
-        headers = self._get_headers_with_tr_id("TTC8434R")
-        params = InquireBalanceRequestDTO(
-            cano=self.account_number,
-            acnt_prdt_cd=self.account_code,
-            inqr_dvsn="02"
-        ).__dict__
-        response_data = self._get("/uapi/domestic-stock/v1/trading/inquire-balance", params, headers)
+        response_data = self._fetch_balance()
 
         if not response_data:
             return None
@@ -69,12 +71,23 @@ class DomesticAccountClient(KISBaseClient):
             logging.critical(f"보유종목 예상치 못한 오류: {e}")
             return None
 
+    @retry_on_error(max_attempts=2, delay=1.0, exceptions=(APIError,))
     def get_order_list(
             self,
             start_date: str = None,
             end_date: str = None
     ) -> Optional[List[StockTradeListResponseDTO]]:
         """국내주식 주문 내역 조회"""
+        try:
+            if not start_date:
+                start_date = (datetime.now() - timedelta(days=30)).strftime("%Y%m%d")
+            if not end_date:
+                end_date = datetime.now().strftime("%Y%m%d")
+        except Exception as e:
+            error = DataError("날짜 형식 처리 실패", original_error=e)
+            handle_error(error, context="DomesticAccountClient.get_order_list", should_raise=False)
+            return []
+
         today = datetime.now().strftime("%Y%m%d")
         start_date = start_date or today
         end_date = end_date or today

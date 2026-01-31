@@ -2,6 +2,8 @@
 import logging
 from typing import List, Union
 
+from config import setting_env
+from data.database import db_connect
 from data.dto.account_dto import StockResponseDTO
 from data.models import Subscription
 from services.data_handler import get_country_by_symbol
@@ -9,6 +11,9 @@ from services.strategies import DividendStrategy, GrowthStrategy, RangeBoundStra
 from services.trading_helpers import add_prev_close_allocation, fetch_price_dataframe, normalize_dataframe_for_country
 from utils import discord
 from utils.operations import price_refine
+from core.exceptions import OrderError
+from core.decorators import log_execution
+from core.error_handler import handle_error
 
 
 def select_buy_stocks(country: str = "KOR") -> dict[str, dict[float, int]]:
@@ -158,10 +163,16 @@ def filter_non_subscription_for_sell(
     return sell_levels
 
 
-def trading_buy(korea_investment, buy_levels):
-    """매수 주문 실행"""
+@log_execution(level=logging.INFO)
+def trading_buy(client, buy_levels):
+    """
+    매수 주문 실행
+
+    :param client: KISClient 인스턴스
+    :param buy_levels: 매수 대상 {symbol: {price: volume}}
+    """
     try:
-        end_date = korea_investment.get_nth_open_day(3)
+        end_date = client.get_nth_open_day(3)
     except Exception as e:
         logging.critical(f"trading_buy 오픈일 조회 실패: {e}")
         return
@@ -171,7 +182,7 @@ def trading_buy(korea_investment, buy_levels):
     for symbol, levels in buy_levels.items():
         try:
             country = get_country_by_symbol(symbol)
-            stock = korea_investment.get_owned_stock_info(symbol=symbol)
+            stock = client.get_owned_stock_info(symbol=symbol)
             for price, volume in levels.items():
                 if stock and price > float(stock.pchs_avg_pric) * 0.975:
                     continue
@@ -179,18 +190,31 @@ def trading_buy(korea_investment, buy_levels):
                 try:
                     if country == "KOR":
                         price = price_refine(price)
-                        korea_investment.buy_reserve(symbol=symbol, price=price, volume=volume, end_date=end_date)
+                        client.buy_reserve(symbol=symbol, price=price, volume=volume, end_date=end_date)
                         money += price * volume
                     elif country == "USA":
-                        korea_investment.submit_overseas_reservation_order(
-                            country=country,
-                            action="buy",
-                            symbol=symbol,
-                            price=str(round(price, 2)),
-                            volume=str(volume)
-                        )
+                        try:
+                            result = client.buy(symbol, price, volume)
+                            if result:
+                                logging.info(f"매수 성공: {symbol} {volume}주 @{price}")
+                            else:
+                                error = OrderError(f"매수 실패: {symbol}")
+                                handle_error(
+                                    error,
+                                    context="trading_buy",
+                                    metadata={"symbol": symbol, "price": price, "volume": volume},
+                                    should_raise=False
+                                )
+                        except Exception as e:
+                            error = OrderError(f"매수 중 예외 발생: {symbol}", original_error=e)
+                            handle_error(
+                                error,
+                                context="trading_buy",
+                                critical=True,
+                                metadata={"symbol": symbol, "price": price, "volume": volume},
+                                should_raise=False
+                            )
                         money += price * volume
-
                 except Exception as e:
                     logging.critical(f"trading_buy 주문 실패: {symbol} -> {e}")
         except Exception as e:
@@ -203,10 +227,16 @@ def trading_buy(korea_investment, buy_levels):
             logging.error(f"trading_buy 디스코드 전송 실패: {e}")
 
 
-def trading_sell(korea_investment, sell_levels):
-    """매도 주문 실행"""
+@log_execution(level=logging.INFO)
+def trading_sell(client, sell_levels):
+    """
+    매도 주문 실행
+
+    :param client: KISClient 인스턴스
+    :param sell_levels: 매도 대상 {symbol: {price: volume}}
+    """
     try:
-        end_date = korea_investment.get_nth_open_day(1)
+        end_date = client.get_nth_open_day(1)
     except Exception as e:
         logging.critical(f"trading_sell 오픈일 조회 실패: {e}")
         return
@@ -214,7 +244,7 @@ def trading_sell(korea_investment, sell_levels):
     for symbol, levels in (sell_levels or {}).items():
         try:
             country = get_country_by_symbol(symbol)
-            stock = korea_investment.get_owned_stock_info(symbol=symbol)
+            stock = client.get_owned_stock_info(symbol=symbol)
             if not stock:
                 continue
 
@@ -233,11 +263,11 @@ def trading_sell(korea_investment, sell_levels):
                     if country == "KOR":
                         if price < float(stock.pchs_avg_pric):
                             price = price_refine(int(float(stock.pchs_avg_pric) * 1.002), 1)
-                        korea_investment.sell_reserve(symbol=symbol, price=int(price), volume=volume, end_date=end_date)
+                        client.sell_reserve(symbol=symbol, price=int(price), volume=volume, end_date=end_date)
                     elif country == "USA":
                         if price < float(stock.pchs_avg_pric):
                             price = round(float(stock.pchs_avg_pric) * 1.005, 2)
-                        korea_investment.submit_overseas_reservation_order(
+                        client.submit_overseas_reservation_order(
                             country=country,
                             action="sell",
                             symbol=symbol,

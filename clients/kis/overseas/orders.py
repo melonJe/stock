@@ -1,28 +1,43 @@
 """해외주식 주문 API"""
 import logging
-from typing import Dict, Optional
+from typing import Dict
 
 from clients.kis.base import KISBaseClient
+from dtos.kis.overseas_order_dtos import OverseasReservationOrderRequestDTO
+from core.exceptions import OrderError, InvalidOrderError
+from core.validators import validate_symbol, validate_price, validate_volume, ValidationError
+from core.error_handler import handle_errorER
 from config.country_config import COUNTRY_CONFIG_ORDER
 
 
 class OverseasOrderClient(KISBaseClient):
     """해외주식 주문 클라이언트"""
 
-    def submit_reservation_order(
-            self,
-            country: str,
-            action: str,
-            symbol: str,
-            volume: str,
-            price: str
-    ) -> Optional[Dict]:
-        """해외주식 예약 주문"""
-        country_code = country.upper()
+    def submit_reservation_order(self, country_code: str, symbol: str, action: str, price: float, volume: int) -> bool:
+        """
+        해외주식 예약 주문을 제출한다.
+
+        :param country_code: 국가코드
+        :param symbol: 종목코드
+        :param action: 매수/매도 (buy/sell)
+        :param price: 가격
+        :param volume: 수량
+        :return: 성공 여부
+        """
+        try:
+            symbol = validate_symbol(symbol)
+            price = validate_price(price, min_value=0)
+            volume = validate_volume(volume, min_value=1)
+        except ValidationError as e:
+            error = InvalidOrderError(f"해외 예약 주문 입력값 검증 실패: {symbol}", original_error=e)
+            handle_error(error, context="OverseasOrderClient.submit_reservation_order", should_raise=False)
+            return False
+
         config = COUNTRY_CONFIG_ORDER.get(country_code)
         if not config:
-            logging.error(f"Unsupported country code: {country_code}")
-            return None
+            error = InvalidOrderError(f"지원하지 않는 국가 코드: {country_code}")
+            handle_error(error, context="OverseasOrderClient.submit_reservation_order", should_raise=False)
+            return False
 
         if action.lower() == 'buy':
             tr_id = config.get("tr_id_buy")

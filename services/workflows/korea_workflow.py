@@ -2,10 +2,13 @@
 import datetime
 import logging
 import threading
-from time import sleep
+from datetime import datetime
 
-from clients.kis import KISClient
 from config import setting_env
+from config.logging_config import get_logger
+
+logger = get_logger(__name__)
+
 from services.data_handler import add_stock_price
 from services.workflows.base import select_buy_stocks, select_sell_stocks, trading_buy, trading_sell
 
@@ -24,7 +27,8 @@ class KoreaWorkflow:
         )
 
         if ki_api.check_holiday(datetime.datetime.now().strftime("%Y%m%d")):
-            logging.info(f'{datetime.datetime.now()} 휴장일')
+            logger.info("국내 주식 일일 루틴 시작", workflow="korea") 
+            logger.info(f'{datetime.datetime.now()} 휴장일')
             return
 
         while datetime.datetime.now().time() < datetime.time(18, 15, 00):
