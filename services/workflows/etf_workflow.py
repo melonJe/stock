@@ -3,8 +3,11 @@ import datetime
 import logging
 
 from clients.kis import KISClient
+from config.logging_config import get_logger
 from config import setting_env
 from utils import discord
+
+logger = get_logger(__name__)
 
 
 class ETFWorkflow:
@@ -24,12 +27,12 @@ class ETFWorkflow:
         holidays = ki_api.get_domestic_market_holidays(today)
         holiday = holidays.get(today)
         if holiday and holiday.opnd_yn == "N":
-            logging.info("ETF 그룹 매수 스킵: 휴장일")
+            logger.info("ETF 그룹 매수 스킵: 휴장일")
             return
 
         group_list = ki_api.get_interest_group_list(user_id=setting_env.HTS_ID_ETF)
         if not group_list or not group_list.output2:
-            logging.warning("ETF 그룹 매수 스킵: 관심종목 그룹 없음")
+            logger.warning("ETF 그룹 매수 스킵: 관심종목 그룹 없음")
             return
 
         etf_groups = [
@@ -37,7 +40,7 @@ class ETFWorkflow:
             if "ETF" in (item.inter_grp_name or "").upper()
         ]
         if not etf_groups:
-            logging.warning("ETF 그룹 매수 스킵: ETF 그룹 미존재")
+            logger.warning("ETF 그룹 매수 스킵: ETF 그룹 미존재")
             return
 
         symbols = set()
@@ -53,7 +56,7 @@ class ETFWorkflow:
                     symbols.add(item.jong_code)
 
         if not symbols:
-            logging.warning("ETF 그룹 매수 스킵: 매수 대상 없음")
+            logger.warning("ETF 그룹 매수 스킵: 매수 대상 없음")
             return
 
         total_purchase_amount = 0
@@ -64,7 +67,7 @@ class ETFWorkflow:
                 ki_api.buy(symbol=symbol, price=0, volume=1, order_type="03")
                 purchased_symbols.append(symbol)
             except Exception as e:
-                logging.critical(f"ETF 그룹 매수 실패: {symbol} - {e}")
+                logger.critical(f"ETF 그룹 매수 실패: {symbol} - {e}")
 
         # 구매 금액 계산 및 잔고 확인
         if purchased_symbols:

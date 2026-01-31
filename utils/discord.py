@@ -4,6 +4,9 @@ from typing import Optional
 import requests
 
 from config import setting_env
+from config.logging_config import get_logger
+
+logger = get_logger(__name__)
 
 
 class DiscordCriticalHandler(logging.Handler):

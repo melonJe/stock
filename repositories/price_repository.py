@@ -8,10 +8,13 @@ import FinanceDataReader
 import pandas as pd
 from dateutil.relativedelta import relativedelta
 
+from config.logging_config import get_logger
 from custom_exception.exception import NotFoundUrl
 from data.models import Stock
 from repositories.stock_repository import StockRepository
 from utils.data_util import upsert_many
+
+logger = get_logger(__name__)
 
 
 class PriceRepository:
@@ -44,7 +47,7 @@ class PriceRepository:
                     try:
                         future.result()
                     except Exception as e:
-                        logging.error(f"에러 발생: {e}")
+                        logger.error(f"에러 발생: {e}")
 
     @staticmethod
     def add_for_symbol(

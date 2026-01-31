@@ -4,6 +4,7 @@ from typing import List, Union
 
 import pandas as pd
 
+from config.logging_config import get_logger
 from data.dto.account_dto import StockResponseDTO
 from data.models import Subscription
 from services.strategies.base import BaseStrategy
@@ -25,6 +26,8 @@ from services.trading_helpers import (
     add_prev_close_allocation,
 )
 from services.data_handler import get_country_by_symbol
+
+logger = get_logger(__name__)
 
 
 class GrowthStrategy(BaseStrategy):
@@ -119,7 +122,7 @@ class GrowthStrategy(BaseStrategy):
 
                 buy_levels[symbol] = add_prev_close_allocation(levels, df, volume_shares)
             except Exception as e:
-                logging.error(f"GrowthStrategy.filter_for_buy 처리 중 에러: {symbol} -> {e}")
+                logger.error(f"GrowthStrategy.filter_for_buy 처리 중 에러: {symbol} -> {e}")
         return buy_levels
 
     def filter_for_sell(
@@ -195,7 +198,7 @@ class GrowthStrategy(BaseStrategy):
                         sell_levels.setdefault(symbol, {})[sell_price] = sell_vol
 
             except Exception as e:
-                logging.error(f"GrowthStrategy.filter_for_sell 처리 중 에러: {symbol} -> {e}")
+                logger.error(f"GrowthStrategy.filter_for_sell 처리 중 에러: {symbol} -> {e}")
                 continue
 
         return sell_levels

@@ -94,11 +94,11 @@ class DomesticOrderClient(KISBaseClient):
             volume = validate_volume(volume, min_value=1)
             order_type = validate_order_type(order_type)
         except ValidationError as e:
-            logging.error(f"예약 매수 입력값 검증 실패: {e}")
+            logger.error(f"예약 매수 입력값 검증 실패: {e}")
             return False
 
         headers = self._get_headers_with_tr_id("CTSC0008U", use_prefix=False)
-        logging.info(f"예약 매수: {symbol}, {price}, {volume}, {end_date}")
+        logger.info(f"예약 매수: {symbol}, {price}, {volume}, {end_date}")
         reserve_payload = self._create_reserve_payload(symbol, price, volume, end_date, order_type, "02")
         return self._send_order("/uapi/domestic-stock/v1/trading/order-resv", headers, reserve_payload)
 
@@ -110,7 +110,7 @@ class DomesticOrderClient(KISBaseClient):
             volume = validate_volume(volume, min_value=1)
             order_type = validate_order_type(order_type)
         except ValidationError as e:
-            logging.error(f"매도 주문 입력값 검증 실패: {e}")
+            logger.error(f"매도 주문 입력값 검증 실패: {e}")
             return False
 
         headers = self._get_headers_with_tr_id("TTC0011U")
@@ -125,10 +125,10 @@ class DomesticOrderClient(KISBaseClient):
             volume = validate_volume(volume, min_value=1)
             order_type = validate_order_type(order_type)
         except ValidationError as e:
-            logging.error(f"예약 매도 입력값 검증 실패: {e}")
+            logger.error(f"예약 매도 입력값 검증 실패: {e}")
             return False
 
         headers = self._get_headers_with_tr_id("CTSC0008U", use_prefix=False)
-        logging.info(f"예약 매도: {symbol}, {price}, {volume}, {end_date}")
+        logger.info(f"예약 매도: {symbol}, {price}, {volume}, {end_date}")
         reserve_payload = self._create_reserve_payload(symbol, price, volume, end_date, order_type, "01")
         return self._send_order("/uapi/domestic-stock/v1/trading/order-resv", headers, reserve_payload)

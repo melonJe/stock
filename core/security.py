@@ -8,6 +8,9 @@ from fastapi import HTTPException, Security, status
 from fastapi.security import HTTPBasic, HTTPBasicCredentials, APIKeyHeader
 
 from config import setting_env
+from config.logging_config import get_logger
+
+logger = get_logger(__name__)
 
 # HTTP Basic 인증
 security_basic = HTTPBasic()
@@ -30,8 +33,7 @@ def verify_basic_auth(credentials: HTTPBasicCredentials = Security(security_basi
     
     # 비밀번호가 설정되지 않은 경우 경고
     if not correct_password:
-        import logging
-        logging.warning("대시보드 비밀번호가 설정되지 않았습니다. DASHBOARD_PASSWORD 환경 변수를 설정하세요.")
+        logger.warning("대시보드 비밀번호가 설정되지 않았습니다. DASHBOARD_PASSWORD 환경 변수를 설정하세요.")
         # 개발 환경에서는 허용
         if os.getenv("ENVIRONMENT", "production") == "development":
             return correct_username
@@ -71,8 +73,7 @@ def verify_api_key(api_key: Optional[str] = Security(api_key_header)) -> str:
     correct_api_key = os.getenv("API_KEY", "")
     
     if not correct_api_key:
-        import logging
-        logging.warning("API 키가 설정되지 않았습니다. API_KEY 환경 변수를 설정하세요.")
+        logger.warning("API 키가 설정되지 않았습니다. API_KEY 환경 변수를 설정하세요.")
         # 개발 환경에서는 허용
         if os.getenv("ENVIRONMENT", "production") == "development":
             return "dev-key"

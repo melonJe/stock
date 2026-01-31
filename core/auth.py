@@ -4,12 +4,15 @@ from datetime import datetime, timedelta
 from typing import Dict, Optional
 
 from config import setting_env
+from config.logging_config import get_logger
 from core.http_client import HttpClient
 from core.exceptions import AuthenticationError, APIError
 from core.decorators import retry_on_error, log_execution
 
 # 토큰 만료 전 갱신 여유 시간 (초)
 TOKEN_REFRESH_BUFFER_SECONDS = 300
+
+logger = get_logger(__name__)
 
 
 class KISAuth:
@@ -92,7 +95,7 @@ class KISAuth:
             # 토큰 만료 시간 저장 (기본 24시간, API 응답에 expires_in이 있으면 사용)
             expires_in = response.get("expires_in", 86400)
             self._token_expires_at = datetime.now() + timedelta(seconds=expires_in)
-            logging.info(f"토큰 발급 완료. 만료: {self._token_expires_at.strftime('%Y-%m-%d %H:%M:%S')}")
+            logger.info(f"토큰 발급 완료. 만료: {self._token_expires_at.strftime('%Y-%m-%d %H:%M:%S')}")
             return f"{self._token_type} {self._access_token}"
         else:
             raise AuthenticationError("인증 응답이 유효하지 않습니다.")

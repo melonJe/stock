@@ -5,6 +5,7 @@ import logging
 import pandas as pd
 import requests
 
+from config.logging_config import get_logger
 from data.models import Subscription
 from services.tradingview_scan import build_tradingview_payload, request_tradingview_scan
 from utils.data_util import upsert_many
@@ -16,6 +17,8 @@ from config.constants import (
     CASH_FLOW_INDEX,
     NET_INCOME_INDEX,
 )
+
+logger = get_logger(__name__)
 
 
 class SubscriptionRepository:
@@ -91,7 +94,7 @@ class SubscriptionRepository:
             df = pd.DataFrame(data_list)
 
             if df.empty:
-                logging.warning("filter_dividend_stocks: 데이터가 없습니다.")
+                logger.warning("filter_dividend_stocks: 데이터가 없습니다.")
                 return set()
 
             df = df[
@@ -109,10 +112,10 @@ class SubscriptionRepository:
             return set(df['ticker'].tolist())
 
         except requests.RequestException as e:
-            logging.error(f"filter_dividend_stocks 요청 실패: {e}")
+            logger.error(f"filter_dividend_stocks 요청 실패: {e}")
             return set()
         except Exception as e:
-            logging.error(f"filter_dividend_stocks 오류 발생: {e}")
+            logger.error(f"filter_dividend_stocks 오류 발생: {e}")
             return set()
 
     @staticmethod
@@ -172,7 +175,7 @@ class SubscriptionRepository:
             df = pd.DataFrame(data_list)
 
             if df.empty:
-                logging.warning("filter_growth_stocks: 데이터가 없습니다.")
+                logger.warning("filter_growth_stocks: 데이터가 없습니다.")
                 return set()
 
             df = df[
@@ -187,10 +190,10 @@ class SubscriptionRepository:
             return set(df['ticker'].tolist())
 
         except requests.RequestException as e:
-            logging.error(f"filter_growth_stocks 요청 실패: {e}")
+            logger.error(f"filter_growth_stocks 요청 실패: {e}")
             return set()
         except Exception as e:
-            logging.error(f"filter_growth_stocks 오류 발생: {e}")
+            logger.error(f"filter_growth_stocks 오류 발생: {e}")
             return set()
 
     @staticmethod
@@ -255,7 +258,7 @@ class SubscriptionRepository:
             df = pd.DataFrame(data_list)
 
             if df.empty:
-                logging.warning("filter_box_pattern_stocks: 데이터가 없습니다.")
+                logger.warning("filter_box_pattern_stocks: 데이터가 없습니다.")
                 return set()
 
             market_cap_threshold = df['market_cap'].quantile(min_market_cap_quantile)
@@ -276,16 +279,16 @@ class SubscriptionRepository:
             return set(df['ticker'].tolist())
 
         except requests.RequestException as e:
-            logging.error(f"filter_box_pattern_stocks 요청 실패: {e}")
+            logger.error(f"filter_box_pattern_stocks 요청 실패: {e}")
             return set()
         except Exception as e:
-            logging.error(f"filter_box_pattern_stocks 오류 발생: {e}")
+            logger.error(f"filter_box_pattern_stocks 오류 발생: {e}")
             return set()
 
     @staticmethod
     def update_all():
         """전체 구독 종목 업데이트"""
-        logging.info(f'{datetime.datetime.now()} update_subscription_stock 시작')
+        logger.info(f'{datetime.datetime.now()} update_subscription_stock 시작')
         data_to_insert = []
 
         # 한국 배당주
@@ -344,6 +347,6 @@ class SubscriptionRepository:
         ])
 
         if data_to_insert:
-            logging.info(f"{len(data_to_insert)}개 주식")
+            logger.info(f"{len(data_to_insert)}개 주식")
             SubscriptionRepository.delete_all()
             SubscriptionRepository.upsert_many(data_to_insert)

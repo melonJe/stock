@@ -3,11 +3,14 @@ import logging
 from typing import Dict
 
 from clients.kis.base import KISBaseClient
+from config.logging_config import get_logger
 from dtos.kis.overseas_order_dtos import OverseasReservationOrderRequestDTO
 from core.exceptions import OrderError, InvalidOrderError
 from core.validators import validate_symbol, validate_price, validate_volume, ValidationError
 from core.error_handler import handle_error
 from config.country_config import COUNTRY_CONFIG_ORDER
+
+logger = get_logger(__name__)
 
 
 class OverseasOrderClient(KISBaseClient):
@@ -48,7 +51,7 @@ class OverseasOrderClient(KISBaseClient):
             sll_buy_dvsn_cd = config.get("sll_buy_dvsn_cd_sell")
             ord_dvsn = config.get("ord_dvsn_sell")
         else:
-            logging.error(f"잘못된 action: {action}. 'buy' 또는 'sell'이어야 합니다.")
+            logger.error(f"잘못된 action: {action}. 'buy' 또는 'sell'이어야 합니다.")
             return None
 
         prdt_type_cd = config.get("prdt_type_cd")
@@ -87,12 +90,12 @@ class OverseasOrderClient(KISBaseClient):
                 continue
 
             if response_data.get("rt_cd") == "0":
-                logging.info("해외 예약 주문이 성공적으로 접수되었습니다.")
+                logger.info("해외 예약 주문이 성공적으로 접수되었습니다.")
                 return response_data
             else:
                 if '해당종목정보가 없습니다' in response_data.get('msg1', ''):
                     continue
-                logging.error(f"{symbol} 해외 예약 주문 실패: {response_data}")
+                logger.error(f"{symbol} 해외 예약 주문 실패: {response_data}")
                 continue
 
         return None

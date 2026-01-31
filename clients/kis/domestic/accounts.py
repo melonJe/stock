@@ -4,6 +4,7 @@ from datetime import datetime, timedelta
 from typing import List, Union, Optional
 
 from clients.kis.base import KISBaseClient
+from config.logging_config import get_logger
 from data.dto.account_dto import (
     InquireBalanceRequestDTO,
     AccountResponseDTO,
@@ -11,6 +12,8 @@ from data.dto.account_dto import (
 )
 from data.dto.stock_trade_dto import StockTradeListRequestDTO, StockTradeListResponseDTO
 from core.decorators import retry_on_error
+
+logger = get_logger(__name__)
 
 
 class DomesticAccountClient(KISBaseClient):
@@ -36,13 +39,13 @@ class DomesticAccountClient(KISBaseClient):
             try:
                 return AccountResponseDTO(**response_data.get("output2", [])[0])
             except (KeyError, IndexError) as e:
-                logging.critical(f"계좌정보 파싱 오류 (KeyError/IndexError): {e}")
+                logger.critical(f"계좌정보 파싱 오류 (KeyError/IndexError): {e}")
                 return None
             except Exception as e:
-                logging.critical(f"계좌정보 예상치 못한 오류: {e}")
+                logger.critical(f"계좌정보 예상치 못한 오류: {e}")
                 return None
         else:
-            logging.critical("계좌정보 API 응답 없음")
+            logger.critical("계좌정보 API 응답 없음")
             return None
 
     @retry_on_error(max_attempts=2, delay=1.0, exceptions=(APIError,))
@@ -65,10 +68,10 @@ class DomesticAccountClient(KISBaseClient):
             else:
                 return response_list
         except KeyError as e:
-            logging.critical(f"보유종목 파싱 오류 (KeyError): {e}")
+            logger.critical(f"보유종목 파싱 오류 (KeyError): {e}")
             return None
         except Exception as e:
-            logging.critical(f"보유종목 예상치 못한 오류: {e}")
+            logger.critical(f"보유종목 예상치 못한 오류: {e}")
             return None
 
     @retry_on_error(max_attempts=2, delay=1.0, exceptions=(APIError,))
@@ -119,14 +122,14 @@ class DomesticAccountClient(KISBaseClient):
                 headers
             )
             if not resp:
-                logging.critical("stock_order_list HTTP 요청 실패.")
+                logger.critical("stock_order_list HTTP 요청 실패.")
                 return None
 
             try:
                 items = resp.json().get("output1", [])
                 all_trades.extend(StockTradeListResponseDTO(**item) for item in items)
             except Exception as e:
-                logging.critical(f"JSON 파싱 오류: {e} | 응답 본문: {resp.text}")
+                logger.critical(f"JSON 파싱 오류: {e} | 응답 본문: {resp.text}")
                 return None
 
             tr_cont = resp.headers.get('tr_cont')

@@ -4,7 +4,10 @@ import logging
 import time
 from typing import Callable, Type, Tuple, Optional
 
+from config.logging_config import get_logger
 from core.exceptions import APIError, RateLimitError, APITimeoutError, NetworkError
+
+logger = get_logger(__name__)
 
 
 def retry_on_error(
@@ -36,12 +39,12 @@ def retry_on_error(
                     return func(*args, **kwargs)
                 except exclude_exceptions as e:
                     # 제외된 예외는 즉시 raise
-                    logging.error(f"{func.__name__} 재시도 제외 예외 발생: {type(e).__name__}: {e}")
+                    logger.error(f"{func.__name__} 재시도 제외 예외 발생: {type(e).__name__}: {e}")
                     raise
                 except exceptions as e:
                     last_exception = e
                     if attempt == max_attempts:
-                        logging.error(f"{func.__name__} 최대 재시도 횟수({max_attempts}) 도달. 실패.")
+                        logger.error(f"{func.__name__} 최대 재시도 횟수({max_attempts}) 도달. 실패.")
                         raise
                     
                     # RateLimitError의 경우 retry_after 사용
@@ -50,7 +53,7 @@ def retry_on_error(
                     else:
                         wait_time = current_delay
 
-                    logging.warning(
+                    logger.warning(
                         f"{func.__name__} 실패 (시도 {attempt}/{max_attempts}): "
                         f"{type(e).__name__}: {e}. {wait_time:.1f}초 후 재시도"
                     )
@@ -86,19 +89,19 @@ def log_execution(level: int = logging.INFO, include_args: bool = False):
                 args_repr = [repr(a) for a in args]
                 kwargs_repr = [f"{k}={v!r}" for k, v in kwargs.items()]
                 signature = ", ".join(args_repr + kwargs_repr)
-                logging.log(level, f"{func_name}({signature}) 시작")
+                logger.log(level, f"{func_name}({signature}) 시작")
             else:
-                logging.log(level, f"{func_name} 시작")
+                logger.log(level, f"{func_name} 시작")
 
             start_time = time.time()
             try:
                 result = func(*args, **kwargs)
                 elapsed = time.time() - start_time
-                logging.log(level, f"{func_name} 완료 ({elapsed:.2f}초)")
+                logger.log(level, f"{func_name} 완료 ({elapsed:.2f}초)")
                 return result
             except Exception as e:
                 elapsed = time.time() - start_time
-                logging.error(f"{func_name} 실패 ({elapsed:.2f}초): {type(e).__name__}: {e}")
+                logger.error(f"{func_name} 실패 ({elapsed:.2f}초): {type(e).__name__}: {e}")
                 raise
 
         return wrapper
@@ -112,7 +115,7 @@ def measure_time(func: Callable) -> Callable:
         start_time = time.time()
         result = func(*args, **kwargs)
         elapsed = time.time() - start_time
-        logging.debug(f"{func.__name__} 실행 시간: {elapsed:.4f}초")
+        logger.debug(f"{func.__name__} 실행 시간: {elapsed:.4f}초")
         return result
     return wrapper
 
@@ -130,7 +133,7 @@ def suppress_errors(default_return=None, log_level: int = logging.ERROR):
             try:
                 return func(*args, **kwargs)
             except Exception as e:
-                logging.log(
+                logger.log(
                     log_level,
                     f"{func.__name__} 에러 억제됨: {type(e).__name__}: {e}"
                 )

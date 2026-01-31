@@ -1,4 +1,4 @@
-"""KIS 통합 클라이언트 - 기존 KoreaInvestmentAPI 호환"""
+"""KIS 통합 클라이언트"""
 from typing import List, Union, Dict, Optional
 
 from core.http_client import HttpClient
@@ -18,12 +18,7 @@ from data.dto.interest_stock_dto import InterestGroupListResponseDTO, InterestGr
 
 
 class KISClient:
-    """
-    KIS 통합 클라이언트
-
-    기존 KoreaInvestmentAPI와 동일한 인터페이스를 제공하며,
-    내부적으로 기능별 클라이언트에 위임한다.
-    """
+    """KIS 통합 클라이언트 - 기능별 클라이언트를 통합 제공"""
 
     def __init__(
             self,
@@ -52,18 +47,15 @@ class KISClient:
         self._holiday = HolidayClient(**shared_deps)
         self._watchlist = WatchlistClient(**shared_deps)
 
-        # 휴일 캐시 공유
         self.total_holidays = self._holiday.total_holidays
 
-    # ==================== 속성 ====================
+    @property
+    def account_number(self) -> str:
+        return self._auth.account_number
 
-    def get_account_number(self) -> str:
-        return self._domestic_order.account_number
-
-    def get_account_code(self) -> str:
-        return self._domestic_order.account_code
-
-    # ==================== 국내주식 주문 ====================
+    @property
+    def account_code(self) -> str:
+        return self._auth.account_code
 
     def buy(self, symbol: str, price: int, volume: int, order_type: str = "00") -> bool:
         return self._domestic_order.buy(symbol, price, volume, order_type)
@@ -77,12 +69,8 @@ class KISClient:
     def sell_reserve(self, symbol: str, price: int, volume: int, end_date: str, order_type: str = "00") -> bool:
         return self._domestic_order.sell_reserve(symbol, price, volume, end_date, order_type)
 
-    # ==================== 국내주식 시세 ====================
-
     def get_current_price(self, symbol: str) -> Optional[int]:
         return self._domestic_quote.get_current_price(symbol)
-
-    # ==================== 국내주식 계좌 ====================
 
     def get_account_info(self) -> Optional[AccountResponseDTO]:
         return self._domestic_account.get_account_info()
@@ -97,8 +85,6 @@ class KISClient:
     ) -> Optional[List[StockTradeListResponseDTO]]:
         return self._domestic_account.get_order_list(start_date, end_date)
 
-    # ==================== 해외주식 주문 ====================
-
     def submit_overseas_reservation_order(
             self,
             country: str,
@@ -108,8 +94,6 @@ class KISClient:
             price: str
     ) -> Optional[Dict]:
         return self._overseas_order.submit_reservation_order(country, action, symbol, volume, price)
-
-    # ==================== 해외주식 계좌 ====================
 
     def get_oversea_owned_stock_info(
             self,
@@ -127,8 +111,6 @@ class KISClient:
     ) -> List[OverseasStockTradeListResponseDTO]:
         return self._overseas_account.get_order_list(symbol, country, start_date, end_date)
 
-    # ==================== 통합 계좌 ====================
-
     def get_owned_stock_info(self, symbol: str = None) -> Union[List[StockResponseDTO], StockResponseDTO, None]:
         """국내/해외 주식 보유 정보를 조회하는 인터페이스"""
         if symbol:
@@ -145,8 +127,6 @@ class KISClient:
 
         return korea_list + oversea_list
 
-    # ==================== 휴일 ====================
-
     def get_domestic_market_holidays(self, date: str) -> Dict[str, HolidayResponseDTO]:
         result = self._holiday.get_holidays(date)
         self.total_holidays.update(result)
@@ -157,8 +137,6 @@ class KISClient:
 
     def check_holiday(self, date: str) -> bool:
         return self._holiday.check_holiday(date)
-
-    # ==================== 관심종목 ====================
 
     def get_interest_group_list(
             self,
@@ -185,5 +163,3 @@ class KISClient:
             user_id, inter_grp_code, group_type, data_rank,
             inter_grp_name, hts_kor_isnm, cntg_cls_code, fid_etc_cls_code, custtype
         )
-
-

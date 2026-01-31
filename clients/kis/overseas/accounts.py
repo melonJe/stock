@@ -4,9 +4,12 @@ from datetime import datetime
 from typing import List, Union, Optional
 
 from clients.kis.base import KISBaseClient
+from config.logging_config import get_logger
 from config.country_config import COUNTRY_CONFIG_ORDER
 from data.dto.account_dto import OverseesStockResponseDTO
 from data.dto.stock_trade_dto import OverseasStockTradeListRequestDTO, OverseasStockTradeListResponseDTO
+
+logger = get_logger(__name__)
 
 
 class OverseasAccountClient(KISBaseClient):
@@ -22,7 +25,7 @@ class OverseasAccountClient(KISBaseClient):
         country_code = country.upper()
         config = COUNTRY_CONFIG_ORDER.get(country_code)
         if not config:
-            logging.error(f"지원하지 않는 국가 코드: {country_code}")
+            logger.error(f"지원하지 않는 국가 코드: {country_code}")
             return None
 
         params = {
@@ -49,10 +52,10 @@ class OverseasAccountClient(KISBaseClient):
                 if stock_data:
                     result.extend([OverseesStockResponseDTO(**item) for item in stock_data])
             except KeyError as e:
-                logging.error(f"해외보유종목 파싱 오류 (KeyError): {e}")
+                logger.error(f"해외보유종목 파싱 오류 (KeyError): {e}")
                 continue
             except Exception as e:
-                logging.error(f"해외보유종목 예상치 못한 오류: {e}")
+                logger.error(f"해외보유종목 예상치 못한 오류: {e}")
                 continue
 
         if symbol:
@@ -102,14 +105,14 @@ class OverseasAccountClient(KISBaseClient):
                 headers
             )
             if not resp:
-                logging.error("해외주문내역 HTTP 요청 실패")
+                logger.error("해외주문내역 HTTP 요청 실패")
                 break
 
             try:
                 data = resp.json().get("output1", [])
                 all_trades.extend(OverseasStockTradeListResponseDTO(**item) for item in data)
             except Exception as e:
-                logging.error(f"JSON 파싱 에러: {e}, 응답: {resp.text}")
+                logger.error(f"JSON 파싱 에러: {e}, 응답: {resp.text}")
                 break
 
             tr_cont = resp.headers.get('tr_cont')

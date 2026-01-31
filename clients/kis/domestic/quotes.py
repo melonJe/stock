@@ -3,11 +3,14 @@ import logging
 from typing import Optional
 
 from clients.kis.base import KISBaseClient
+from config.logging_config import get_logger
 from dtos.kis.quote_dtos import CurrentPriceRequestDTO, CurrentPriceResponseDTO
 from core.exceptions import APIError
 from core.validators import validate_symbol, ValidationError
 from core.decorators import retry_on_error
 from core.error_handler import handle_error
+
+logger = get_logger(__name__)
 
 
 class DomesticQuoteClient(KISBaseClient):
@@ -39,6 +42,6 @@ class DomesticQuoteClient(KISBaseClient):
                 output = response_data.get("output", {})
                 return int(output.get("stck_prpr", 0))
             except (KeyError, ValueError) as e:
-                logging.error(f"현재가 조회 파싱 오류: {symbol} - {e}")
+                logger.error(f"현재가 조회 파싱 오류: {symbol} - {e}")
                 return None
         return None

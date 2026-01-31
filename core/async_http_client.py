@@ -7,6 +7,7 @@ import asyncio
 import httpx
 
 from config import setting_env
+from config.logging_config import get_logger
 from core.exceptions import (
     APIError,
     RateLimitError,
@@ -17,6 +18,8 @@ from core.exceptions import (
 
 # API 요청 간 대기 시간 (초)
 API_REQUEST_DELAY = 0.5
+
+logger = get_logger(__name__)
 
 # HTTP 요청 타임아웃 (connect, read) 초
 DEFAULT_TIMEOUT: Tuple[int, int] = (10, 30)
@@ -152,7 +155,7 @@ class AsyncHttpClient:
                     f"{error_log_prefix}. 타임아웃 (시도 {attempt + 1}/{MAX_RETRY_COUNT})",
                     original_error=e
                 )
-                logging.warning(str(last_exception))
+                logger.warning(str(last_exception))
                 if attempt == MAX_RETRY_COUNT - 1:
                     raise last_exception
             except httpx.ConnectError as e:
@@ -160,7 +163,7 @@ class AsyncHttpClient:
                     f"{error_log_prefix}. 연결 실패",
                     original_error=e
                 )
-                logging.warning(f"URL: {self._sanitize_url(url)}, {last_exception}")
+                logger.warning(f"URL: {self._sanitize_url(url)}, {last_exception}")
                 if attempt == MAX_RETRY_COUNT - 1:
                     raise last_exception
             except httpx.HTTPStatusError as e:
@@ -245,7 +248,7 @@ class AsyncHttpClient:
                     f"{error_log_prefix}. 타임아웃 (시도 {attempt + 1}/{MAX_RETRY_COUNT})",
                     original_error=e
                 )
-                logging.warning(str(last_exception))
+                logger.warning(str(last_exception))
                 if attempt == MAX_RETRY_COUNT - 1:
                     raise last_exception
             except httpx.ConnectError as e:
@@ -253,7 +256,7 @@ class AsyncHttpClient:
                     f"{error_log_prefix}. 연결 실패",
                     original_error=e
                 )
-                logging.warning(f"URL: {path}, {last_exception}")
+                logger.warning(f"URL: {path}, {last_exception}")
                 if attempt == MAX_RETRY_COUNT - 1:
                     raise last_exception
             except httpx.HTTPStatusError as e:

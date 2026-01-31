@@ -6,9 +6,12 @@ from urllib.parse import urlparse, parse_qs
 import requests
 from bs4 import BeautifulSoup
 
+from config.logging_config import get_logger
 from data.models import Blacklist
 from utils.data_util import upsert_many
 from config.constants import BLACKLIST_RETENTION_DAYS
+
+logger = get_logger(__name__)
 
 
 class BlacklistRepository:
@@ -46,7 +49,7 @@ class BlacklistRepository:
                     parse_qs(urlparse(x['href']).query)['code'][0] for x in elements
                 )
             except Exception as e:
-                logging.error(f"블랙리스트 URL 처리 오류 ({url}): {e}")
+                logger.error(f"블랙리스트 URL 처리 오류 ({url}): {e}")
                 continue
 
         data_to_insert = [

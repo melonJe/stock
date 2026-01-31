@@ -8,10 +8,13 @@ from fastapi import APIRouter, HTTPException, Query, Depends
 from pydantic import BaseModel
 
 from config import setting_env
+from config.logging_config import get_logger
 from clients.kis import KISClient
 from data.models import Stock, PriceHistory, PriceHistoryUS
 from repositories.stock_repository import StockRepository
 from core.security import verify_basic_auth, sanitize_path, mask_sensitive_data
+
+logger = get_logger(__name__)
 
 router = APIRouter(
     prefix="/api/dashboard",
@@ -100,7 +103,7 @@ async def get_account_info(country: str = Query("KOR", regex="^(KOR|USA)$")):
             profit_loss_rate=float(account_data.get("profit_loss_rate", 0))
         )
     except Exception as e:
-        logging.error(f"계좌 정보 조회 실패: {e}")
+        logger.error(f"계좌 정보 조회 실패: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -147,7 +150,7 @@ async def get_holdings(country: str = Query("KOR", regex="^(KOR|USA)$")):
         
         return result
     except Exception as e:
-        logging.error(f"보유 종목 조회 실패: {e}")
+        logger.error(f"보유 종목 조회 실패: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -177,7 +180,7 @@ async def get_logs(
     except FileNotFoundError:
         raise HTTPException(status_code=404, detail=f"{log_type} 로그 파일을 찾을 수 없습니다")
     except Exception as e:
-        logging.error(f"로그 조회 실패: {e}")
+        logger.error(f"로그 조회 실패: {e}")
         raise HTTPException(status_code=500, detail="로그 조회 중 오류가 발생했습니다")
 
 
@@ -206,7 +209,7 @@ async def get_system_status():
             usa_holdings=0  # TODO: 미국 보유 종목 수
         )
     except Exception as e:
-        logging.error(f"시스템 상태 조회 실패: {e}")
+        logger.error(f"시스템 상태 조회 실패: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -231,7 +234,7 @@ async def search_stocks(query: str = Query(..., min_length=1)):
             for stock in stocks
         ]
     except Exception as e:
-        logging.error(f"종목 검색 실패: {e}")
+        logger.error(f"종목 검색 실패: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -280,5 +283,5 @@ async def get_price_history(
     except HTTPException:
         raise
     except Exception as e:
-        logging.error(f"가격 히스토리 조회 실패: {e}")
+        logger.error(f"가격 히스토리 조회 실패: {e}")
         raise HTTPException(status_code=500, detail=str(e))

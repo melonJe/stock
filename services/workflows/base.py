@@ -3,6 +3,7 @@ import logging
 from typing import List, Union
 
 from config import setting_env
+from config.logging_config import get_logger
 from data.database import db_connect
 from data.dto.account_dto import StockResponseDTO
 from data.models import Subscription
@@ -14,6 +15,8 @@ from utils.operations import price_refine
 from core.exceptions import OrderError
 from core.decorators import log_execution
 from core.error_handler import handle_error
+
+logger = get_logger(__name__)
 
 
 def select_buy_stocks(country: str = "KOR") -> dict[str, dict[float, int]]:
@@ -34,7 +37,7 @@ def select_buy_stocks(country: str = "KOR") -> dict[str, dict[float, int]]:
                     buy_levels.setdefault(sym, {})
                     buy_levels[sym][price] = buy_levels[sym].get(price, 0) + qty
         except Exception as e:
-            logging.error(f"select_buy_stocks 전략 실행 오류: {e}")
+            logger.error(f"select_buy_stocks 전략 실행 오류: {e}")
 
     return buy_levels
 
@@ -57,7 +60,7 @@ def select_sell_stocks(stocks_held: Union[List[StockResponseDTO], StockResponseD
                     sell_levels.setdefault(sym, {})
                     sell_levels[sym][price] = sell_levels[sym].get(price, 0) + qty
         except Exception as e:
-            logging.error(f"select_sell_stocks 전략 실행 오류: {e}")
+            logger.error(f"select_sell_stocks 전략 실행 오류: {e}")
 
     # 구독하지 않은 종목 처리
     non_sub_result = filter_non_subscription_for_sell(stocks_held)
@@ -157,7 +160,7 @@ def filter_non_subscription_for_sell(
             sell_price = prev_close
             sell_levels.setdefault(symbol, {})[sell_price] = hldg_qty
         except Exception as e:
-            logging.error(f"filter_non_subscription_for_sell 처리 중 에러: {symbol} -> {e}")
+            logger.error(f"filter_non_subscription_for_sell 처리 중 에러: {symbol} -> {e}")
             continue
 
     return sell_levels
@@ -174,7 +177,7 @@ def trading_buy(client, buy_levels):
     try:
         end_date = client.get_nth_open_day(3)
     except Exception as e:
-        logging.critical(f"trading_buy 오픈일 조회 실패: {e}")
+        logger.critical(f"trading_buy 오픈일 조회 실패: {e}")
         return
 
     money = 0
@@ -196,7 +199,7 @@ def trading_buy(client, buy_levels):
                         try:
                             result = client.buy(symbol, price, volume)
                             if result:
-                                logging.info(f"매수 성공: {symbol} {volume}주 @{price}")
+                                logger.info(f"매수 성공: {symbol} {volume}주 @{price}")
                             else:
                                 error = OrderError(f"매수 실패: {symbol}")
                                 handle_error(
@@ -216,15 +219,15 @@ def trading_buy(client, buy_levels):
                             )
                         money += price * volume
                 except Exception as e:
-                    logging.critical(f"trading_buy 주문 실패: {symbol} -> {e}")
+                    logger.critical(f"trading_buy 주문 실패: {symbol} -> {e}")
         except Exception as e:
-            logging.error(f"trading_buy 처리 중 에러: {symbol} -> {e}")
+            logger.error(f"trading_buy 처리 중 에러: {symbol} -> {e}")
 
     if money:
         try:
             discord.send_message(f'총 액 : {money}')
         except Exception as e:
-            logging.error(f"trading_buy 디스코드 전송 실패: {e}")
+            logger.error(f"trading_buy 디스코드 전송 실패: {e}")
 
 
 @log_execution(level=logging.INFO)
@@ -238,7 +241,7 @@ def trading_sell(client, sell_levels):
     try:
         end_date = client.get_nth_open_day(1)
     except Exception as e:
-        logging.critical(f"trading_sell 오픈일 조회 실패: {e}")
+        logger.critical(f"trading_sell 오픈일 조회 실패: {e}")
         return
 
     for symbol, levels in (sell_levels or {}).items():
@@ -275,6 +278,6 @@ def trading_sell(client, sell_levels):
                             volume=str(volume)
                         )
                 except Exception as e:
-                    logging.critical(f"trading_sell 주문 실패: {symbol} -> {e}")
+                    logger.critical(f"trading_sell 주문 실패: {symbol} -> {e}")
         except Exception as e:
-            logging.error(f"trading_sell 처리 중 에러: {symbol} -> {e}")
+            logger.error(f"trading_sell 처리 중 에러: {symbol} -> {e}")

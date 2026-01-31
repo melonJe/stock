@@ -3,7 +3,10 @@ from typing import Type
 
 from peewee import Model
 
+from config.logging_config import get_logger
 from data import models
+
+logger = get_logger(__name__)
 
 
 def upsert(model: Type[Model], data: dict, conflict_target: list, preserve_fields: list):
@@ -24,7 +27,7 @@ def upsert(model: Type[Model], data: dict, conflict_target: list, preserve_field
                 preserve=preserve_fields
             ).execute()
     except Exception as e:
-        logging.error(f"Upsert failed for model {model.__name__}: {e}")
+        logger.error(f"Upsert failed for model {model.__name__}: {e}")
 
 
 def upsert_many(model: Type[Model], data: list, conflict_target: list = None, preserve_fields: list = None):
@@ -53,4 +56,4 @@ def upsert_many(model: Type[Model], data: list, conflict_target: list = None, pr
                     preserve=preserve_fields
                 ).execute()
     except Exception as e:
-        logging.error(f"Upsert many failed for model {model.__name__}: {e}")
+        logger.error(f"Upsert many failed for model {model.__name__}: {e}")

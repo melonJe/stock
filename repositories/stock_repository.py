@@ -9,6 +9,7 @@ import FinanceDataReader
 import pandas as pd
 from dateutil.relativedelta import relativedelta
 
+from config.logging_config import get_logger
 from data.models import Stock, PriceHistory, PriceHistoryUS
 from config.constants import (
     KOREAN_STOCK_PATTERN,
@@ -16,6 +17,8 @@ from config.constants import (
     MAX_WORKER_COUNT,
     DEFAULT_PRICE_HISTORY_YEARS,
 )
+
+logger = get_logger(__name__)
 
 
 class StockRepository:
@@ -64,7 +67,7 @@ class StockRepository:
                 code = 'Symbol'
             return df_krx[df_krx[code] == symbol].to_dict('records')[0].get('Name')
         except Exception as e:
-            logging.error(f"종목명 조회 실패: {e}")
+            logger.error(f"종목명 조회 실패: {e}")
             return None
 
     @staticmethod
@@ -131,9 +134,9 @@ class StockRepository:
                     try:
                         future.result()
                     except Exception as e:
-                        logging.error(f"Error while processing data: {e}")
+                        logger.error(f"Error while processing data: {e}")
         except Exception as e:
-            logging.error(f"Error loading data for market: {e}")
+            logger.error(f"Error loading data for market: {e}")
 
     @staticmethod
     def update_listings():
@@ -143,9 +146,9 @@ class StockRepository:
             try:
                 StockRepository._process_listing(df_kr, 'Code', 'Name', "KOR")
             except Exception as e:
-                logging.error(f"Error insert KOR data: {e}")
+                logger.error(f"Error insert KOR data: {e}")
         except Exception as e:
-            logging.error(f"Error loading KOR data: {e}")
+            logger.error(f"Error loading KOR data: {e}")
 
         try:
             df_us = pd.concat([
@@ -156,6 +159,6 @@ class StockRepository:
             try:
                 StockRepository._process_listing(df_us, "Symbol", "Name", "USA")
             except Exception as e:
-                logging.error(f"Error insert USA data: {e}")
+                logger.error(f"Error insert USA data: {e}")
         except Exception as e:
-            logging.error(f"Error loading USA data: {e}")
+            logger.error(f"Error loading USA data: {e}")

@@ -3,6 +3,7 @@ import logging
 import traceback
 from typing import Optional, Callable, Dict, Any
 
+from config.logging_config import get_logger
 from core.exceptions import (
     StockTradingError,
     APIError,
@@ -12,6 +13,8 @@ from core.exceptions import (
     DatabaseError,
 )
 
+logger = get_logger(__name__)
+
 
 def _default_alert_callback(message: str, error: Exception) -> None:
     """기본 알림 콜백 - Discord로 에러 메시지 전송"""
@@ -19,7 +22,7 @@ def _default_alert_callback(message: str, error: Exception) -> None:
         from utils.discord import error_message
         error_message(f"🚨 **CRITICAL ERROR**\n{message}")
     except Exception as e:
-        logging.error(f"Discord 알림 전송 실패: {e}", extra={"skip_discord": True})
+        logger.error(f"Discord 알림 전송 실패: {e}", extra={"skip_discord": True})
 
 
 class ErrorHandler:
@@ -59,17 +62,17 @@ class ErrorHandler:
         log_message = self._format_error_message(error, context, metadata)
         
         if critical or isinstance(error, (AuthenticationError, DatabaseError)):
-            logging.critical(log_message)
+            logger.critical(log_message)
             if self.alert_callback:
                 self.alert_callback(log_message, error)
         elif isinstance(error, (OrderError, APIError)):
-            logging.error(log_message)
+            logger.error(log_message)
         else:
-            logging.warning(log_message)
+            logger.warning(log_message)
 
         # 상세 트레이스 (DEBUG 레벨)
         if logging.getLogger().isEnabledFor(logging.DEBUG):
-            logging.debug(f"에러 상세 트레이스:\n{traceback.format_exc()}")
+            logger.debug(f"에러 상세 트레이스:\n{traceback.format_exc()}")
 
         # 에러 재발생
         if should_raise:

@@ -3,6 +3,7 @@ import logging
 from typing import Optional
 
 from clients.kis.base import KISBaseClient
+from config.logging_config import get_logger
 from data.dto.interest_stock_dto import (
     InterestGroupListRequestDTO,
     InterestGroupListItemDTO,
@@ -12,6 +13,8 @@ from data.dto.interest_stock_dto import (
     InterestGroupDetailItemDTO,
     InterestGroupDetailResponseDTO,
 )
+
+logger = get_logger(__name__)
 
 
 class WatchlistClient(KISBaseClient):
@@ -55,10 +58,10 @@ class WatchlistClient(KISBaseClient):
                 items = [InterestGroupListItemDTO(**item) for item in output2]
                 return InterestGroupListResponseDTO(output2=items)
             except Exception as e:
-                logging.critical(f"관심종목 그룹조회 파싱 오류: {e} - response data: {response_data}")
+                logger.critical(f"관심종목 그룹조회 파싱 오류: {e} - response data: {response_data}")
                 return None
 
-        logging.critical("관심종목 그룹조회 API 응답 없음")
+        logger.critical("관심종목 그룹조회 API 응답 없음")
         return None
 
     def get_stocks_by_group(
@@ -116,8 +119,8 @@ class WatchlistClient(KISBaseClient):
                 items = [InterestGroupDetailItemDTO(**item) for item in output2]
                 return InterestGroupDetailResponseDTO(output1=info, output2=items)
             except Exception as e:
-                logging.critical(f"관심종목 그룹별 종목조회 파싱 오류: {e} - response data: {response_data}")
+                logger.critical(f"관심종목 그룹별 종목조회 파싱 오류: {e} - response data: {response_data}")
                 return None
 
-        logging.critical("관심종목 상세조회 API 응답 없음")
+        logger.critical("관심종목 상세조회 API 응답 없음")
         return None
