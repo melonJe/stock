@@ -7,7 +7,7 @@ from typing import List, Union
 import numpy as np
 import pandas as pd
 
-from apis.korea_investment import KoreaInvestmentAPI
+from clients.kis import KISClient as KoreaInvestmentAPI
 from config import setting_env
 from data.dto.account_dto import StockResponseDTO
 from data.models import Subscription
