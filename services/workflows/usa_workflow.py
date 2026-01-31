@@ -1,7 +1,6 @@
 """미국주식 트레이딩 워크플로우"""
 import asyncio
 import datetime
-import logging
 
 from config import setting_env
 from config.logging_config import get_logger

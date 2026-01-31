@@ -1,5 +1,4 @@
 """비동기 HTTP 클라이언트"""
-import logging
 import urllib.parse
 from typing import Dict, Optional, Tuple
 import asyncio

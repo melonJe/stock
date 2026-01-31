@@ -11,8 +11,9 @@ from bs4 import BeautifulSoup
 from dateutil.relativedelta import relativedelta
 
 from config.logging_config import get_logger
-from custom_exception.exception import NotFoundUrl
-from data.models import Stock, PriceHistory, PriceHistoryUS, Subscription, Blacklist
+from core.exceptions import NotFoundError as NotFoundUrl
+from data.models import Stock, Subscription, Blacklist
+from repositories.stock_repository import StockRepository
 from services.tradingview_scan import (
     build_tradingview_payload,
     request_tradingview_scan,
@@ -35,46 +36,17 @@ from config.constants import (
 logger = get_logger(__name__)
 
 
-def get_company_name(symbol: str):
-    try:
-        existing_stock = Stock.get_or_none(Stock.symbol == symbol)
-        if existing_stock:
-            return existing_stock.company_name
-
-        df_krx = FinanceDataReader.StockListing('KRX')
-        code = 'Code'
-        if get_country_by_symbol(symbol) == "USA":
-            df_krx = pd.concat([df_krx,
-                                FinanceDataReader.StockListing('S&P500'),
-                                FinanceDataReader.StockListing('NASDAQ'),
-                                FinanceDataReader.StockListing('NYSE')
-                                ])
-            code = 'Symbol'
-        return df_krx[df_krx[code] == symbol].to_dict('records')[0].get('Name')
-    except Exception as e:
-        logger.error(f"종목명 조회 실패: {e}")
-        return None
+# StockRepository로 위임
+def get_company_name(symbol: str) -> str:
+    return StockRepository.get_company_name(symbol)
 
 
-def get_country_by_symbol(symbol: str):
-    if re.match(KOREAN_STOCK_PATTERN, symbol):
-        return "KOR"
-    elif re.match(AMERICA_STOCK_PATTERN, symbol):
-        return "USA"
-    else:
-        return ""
+def get_country_by_symbol(symbol: str) -> str:
+    return StockRepository.get_country_by_symbol(symbol)
 
 
 def get_history_table(country: str):
-    country = country.upper()
-    mapping = {
-        'KOR': PriceHistory,
-        'USA': PriceHistoryUS,
-    }
-    try:
-        return mapping[country]
-    except KeyError:
-        raise ValueError(f"Unsupported country code: {country}")
+    return StockRepository.get_history_table(country)
 
 
 def insert_stock(symbol: str, company_name: str = None, country: str = None):
@@ -502,41 +474,40 @@ def add_stock_price(symbol: str = None, country: str = None, start_date: datetim
 
 
 def add_price_for_symbol(symbol: str, start_date: datetime.datetime = None, end_date: datetime.datetime = None):
-    start_date = (datetime.datetime.now() - relativedelta(days=5)).strftime('%Y-%m-%d') if not start_date else start_date.strftime('%Y-%m-%d')
+    start_date_str = (datetime.datetime.now() - relativedelta(days=5)).strftime('%Y-%m-%d') if not start_date else start_date.strftime('%Y-%m-%d')
     try:
         country = get_country_by_symbol(symbol)
         table = get_history_table(country)
         data_to_insert = None
+
         if country == "KOR":
-            df_krx = FinanceDataReader.DataReader(
+            df = FinanceDataReader.DataReader(
                 symbol=f'NAVER:{symbol}',
-                start=start_date,
+                start=start_date_str,
                 end=end_date
             )
-            data_to_insert = [
-                {'symbol': symbol,
-                 'date': idx.date(),
-                 'open': row['Open'],
-                 'high': row['High'],
-                 'close': row['Close'],
-                 'low': row['Low'],
-                 'volume': row['Volume']}
-                for idx, row in df_krx.iterrows()
-            ]
+            if not df.empty:
+                df = df.reset_index()
+                df['symbol'] = symbol
+                df['date'] = df['Date'].dt.date
+                data_to_insert = df[['symbol', 'date', 'Open', 'High', 'Close', 'Low', 'Volume']].rename(
+                    columns={'Open': 'open', 'High': 'high', 'Close': 'close', 'Low': 'low', 'Volume': 'volume'}
+                ).to_dict('records')
         elif country == "USA":
-            df_krx = FinanceDataReader.DataReader(symbol=symbol, start=start_date, end=end_date)
-            data_to_insert = [
-                {'symbol': symbol,
-                 'date': idx.date(),
-                 'open': float(row['Open']),
-                 'high': float(row['High']),
-                 'close': float(row['Close']),
-                 'low': float(row['Low']),
-                 'volume': int(row['Volume']) if not pd.isna(row['Volume']) else None}
-                for idx, row in df_krx.iterrows()
-            ]
+            df = FinanceDataReader.DataReader(symbol=symbol, start=start_date_str, end=end_date)
+            if not df.empty:
+                df = df.reset_index()
+                df['symbol'] = symbol
+                df['date'] = df['Date'].dt.date
+                df['open'] = df['Open'].astype(float)
+                df['high'] = df['High'].astype(float)
+                df['close'] = df['Close'].astype(float)
+                df['low'] = df['Low'].astype(float)
+                df['volume'] = df['Volume'].apply(lambda x: int(x) if pd.notna(x) else None)
+                data_to_insert = df[['symbol', 'date', 'open', 'high', 'close', 'low', 'volume']].to_dict('records')
 
-        upsert_many(table, data_to_insert, [table.symbol, table.date], ['open', 'high', 'close', 'low', 'volume'])
+        if data_to_insert:
+            upsert_many(table, data_to_insert, [table.symbol, table.date], ['open', 'high', 'close', 'low', 'volume'])
 
     except NotFoundUrl:
         Stock.delete().where(Stock.symbol == symbol).execute()

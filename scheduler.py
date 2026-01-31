@@ -1,7 +1,9 @@
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta
+from typing import AsyncGenerator
 
 from apscheduler.schedulers.background import BackgroundScheduler
+from fastapi import FastAPI
 from apscheduler.triggers.cron import CronTrigger
 
 from config import setting_env
@@ -13,7 +15,8 @@ from services.trading import usa_trading, korea_trading, buy_etf_group_stocks
 logger = get_logger(__name__)
 
 
-def start():
+def start() -> None:
+    """스케줄러 시작"""
     scheduler = BackgroundScheduler(misfire_grace_time=3600, coalesce=True, timezone='Asia/Seoul')
 
     if not setting_env.SIMULATE:
@@ -83,7 +86,8 @@ def start():
 
 
 @asynccontextmanager
-async def lifespan(app):
+async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
+    """FastAPI lifespan 이벤트 핸들러"""
     start()
     yield
-    print("lifespan finished")
+    logger.info("lifespan finished")

@@ -1,6 +1,5 @@
 """블랙리스트 데이터 접근"""
 import datetime
-import logging
 from urllib.parse import urlparse, parse_qs
 
 import requests
@@ -64,5 +63,3 @@ class BlacklistRepository:
         Blacklist.delete().where(
             Blacklist.record_date < datetime.datetime.now() - datetime.timedelta(days=BLACKLIST_RETENTION_DAYS)
         ).execute()
-
-        # TODO: 미국 주식 Blacklist insert 프로세스 추가

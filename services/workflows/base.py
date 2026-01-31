@@ -1,5 +1,4 @@
 """워크플로우 공통 함수"""
-import logging
 from typing import List, Union
 
 from config import setting_env

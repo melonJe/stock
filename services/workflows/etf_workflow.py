@@ -1,6 +1,5 @@
 """ETF 트레이딩 워크플로우"""
 import datetime
-import logging
 
 from clients.kis import KISClient
 from config.logging_config import get_logger

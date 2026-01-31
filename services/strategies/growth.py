@@ -1,5 +1,4 @@
 """성장주 전략 (기존 filter_trend_*)"""
-import logging
 from typing import List, Union
 
 import pandas as pd

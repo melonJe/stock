@@ -1,5 +1,4 @@
 """박스권 전략 (기존 filter_box_*)"""
-import logging
 from typing import List, Union
 
 import pandas as pd

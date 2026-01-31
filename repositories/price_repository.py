@@ -1,6 +1,5 @@
 """가격 데이터 접근"""
 import datetime
-import logging
 import os
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
@@ -9,7 +8,7 @@ import pandas as pd
 from dateutil.relativedelta import relativedelta
 
 from config.logging_config import get_logger
-from custom_exception.exception import NotFoundUrl
+from core.exceptions import NotFoundError as NotFoundUrl
 from data.models import Stock
 from repositories.stock_repository import StockRepository
 from utils.data_util import upsert_many
@@ -65,37 +64,30 @@ class PriceRepository:
             data_to_insert = None
 
             if country == "KOR":
-                df_krx = FinanceDataReader.DataReader(
+                df = FinanceDataReader.DataReader(
                     symbol=f'NAVER:{symbol}',
                     start=start_date_str,
                     end=end_date
                 )
-                data_to_insert = [
-                    {
-                        'symbol': symbol,
-                        'date': idx.date(),
-                        'open': row['Open'],
-                        'high': row['High'],
-                        'close': row['Close'],
-                        'low': row['Low'],
-                        'volume': row['Volume']
-                    }
-                    for idx, row in df_krx.iterrows()
-                ]
+                if not df.empty:
+                    df = df.reset_index()
+                    df['symbol'] = symbol
+                    df['date'] = df['Date'].dt.date
+                    data_to_insert = df[['symbol', 'date', 'Open', 'High', 'Close', 'Low', 'Volume']].rename(
+                        columns={'Open': 'open', 'High': 'high', 'Close': 'close', 'Low': 'low', 'Volume': 'volume'}
+                    ).to_dict('records')
             elif country == "USA":
-                df_krx = FinanceDataReader.DataReader(symbol=symbol, start=start_date_str, end=end_date)
-                data_to_insert = [
-                    {
-                        'symbol': symbol,
-                        'date': idx.date(),
-                        'open': float(row['Open']),
-                        'high': float(row['High']),
-                        'close': float(row['Close']),
-                        'low': float(row['Low']),
-                        'volume': int(row['Volume']) if not pd.isna(row['Volume']) else None
-                    }
-                    for idx, row in df_krx.iterrows()
-                ]
+                df = FinanceDataReader.DataReader(symbol=symbol, start=start_date_str, end=end_date)
+                if not df.empty:
+                    df = df.reset_index()
+                    df['symbol'] = symbol
+                    df['date'] = df['Date'].dt.date
+                    df['open'] = df['Open'].astype(float)
+                    df['high'] = df['High'].astype(float)
+                    df['close'] = df['Close'].astype(float)
+                    df['low'] = df['Low'].astype(float)
+                    df['volume'] = df['Volume'].apply(lambda x: int(x) if pd.notna(x) else None)
+                    data_to_insert = df[['symbol', 'date', 'open', 'high', 'close', 'low', 'volume']].to_dict('records')
 
             if data_to_insert:
                 upsert_many(table, data_to_insert, [table.symbol, table.date], ['open', 'high', 'close', 'low', 'volume'])

@@ -1,7 +1,6 @@
-import logging
-from typing import Type
+from typing import Type, Dict, List, Any, Optional
 
-from peewee import Model
+from peewee import Model, Field
 
 from config.logging_config import get_logger
 from data import models
@@ -9,7 +8,7 @@ from data import models
 logger = get_logger(__name__)
 
 
-def upsert(model: Type[Model], data: dict, conflict_target: list, preserve_fields: list):
+def upsert(model: Type[Model], data: Dict[str, Any], conflict_target: List[Field], preserve_fields: List[str]) -> None:
     """
     범용 UPSERT 함수 (다중 필드 고유 인덱스 처리 포함)
     :param model: Peewee 모델 클래스
@@ -30,7 +29,7 @@ def upsert(model: Type[Model], data: dict, conflict_target: list, preserve_field
         logger.error(f"Upsert failed for model {model.__name__}: {e}")
 
 
-def upsert_many(model: Type[Model], data: list, conflict_target: list = None, preserve_fields: list = None):
+def upsert_many(model: Type[Model], data: List[Dict[str, Any]], conflict_target: Optional[List[Field]] = None, preserve_fields: Optional[List[str]] = None) -> None:
     """
     Peewee insert_many와 UPSERT를 결합하여 다중 데이터 처리
     :param model: Peewee 모델 클래스

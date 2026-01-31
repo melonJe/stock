@@ -1,5 +1,4 @@
 """비동기 KIS API 인증 관리"""
-import logging
 from datetime import datetime, timedelta
 from typing import Dict, Optional
 

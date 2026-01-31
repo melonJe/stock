@@ -115,3 +115,14 @@ class StrategyError(StockTradingError):
 class StrategyValidationError(StrategyError):
     """전략 검증 실패"""
     pass
+
+
+# URL/리소스 관련 예외
+class NotFoundError(DataError):
+    """리소스를 찾을 수 없음"""
+    pass
+
+
+# 레거시 호환용 alias (deprecated - core.exceptions 직접 사용 권장)
+NotFoundUrl = NotFoundError
+OrderException = OrderError

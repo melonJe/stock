@@ -1,5 +1,4 @@
 """관심종목 조회 API"""
-import logging
 from typing import Optional
 
 from clients.kis.base import KISBaseClient

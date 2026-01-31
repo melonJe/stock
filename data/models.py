@@ -1,10 +1,20 @@
 import datetime
 
 from peewee import *
+from playhouse.pool import PooledPostgresqlDatabase
 
 from config import setting_env
 
-db = PostgresqlDatabase(database=setting_env.DB_NAME, user=setting_env.DB_USER, password=setting_env.DB_PASS, host=setting_env.DB_HOST, port=setting_env.DB_PORT)
+db = PooledPostgresqlDatabase(
+    database=setting_env.DB_NAME,
+    user=setting_env.DB_USER,
+    password=setting_env.DB_PASS,
+    host=setting_env.DB_HOST,
+    port=setting_env.DB_PORT,
+    max_connections=20,
+    stale_timeout=300,
+    timeout=30,
+)
 
 
 class Blacklist(Model):

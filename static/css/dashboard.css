@@ -223,6 +223,74 @@ body {
     box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.2);
 }
 
+/* 토스트 알림 */
+#toast-container {
+    position: fixed;
+    top: 1rem;
+    right: 1rem;
+    z-index: 9999;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.toast {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.875rem 1rem;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    transform: translateX(120%);
+    transition: transform 0.3s ease;
+    max-width: 360px;
+}
+
+.toast.show {
+    transform: translateX(0);
+}
+
+.toast-error {
+    background: #fee2e2;
+    border-left: 4px solid var(--danger);
+    color: #991b1b;
+}
+
+.toast-success {
+    background: #d1fae5;
+    border-left: 4px solid var(--success);
+    color: #065f46;
+}
+
+.toast-info {
+    background: #dbeafe;
+    border-left: 4px solid var(--primary);
+    color: #1e40af;
+}
+
+.toast-icon {
+    font-size: 1.125rem;
+}
+
+.toast-message {
+    flex: 1;
+    font-size: 0.875rem;
+    font-weight: 500;
+}
+
+.toast-close {
+    background: none;
+    border: none;
+    font-size: 1.25rem;
+    cursor: pointer;
+    opacity: 0.5;
+    transition: opacity 0.2s;
+}
+
+.toast-close:hover {
+    opacity: 1;
+}
+
 /* 반응형 */
 @media (max-width: 768px) {
     .card-value {

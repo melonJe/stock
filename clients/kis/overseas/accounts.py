@@ -1,5 +1,4 @@
 """해외주식 계좌/잔고 조회 API"""
-import logging
 from datetime import datetime
 from typing import List, Union, Optional
 

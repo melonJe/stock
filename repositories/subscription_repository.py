@@ -1,6 +1,5 @@
 """구독 종목 데이터 접근"""
 import datetime
-import logging
 
 import pandas as pd
 import requests

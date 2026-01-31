@@ -1,5 +1,4 @@
 """해외주식 주문 API"""
-import logging
 from typing import Dict
 
 from clients.kis.base import KISBaseClient

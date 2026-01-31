@@ -1,7 +1,6 @@
 """국내주식 트레이딩 워크플로우"""
 import asyncio
 import datetime
-import logging
 from datetime import datetime
 
 from config import setting_env

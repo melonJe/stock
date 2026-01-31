@@ -1,5 +1,4 @@
 """대시보드 API 라우터"""
-import logging
 from pathlib import Path
 from typing import List, Dict, Any
 from datetime import datetime, timedelta

@@ -1,6 +1,5 @@
 """종목 정보 데이터 접근"""
 import datetime
-import logging
 import os
 import re
 from concurrent.futures import ThreadPoolExecutor, as_completed
