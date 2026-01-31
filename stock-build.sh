@@ -92,14 +92,38 @@ main() {
     # Return to original directory
     cd "$current_dir" || log_error "Failed to return to original directory"
 
+    # Validate .env files
+    log_info "Validating environment files..."
+    if [ ! -f ".env.stock" ]; then
+        log_warn ".env.stock not found. Please create it from .env.example"
+    fi
+    if [ ! -f ".env.db" ]; then
+        log_warn ".env.db not found. Please create it"
+    fi
+
+    # Create logs directory if it doesn't exist
+    log_info "Setting up logs directory..."
+    mkdir -p logs
+    chmod 755 logs  # 755로 변경 (보안 강화)
+
     # Start services
     log_info "Starting services..."
     if command -v docker-compose &> /dev/null; then
         docker-compose down || log_warn "Failed to stop existing containers"
         docker-compose up -d --remove-orphans || log_error "Failed to start services"
+        
+        # Wait for health checks
+        log_info "Waiting for services to be healthy..."
+        sleep 5
+        docker-compose ps
     else
         docker compose down || log_warn "Failed to stop existing containers"
         docker compose up -d --remove-orphans || log_error "Failed to start services"
+        
+        # Wait for health checks
+        log_info "Waiting for services to be healthy..."
+        sleep 5
+        docker compose ps
     fi
 
     # Clean up unused images

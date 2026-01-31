@@ -13,9 +13,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN python -m venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 
-# Install Python dependencies
+# Install Python dependencies (레이어 캐싱 최적화)
 COPY requirements.txt .
-RUN pip install --no-cache-dir --upgrade pip && \
+RUN pip install --no-cache-dir --upgrade pip setuptools wheel && \
     pip install --no-cache-dir -r requirements.txt
 
 # Runtime stage
@@ -25,7 +25,13 @@ FROM python:3.10-slim
 ENV TZ="Asia/Seoul"
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
+    ENVIRONMENT=production \
     PATH="/opt/venv/bin:$PATH"
+
+# Install runtime dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libpq5 \
+    && rm -rf /var/lib/apt/lists/*
 
 # Copy only necessary files from builder
 COPY --from=builder /opt/venv /opt/venv
@@ -34,6 +40,9 @@ WORKDIR /app
 
 # Copy application code
 COPY . .
+
+# Create logs directory
+RUN mkdir -p /app/logs && chmod 777 /app/logs
 
 # Expose the port the app runs on
 EXPOSE 8000

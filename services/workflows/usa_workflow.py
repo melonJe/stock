@@ -1,7 +1,7 @@
 """미국주식 트레이딩 워크플로우"""
+import asyncio
 import datetime
 import logging
-import threading
 
 from config import setting_env
 from config.logging_config import get_logger
@@ -16,7 +16,8 @@ class USAWorkflow:
     """미국주식 트레이딩 워크플로우"""
 
     @staticmethod
-    def run():
+    async def run():
+        """미국주식 일일 트레이딩 실행 (비동기)"""
         logger.info("미국 주식 일일 루틴 시작", workflow="usa")
         ki_api = KISClient(
             app_key=setting_env.APP_KEY_USA,
@@ -26,10 +27,12 @@ class USAWorkflow:
         )
 
         usa_stock = select_buy_stocks(country="USA")
-        buy = threading.Thread(target=trading_buy, args=(ki_api, usa_stock,))
-        buy.start()
+        
+        # 비동기 실행 (threading 대신 asyncio 사용)
+        await asyncio.to_thread(trading_buy, ki_api, usa_stock)
 
 
 # 기존 코드 호환을 위한 함수
 def usa_trading():
-    USAWorkflow.run()
+    """동기 래퍼 함수 (스케줄러용)"""
+    asyncio.run(USAWorkflow.run())
