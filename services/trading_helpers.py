@@ -530,3 +530,16 @@ def rsi_rebound_below(df: pd.DataFrame, window: int, upper_bound: float) -> bool
     curr_val = float(curr)
     prev_val = float(prev)
     return prev_val < curr_val < upper_bound
+
+
+def compute_rsi(df: pd.DataFrame, window: int = 14) -> Optional[pd.Series]:
+    """RSI 계산 (공통 함수)"""
+    if df is None or "close" not in df.columns or len(df) < window:
+        return None
+    delta = df["close"].diff()
+    gain = delta.clip(lower=0)
+    loss = -delta.clip(upper=0)
+    avg_gain = gain.rolling(window=window, min_periods=window).mean()
+    avg_loss = loss.rolling(window=window, min_periods=window).mean()
+    rs = avg_gain / avg_loss
+    return 100 - (100 / (1 + rs))

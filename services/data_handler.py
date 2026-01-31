@@ -337,44 +337,109 @@ def stock_box_pattern_filter(
 
 
 def update_subscription_stock():
+    """
+    전략별 종목 업데이트 - 우선순위 적용
+    
+    우선순위: dividend(1) > growth(2) > box(3)
+    동일 종목이 여러 전략에 해당할 경우 최우선 전략만 등록
+    """
+    from config.strategy_config import (
+        STRATEGY_PRIORITY,
+        DIVIDEND_CONFIG,
+        GROWTH_CONFIG,
+        RANGEBOX_CONFIG,
+    )
+    
     logger.info(f'{datetime.datetime.now()} update_subscription_stock 시작')
+    
+    # 전략별 종목 수집 (symbol -> category 매핑)
+    strategy_candidates: dict[str, list[str]] = {}  # symbol -> [categories]
+    
+    # 1. 배당주 (최우선) - 배당수익률 3%+, 배당성향 40-80%
+    dividend_kor = stock_dividend_filter(
+        country="korea",
+        min_yield=DIVIDEND_CONFIG.min_yield_kor,
+        min_continuous_dividend_payout=DIVIDEND_CONFIG.min_continuous_dividend_kor,
+        min_payout_ratio=DIVIDEND_CONFIG.min_payout_ratio,
+        max_payout_ratio=DIVIDEND_CONFIG.max_payout_ratio
+    )
+    dividend_usa = stock_dividend_filter(
+        country="america",
+        min_yield=DIVIDEND_CONFIG.min_yield_usa,
+        min_continuous_dividend_payout=DIVIDEND_CONFIG.min_continuous_dividend_usa,
+        min_payout_ratio=DIVIDEND_CONFIG.min_payout_ratio,
+        max_payout_ratio=DIVIDEND_CONFIG.max_payout_ratio
+    )
+    for symbol in dividend_kor | dividend_usa:
+        strategy_candidates.setdefault(symbol, []).append("dividend")
+    
+    # 2. 성장주
+    growth_kor = stock_growth_filter(
+        country="korea",
+        min_rev_cagr=GROWTH_CONFIG.min_rev_cagr_kor,
+        min_eps_cagr=GROWTH_CONFIG.min_eps_cagr_kor,
+        min_roe=GROWTH_CONFIG.min_roe_kor,
+        max_debt_to_equity=GROWTH_CONFIG.max_debt_to_equity_kor,
+        min_current_ratio=GROWTH_CONFIG.min_current_ratio_kor,
+        max_peg=GROWTH_CONFIG.max_peg_kor
+    )
+    growth_usa = stock_growth_filter(
+        country="america",
+        min_rev_cagr=GROWTH_CONFIG.min_rev_cagr_usa,
+        min_eps_cagr=GROWTH_CONFIG.min_eps_cagr_usa,
+        min_roe=GROWTH_CONFIG.min_roe_usa,
+        max_debt_to_equity=GROWTH_CONFIG.max_debt_to_equity_usa,
+        min_current_ratio=GROWTH_CONFIG.min_current_ratio_usa,
+        max_peg=GROWTH_CONFIG.max_peg_usa
+    )
+    for symbol in growth_kor | growth_usa:
+        strategy_candidates.setdefault(symbol, []).append("growth")
+    
+    # 3. 박스권
+    box_kor = stock_box_pattern_filter(
+        country="korea",
+        min_ebitda_ttm=RANGEBOX_CONFIG.min_ebitda_kor,
+        min_cash_f_operating_activities_ttm=RANGEBOX_CONFIG.min_cash_flow_kor,
+        max_debt_to_equity=RANGEBOX_CONFIG.max_debt_to_equity_kor,
+        min_revenue_growth=RANGEBOX_CONFIG.min_revenue_growth_kor,
+        min_roe=RANGEBOX_CONFIG.min_roe_kor,
+        min_oper_margin=RANGEBOX_CONFIG.min_oper_margin_kor,
+        min_current_ratio=RANGEBOX_CONFIG.min_current_ratio_kor,
+        max_per=RANGEBOX_CONFIG.max_per_kor,
+        min_market_cap_quantile=RANGEBOX_CONFIG.min_market_cap_quantile_kor
+    )
+    box_usa = stock_box_pattern_filter(
+        country="america",
+        min_ebitda_ttm=RANGEBOX_CONFIG.min_ebitda_usa,
+        min_cash_f_operating_activities_ttm=RANGEBOX_CONFIG.min_cash_flow_usa,
+        max_debt_to_equity=RANGEBOX_CONFIG.max_debt_to_equity_usa,
+        min_revenue_growth=RANGEBOX_CONFIG.min_revenue_growth_usa,
+        min_roe=RANGEBOX_CONFIG.min_roe_usa,
+        min_oper_margin=RANGEBOX_CONFIG.min_oper_margin_usa,
+        min_current_ratio=RANGEBOX_CONFIG.min_current_ratio_usa,
+        max_per=RANGEBOX_CONFIG.max_per_usa,
+        min_market_cap_quantile=RANGEBOX_CONFIG.min_market_cap_quantile_usa
+    )
+    for symbol in box_kor | box_usa:
+        strategy_candidates.setdefault(symbol, []).append("box")
+    
+    # 우선순위 적용: 각 종목에 대해 최우선 전략만 선택
     data_to_insert = []
-
-    # 한국 배당주 프로세스
-    data_to_insert.extend([{'symbol': symbol, 'category': 'dividend'} for symbol in stock_dividend_filter(country="korea", min_yield=2.0, min_continuous_dividend_payout=3, min_payout_ratio=0, max_payout_ratio=50)])
-    # 미국 배당주 프로세스
-    data_to_insert.extend([{'symbol': symbol, 'category': 'dividend'} for symbol in stock_dividend_filter(country="america", min_yield=2.0, min_continuous_dividend_payout=5, min_payout_ratio=20, max_payout_ratio=60)])
-
-    # 한국 성장주 프로세스
-    data_to_insert.extend([{'symbol': symbol, 'category': 'growth'} for symbol in stock_growth_filter(country="korea", min_rev_cagr=15.0, min_eps_cagr=10.0, min_roe=10.0, max_debt_to_equity=150.0, min_current_ratio=1.2, max_peg=1.15)])
-    # 미국 성장주 프로세스
-    data_to_insert.extend([{'symbol': symbol, 'category': 'growth'} for symbol in stock_growth_filter(country="america", min_rev_cagr=20.0, min_eps_cagr=15, min_roe=15.0, max_debt_to_equity=100.0, min_current_ratio=1.5, max_peg=1.4)])
-
-    data_to_insert.extend([{'symbol': symbol, 'category': 'box'} for symbol in
-                           stock_box_pattern_filter(country="korea",
-                                                    min_ebitda_ttm=0.0,
-                                                    min_cash_f_operating_activities_ttm=0.0,
-                                                    max_debt_to_equity=120.0,
-                                                    min_revenue_growth=12.0,
-                                                    min_roe=12.0,
-                                                    min_oper_margin=10.0,
-                                                    min_current_ratio=1.3,
-                                                    max_per=18.0,
-                                                    min_market_cap_quantile=0.92)])
-    data_to_insert.extend([{'symbol': symbol, 'category': 'box'} for symbol in
-                           stock_box_pattern_filter(country="america",
-                                                    min_ebitda_ttm=0.0,
-                                                    min_cash_f_operating_activities_ttm=0.0,
-                                                    max_debt_to_equity=100.0,
-                                                    min_revenue_growth=15.0,
-                                                    min_roe=15.0,
-                                                    min_oper_margin=12.0,
-                                                    min_current_ratio=1.4,
-                                                    max_per=22.0,
-                                                    min_market_cap_quantile=0.92)])
-
+    for symbol, categories in strategy_candidates.items():
+        # 우선순위가 높은 전략 선택 (숫자가 작을수록 높음)
+        best_category = min(categories, key=lambda c: STRATEGY_PRIORITY.get(c, 999))
+        data_to_insert.append({'symbol': symbol, 'category': best_category})
+    
     if data_to_insert:
-        logger.info(f"{len(data_to_insert)}개 주식")
+        # 전략별 통계
+        category_counts = {}
+        for item in data_to_insert:
+            cat = item['category']
+            category_counts[cat] = category_counts.get(cat, 0) + 1
+        
+        logger.info(f"{len(data_to_insert)}개 종목 (dividend: {category_counts.get('dividend', 0)}, "
+                    f"growth: {category_counts.get('growth', 0)}, box: {category_counts.get('box', 0)})")
+        
         Subscription.delete().execute()
         upsert_many(Subscription, data_to_insert, [Subscription.symbol])
 
