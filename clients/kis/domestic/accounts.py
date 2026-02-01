@@ -4,13 +4,14 @@ from typing import List, Union, Optional
 
 from clients.kis.base import KISBaseClient
 from config.logging_config import get_logger
+from core.decorators import retry_on_error
+from core.exceptions import APIError
 from data.dto.account_dto import (
     InquireBalanceRequestDTO,
     AccountResponseDTO,
     StockResponseDTO,
 )
 from data.dto.stock_trade_dto import StockTradeListRequestDTO, StockTradeListResponseDTO
-from core.decorators import retry_on_error
 
 logger = get_logger(__name__)
 

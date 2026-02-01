@@ -143,3 +143,11 @@ def handle_error(
 ) -> None:
     """전역 에러 핸들러의 편의 함수"""
     get_error_handler().handle_error(error, context, critical, should_raise, metadata)
+
+
+__all__ = [
+    "ErrorHandler",
+    "get_error_handler",
+    "set_error_handler",
+    "handle_error",
+]
