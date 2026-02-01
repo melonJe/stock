@@ -35,8 +35,7 @@ services:
       - TZ=Asia/Seoul
       - ENVIRONMENT=${ENVIRONMENT:-production}
     volumes:
-      - stock_logs:/app/logs  # Named Volume (권장)
-      # 개발 환경에서만 bind mount 사용: ./logs:/app/logs
+      - ./logs:/app/logs
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/')"]
       interval: 30s
@@ -51,11 +50,3 @@ networks:
   melon-net:
     name: melon-net
     external: true
-
-volumes:
-  stock_logs:
-    driver: local
-    driver_opts:
-      type: none
-      o: bind
-      device: ${PWD}/logs  # 로컬 경로에 볼륨 생성
