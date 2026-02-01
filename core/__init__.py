@@ -8,8 +8,8 @@ from core.exceptions import (
     RateLimitError,
     OrderError,
     DataError,
-    ValidationError,
 )
+from core.validators import ValidationError
 from core.decorators import retry_on_error, log_execution, measure_time
 from core.error_handler import ErrorHandler, get_error_handler, handle_error
 
