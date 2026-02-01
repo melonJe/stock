@@ -69,13 +69,13 @@ def start() -> None:
         replace_existing=True,
     )
 
-    scheduler.add_job(
-        buy_etf_group_stocks,
-        trigger=CronTrigger(day_of_week="mon-fri", hour=11, minute=0, second=0),
-        id="buy_etf_group_stocks",
-        max_instances=1,
-        replace_existing=True,
-    )
+    # scheduler.add_job(
+    #     buy_etf_group_stocks,
+    #     trigger=CronTrigger(day_of_week="mon-fri", hour=11, minute=0, second=0),
+    #     id="buy_etf_group_stocks",
+    #     max_instances=1,
+    #     replace_existing=True,
+    # )
 
     logger.info("스케줄러 시작", simulate=setting_env.SIMULATE)
     try:
