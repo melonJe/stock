@@ -34,8 +34,6 @@ services:
     environment:
       - TZ=Asia/Seoul
       - ENVIRONMENT=${ENVIRONMENT:-production}
-    volumes:
-      - ./logs:/app/logs
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/')"]
       interval: 30s
