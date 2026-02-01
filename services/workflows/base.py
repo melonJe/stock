@@ -1,19 +1,19 @@
 """워크플로우 공통 함수"""
+import logging
 from typing import List, Union
 
 from config import setting_env
 from config.logging_config import get_logger
-from data.database import db_connect
+from core.decorators import log_execution
+from core.error_handler import handle_error
+from core.exceptions import OrderError
 from data.dto.account_dto import StockResponseDTO
 from data.models import Subscription
 from services.data_handler import get_country_by_symbol
 from services.strategies import DividendStrategy, GrowthStrategy, RangeBoundStrategy
-from services.trading_helpers import add_prev_close_allocation, fetch_price_dataframe, normalize_dataframe_for_country
+from services.trading_helpers import fetch_price_dataframe, normalize_dataframe_for_country
 from utils import discord
 from utils.operations import price_refine
-from core.exceptions import OrderError
-from core.decorators import log_execution
-from core.error_handler import handle_error
 
 logger = get_logger(__name__)
 

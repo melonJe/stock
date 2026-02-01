@@ -1,16 +1,15 @@
 """국내주식 트레이딩 워크플로우"""
 import asyncio
 import datetime
-from datetime import datetime
+from datetime import timedelta
 
+from clients.kis import KISClient
 from config import setting_env
 from config.logging_config import get_logger
-
-logger = get_logger(__name__)
-
 from services.data_handler import add_stock_price
 from services.workflows.base import select_buy_stocks, select_sell_stocks, trading_buy, trading_sell
-from clients.kis import KISClient
+
+logger = get_logger(__name__)
 
 
 class KoreaWorkflow:
@@ -36,7 +35,7 @@ class KoreaWorkflow:
 
         add_stock_price(
             country="KOR",
-            start_date=datetime.datetime.now() - datetime.timedelta(days=5),
+            start_date=datetime.datetime.now() - timedelta(days=5),
             end_date=datetime.datetime.now()
         )
 
