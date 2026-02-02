@@ -197,6 +197,10 @@ def setup_logging(
     for module_name, module_level in LogConfig.MODULE_LOG_LEVELS.items():
         logging.getLogger(module_name).setLevel(module_level)
     
+    # Uvicorn access 로그에서 /health 엔드포인트 필터링
+    uvicorn_access_logger = logging.getLogger("uvicorn.access")
+    uvicorn_access_logger.addFilter(HealthCheckFilter())
+    
     # Discord 핸들러 등록 (기존)
     try:
         from utils.discord import register_discord_critical_handler
@@ -205,6 +209,14 @@ def setup_logging(
         pass
     
     logging.info(f"로깅 시스템 초기화 완료 (환경: {LogConfig.ENVIRONMENT}, 레벨: {logging.getLevelName(log_level)})")
+
+
+class HealthCheckFilter(logging.Filter):
+    """헬스체크 엔드포인트 로그 필터링 (제외)"""
+    
+    def filter(self, record: logging.LogRecord) -> bool:
+        message = record.getMessage()
+        return "/health" not in message
 
 
 class TradingLogFilter(logging.Filter):

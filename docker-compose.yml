@@ -38,12 +38,12 @@ services:
     environment:
       - TZ=Asia/Seoul
       - ENVIRONMENT=${ENVIRONMENT:-production}
-    # healthcheck:
-    #   test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
-    #   interval: 30s
-    #   timeout: 10s
-    #   retries: 3
-    #   start_period: 40s
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
     # depends_on:
     #   stock_db:
     #     condition: service_healthy
