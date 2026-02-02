@@ -42,8 +42,7 @@ services:
       retries: 3
       start_period: 40s
     depends_on:
-      stock_db:
-        condition: service_healthy
+      - stock_db
 
 networks:
   melon-net:
