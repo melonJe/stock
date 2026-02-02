@@ -13,9 +13,6 @@ services:
       - .env.db
     environment:
       - TZ=Asia/Seoul
-      - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-postgres}
-      - POSTGRES_DB=${POSTGRES_DB:-stock}
     volumes:
       - ./stock_db_volume:/var/lib/postgresql/data
     healthcheck:
