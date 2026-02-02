@@ -1,6 +1,6 @@
 from fastapi import FastAPI, Depends, Request
-from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
+# from fastapi.staticfiles import StaticFiles
+# from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
@@ -8,8 +8,8 @@ from slowapi.errors import RateLimitExceeded
 
 from config.logging_config import setup_logging
 from scheduler import lifespan
-from routers import dashboard
-from core.security import verify_basic_auth
+# from routers import dashboard
+# from core.security import verify_basic_auth
 
 # 로깅 초기화
 setup_logging(enable_file_logging=True, enable_json_logging=False)
@@ -38,17 +38,17 @@ app.add_middleware(
 )
 
 # 정적 파일 및 템플릿 마운트
-app.mount("/static", StaticFiles(directory="static"), name="static")
+# app.mount("/static", StaticFiles(directory="static"), name="static")
 
 # 라우터 등록
-app.include_router(dashboard.router)
+# app.include_router(dashboard.router)
 
 
-@app.get("/")
-@limiter.limit("30/minute")
-async def read_root(request: Request, username: str = Depends(verify_basic_auth)):
-    """대시보드 페이지 (인증 필요)"""
-    return FileResponse("templates/dashboard.html")
+# @app.get("/")
+# @limiter.limit("30/minute")
+# async def read_root(request: Request, username: str = Depends(verify_basic_auth)):
+#     """대시보드 페이지 (인증 필요)"""
+#     return FileResponse("templates/dashboard.html")
 
 
 @app.get("/health")

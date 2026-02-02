@@ -13,6 +13,9 @@ services:
       - .env.db
     environment:
       - TZ=Asia/Seoul
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-postgres}
+      - POSTGRES_DB=${POSTGRES_DB:-stock}
     volumes:
       - ./stock_db_volume:/var/lib/postgresql/data
     healthcheck:
@@ -35,7 +38,7 @@ services:
       - TZ=Asia/Seoul
       - ENVIRONMENT=${ENVIRONMENT:-production}
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/')"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
       interval: 30s
       timeout: 10s
       retries: 3
