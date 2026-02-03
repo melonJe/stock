@@ -1,10 +1,9 @@
 """데코레이터 모음"""
 import functools
-import logging
 import time
 from typing import Callable, Type, Tuple, Optional
 
-from config.logging_config import get_logger
+from config.logging_config import get_logger, LogLevel
 from core.exceptions import APIError, RateLimitError, APITimeoutError, NetworkError
 
 logger = get_logger(__name__)
@@ -73,7 +72,7 @@ def retry_on_error(
     return decorator
 
 
-def log_execution(level: int = logging.INFO, include_args: bool = False):
+def log_execution(level: int = LogLevel.INFO, include_args: bool = False):
     """
     함수 실행을 로깅하는 데코레이터
 
@@ -120,7 +119,7 @@ def measure_time(func: Callable) -> Callable:
     return wrapper
 
 
-def suppress_errors(default_return=None, log_level: int = logging.ERROR):
+def suppress_errors(default_return=None, log_level: int = LogLevel.ERROR):
     """
     에러를 억제하고 기본값을 반환하는 데코레이터 (주의해서 사용)
 

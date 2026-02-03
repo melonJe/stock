@@ -7,14 +7,9 @@
 3. 로깅을 통해 주요 이벤트와 오류를 기록합니다.
 """
 
-import logging
 import os
 
 from dotenv import load_dotenv
-
-# 로깅 설정
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
 
 load_dotenv()  # .env 파일에서 환경 변수를 로드
 
@@ -94,5 +89,8 @@ HTS_ID_ETF = get_env("HTS_ID_ETF")
 
 # 매매 전략 관련
 EQUITY_USD = get_env("EQUITY_USD")
+
 # 주요 환경 변수 로그
+from config.logging_config import get_logger
+logger = get_logger(__name__)
 logger.info("환경 변수가 성공적으로 로드되었습니다.")

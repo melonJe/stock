@@ -44,7 +44,7 @@ def send_message(content: str) -> None:
         response = requests.post(url=setting_env.DISCORD_MESSAGE_URL, data={'content': content}, timeout=10)
         response.raise_for_status()  # 요청이 성공적으로 완료되지 않으면 예외 발생
     except requests.exceptions.RequestException as e:
-        logging.getLogger(__name__).error("Failed to send message: %s", e, extra={"skip_discord": True})
+        logger.error(f"Failed to send message: {e}", skip_discord=True)
 
 
 def error_message(content: str) -> None:
@@ -53,7 +53,7 @@ def error_message(content: str) -> None:
         response = requests.post(url=setting_env.DISCORD_ERROR_URL, data={'content': content}, timeout=10)
         response.raise_for_status()  # 요청이 성공적으로 완료되지 않으면 예외 발생
     except requests.exceptions.RequestException as e:
-        logging.getLogger(__name__).error("Failed to send error message: %s", e, extra={"skip_discord": True})
+        logger.error(f"Failed to send error message: {e}", skip_discord=True)
 
 
 register_discord_critical_handler()

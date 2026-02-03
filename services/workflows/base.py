@@ -1,9 +1,8 @@
 """워크플로우 공통 함수"""
-import logging
 from typing import List, Union
 
 from config import setting_env
-from config.logging_config import get_logger
+from config.logging_config import get_logger, LogLevel
 from core.decorators import log_execution
 from core.error_handler import handle_error
 from core.exceptions import OrderError
@@ -165,7 +164,7 @@ def filter_non_subscription_for_sell(
     return sell_levels
 
 
-@log_execution(level=logging.INFO)
+@log_execution(level=LogLevel.INFO)
 def trading_buy(client, buy_levels):
     """
     매수 주문 실행
@@ -229,7 +228,7 @@ def trading_buy(client, buy_levels):
             logger.error(f"trading_buy 디스코드 전송 실패: {e}")
 
 
-@log_execution(level=logging.INFO)
+@log_execution(level=LogLevel.INFO)
 def trading_sell(client, sell_levels):
     """
     매도 주문 실행

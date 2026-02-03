@@ -1,9 +1,8 @@
 """중앙화된 에러 핸들러"""
-import logging
 import traceback
 from typing import Optional, Callable, Dict, Any
 
-from config.logging_config import get_logger
+from config.logging_config import get_logger, LogLevel
 from core.exceptions import (
     StockTradingError,
     APIError,
@@ -71,7 +70,7 @@ class ErrorHandler:
             logger.warning(log_message)
 
         # 상세 트레이스 (DEBUG 레벨)
-        if logging.getLogger().isEnabledFor(logging.DEBUG):
+        if logger.isEnabledFor(LogLevel.DEBUG):
             logger.debug(f"에러 상세 트레이스:\n{traceback.format_exc()}")
 
         # 에러 재발생

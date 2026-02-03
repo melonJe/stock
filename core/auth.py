@@ -1,16 +1,13 @@
 """KIS API 인증 관리"""
-import logging
 from datetime import datetime, timedelta
 from typing import Dict, Optional
 
 from config import setting_env
-from config.logging_config import get_logger
+from config.constants import TOKEN_REFRESH_BUFFER_SECONDS
+from config.logging_config import get_logger, LogLevel
 from core.http_client import HttpClient
 from core.exceptions import AuthenticationError, APIError
 from core.decorators import retry_on_error, log_execution
-
-# 토큰 만료 전 갱신 여유 시간 (초)
-TOKEN_REFRESH_BUFFER_SECONDS = 300
 
 logger = get_logger(__name__)
 
@@ -55,7 +52,7 @@ class KISAuth:
         return datetime.now() < (self._token_expires_at - timedelta(seconds=TOKEN_REFRESH_BUFFER_SECONDS))
 
     @retry_on_error(max_attempts=2, delay=2.0, exceptions=(APIError,))
-    @log_execution(level=logging.INFO)
+    @log_execution(level=LogLevel.INFO)
     def authenticate(self, force: bool = False) -> str:
         """
         API 인증을 수행하고 Authorization 헤더 값을 반환한다.

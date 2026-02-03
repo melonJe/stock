@@ -2,11 +2,18 @@
 import logging
 import urllib.parse
 from time import sleep
-from typing import Dict, Optional, Tuple
+from typing import Dict, Optional
 
 import requests
 
 from config import setting_env
+from config.constants import (
+    API_REQUEST_DELAY,
+    DEFAULT_TIMEOUT,
+    MAX_RETRY_COUNT,
+    RATE_LIMIT_STATUS_CODE,
+    SENSITIVE_PARAMS,
+)
 from config.logging_config import get_logger
 from core.exceptions import (
     APIError,
@@ -16,20 +23,7 @@ from core.exceptions import (
     NetworkError,
 )
 
-# API 요청 간 대기 시간 (초) - Rate Limit 방지
-API_REQUEST_DELAY = 0.5
-
 logger = get_logger(__name__)
-
-# HTTP 요청 타임아웃 (connect, read) 초
-DEFAULT_TIMEOUT: Tuple[int, int] = (10, 30)
-
-# Rate Limit 재시도 설정
-MAX_RETRY_COUNT = 3
-RATE_LIMIT_STATUS_CODE = 429
-
-# 로깅에서 마스킹할 민감 파라미터
-SENSITIVE_PARAMS = {'appkey', 'appsecret', 'APP_KEY', 'APP_SECRET', 'password', 'token'}
 
 
 class HttpClient:

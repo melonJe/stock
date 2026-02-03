@@ -1,10 +1,23 @@
 """애플리케이션 전역 상수 정의"""
+from typing import Tuple
 
 # 시스템 설정
 MAX_WORKER_COUNT = 10
 BLACKLIST_RETENTION_DAYS = 30
 DEFAULT_PRICE_HISTORY_YEARS = 5
 DEFAULT_PRICE_HISTORY_DAYS = 365
+
+# API 인증 설정
+TOKEN_REFRESH_BUFFER_SECONDS = 300  # 토큰 만료 전 갱신 여유 시간 (초)
+
+# HTTP 클라이언트 설정
+API_REQUEST_DELAY = 0.5  # API 요청 간 대기 시간 (초) - Rate Limit 방지
+DEFAULT_TIMEOUT: Tuple[int, int] = (10, 30)  # HTTP 요청 타임아웃 (connect, read) 초
+MAX_RETRY_COUNT = 3  # Rate Limit 재시도 설정
+RATE_LIMIT_STATUS_CODE = 429
+
+# 민감한 파라미터 (로그 마스킹)
+SENSITIVE_PARAMS = {'appkey', 'appsecret', 'APP_KEY', 'APP_SECRET', 'password', 'token', 'authorization'}
 
 # 국가별 정규식 패턴
 KOREAN_STOCK_PATTERN = r'(\d{5}[0-9KLMN])'

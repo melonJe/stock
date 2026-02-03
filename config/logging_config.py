@@ -248,6 +248,10 @@ class StructuredLogger:
         
         self.logger.log(level, full_message, extra=kwargs)
     
+    def log(self, level: int, message: str, **kwargs):
+        """표준 로그 메서드 (데코레이터 호환성)"""
+        self._log(level, message, **kwargs)
+    
     def debug(self, message: str, **kwargs):
         self._log(logging.DEBUG, message, **kwargs)
     
@@ -257,11 +261,31 @@ class StructuredLogger:
     def warning(self, message: str, **kwargs):
         self._log(logging.WARNING, message, **kwargs)
     
+    def warn(self, message: str, **kwargs):
+        """warning의 별칭 (표준 logging 호환)"""
+        self.warning(message, **kwargs)
+    
     def error(self, message: str, **kwargs):
         self._log(logging.ERROR, message, **kwargs)
     
     def critical(self, message: str, **kwargs):
         self._log(logging.CRITICAL, message, **kwargs)
+    
+    def exception(self, message: str, **kwargs):
+        """예외 정보를 포함한 에러 로그 (표준 logging 호환)"""
+        self.logger.exception(message, extra=kwargs)
+    
+    def setLevel(self, level: int):
+        """로그 레벨 설정 (표준 logging 호환)"""
+        self.logger.setLevel(level)
+    
+    def getEffectiveLevel(self) -> int:
+        """유효 로그 레벨 반환 (표준 logging 호환)"""
+        return self.logger.getEffectiveLevel()
+    
+    def isEnabledFor(self, level: int) -> bool:
+        """특정 레벨이 활성화되어 있는지 확인 (표준 logging 호환)"""
+        return self.logger.isEnabledFor(level)
     
     def trading(self, action: str, symbol: str, price: float = None, volume: int = None, **kwargs):
         """트레이딩 전용 로그"""
