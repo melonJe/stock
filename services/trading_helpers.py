@@ -139,7 +139,11 @@ def compute_resistance_prices(df: pd.DataFrame) -> Tuple[float, float, float]:
 
 
 def prepare_buy_context(country: str, category: str) -> tuple[str, float, float, float, Set[str], float]:
-    usd_krw = float(FinanceDataReader.DataReader("USD/KRW").iloc[-1]["Adj Close"])
+    usd_krw_df = FinanceDataReader.DataReader("USD/KRW")
+    if usd_krw_df is None or usd_krw_df.empty:
+        usd_krw = 1300.0  # fallback
+    else:
+        usd_krw = float(usd_krw_df.iloc[-1]["Adj Close"])
 
     risk_pct = float(getattr(setting_env, "RISK_PCT", 0.0051))
     risk_k = float(getattr(setting_env, "RISK_ATR_MULT", 12.0))

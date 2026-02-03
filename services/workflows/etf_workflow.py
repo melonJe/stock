@@ -24,7 +24,7 @@ class ETFWorkflow:
 
         today = datetime.datetime.now().strftime("%Y%m%d")
         holidays = ki_api.get_domestic_market_holidays(today)
-        holiday = holidays.get(today)
+        holiday = holidays.get(today) if holidays else None
         if holiday and holiday.opnd_yn == "N":
             logger.info("ETF 그룹 매수 스킵: 휴장일")
             return

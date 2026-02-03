@@ -64,7 +64,8 @@ class StockRepository:
                     FinanceDataReader.StockListing('NYSE')
                 ])
                 code = 'Symbol'
-            return df_krx[df_krx[code] == symbol].to_dict('records')[0].get('Name')
+            records = df_krx[df_krx[code] == symbol].to_dict('records')
+            return records[0].get('Name') if records else None
         except Exception as e:
             logger.error(f"종목명 조회 실패: {e}")
             return None

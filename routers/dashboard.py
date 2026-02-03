@@ -95,11 +95,11 @@ async def get_account_info(country: str = Query("KOR", regex="^(KOR|USA)$")):
         # 실제 API 응답 구조에 맞게 파싱
         return AccountInfo(
             account_number=client.account_number,
-            total_asset=float(account_data.get("total_asset", 0)),
-            cash=float(account_data.get("cash", 0)),
-            stock_value=float(account_data.get("stock_value", 0)),
-            profit_loss=float(account_data.get("profit_loss", 0)),
-            profit_loss_rate=float(account_data.get("profit_loss_rate", 0))
+            total_asset=float(account_data.get("total_asset") or 0),
+            cash=float(account_data.get("cash") or 0),
+            stock_value=float(account_data.get("stock_value") or 0),
+            profit_loss=float(account_data.get("profit_loss") or 0),
+            profit_loss_rate=float(account_data.get("profit_loss_rate") or 0)
         )
     except Exception as e:
         logger.error(f"계좌 정보 조회 실패: {e}")
@@ -137,13 +137,13 @@ async def get_holdings(country: str = Query("KOR", regex="^(KOR|USA)$")):
         result = []
         for stock in holdings_data:
             result.append(StockHolding(
-                symbol=stock.get("symbol", ""),
-                name=stock.get("name", ""),
-                quantity=int(stock.get("quantity", 0)),
-                avg_price=float(stock.get("avg_price", 0)),
-                current_price=float(stock.get("current_price", 0)),
-                profit_loss=float(stock.get("profit_loss", 0)),
-                profit_loss_rate=float(stock.get("profit_loss_rate", 0)),
+                symbol=stock.get("symbol") or "",
+                name=stock.get("name") or "",
+                quantity=int(stock.get("quantity") or 0),
+                avg_price=float(stock.get("avg_price") or 0),
+                current_price=float(stock.get("current_price") or 0),
+                profit_loss=float(stock.get("profit_loss") or 0),
+                profit_loss_rate=float(stock.get("profit_loss_rate") or 0),
                 country=country
             ))
         

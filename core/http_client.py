@@ -2,7 +2,7 @@
 import logging
 import urllib.parse
 from time import sleep
-from typing import Dict, Optional
+from typing import Dict, Optional, Tuple
 
 import requests
 

@@ -454,7 +454,10 @@ def update_blacklist():
         page = requests.get(url, timeout=30).text
         soup = BeautifulSoup(page, "html.parser")
         elements = soup.select('a.tltle')
-        blacklisted_symbols = blacklisted_symbols.union(parse_qs(urlparse(x['href']).query)['code'][0] for x in elements)
+        for x in elements:
+            parsed = parse_qs(urlparse(x['href']).query)
+            if 'code' in parsed and parsed['code']:
+                blacklisted_symbols.add(parsed['code'][0])
     data_to_insert = [{'symbol': x, 'record_date': datetime.datetime.now().strftime('%Y-%m-%d')} for x in blacklisted_symbols]
     if data_to_insert:
         upsert_many(Blacklist, data_to_insert, Blacklist.symbol, Blacklist.record_date)
